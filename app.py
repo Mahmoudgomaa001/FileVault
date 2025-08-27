@@ -1,5 +1,3 @@
-#l
-
 import os
 import re
 import json
@@ -11,7 +9,9 @@ import secrets
 import random
 import unicodedata
 import requests
+import shutil
 import hashlib
+import zipfile
 from io import BytesIO
 from pathlib import Path
 from datetime import datetime
@@ -797,8 +797,10 @@ BASE_HTML = """
     /* File grid */
     .file-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap:.75rem; margin-top:1rem; }
     .file-grid.list-view { grid-template-columns: 1fr; gap:.5rem; }
-    .file-card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; overflow:hidden; transition:all .2s ease; cursor:pointer; }
+    .file-card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; overflow:hidden; transition:all .2s ease; cursor:pointer; position: relative; }
     .file-card:active { transform:scale(.98); }
+    .file-card.selected { border-color: var(--primary); background: color-mix(in srgb, var(--bg-secondary) 80%, var(--primary)); }
+    .file-select-checkbox { position: absolute; top: 8px; left: 8px; z-index: 5; width: 18px; height: 18px; accent-color: var(--primary); }
     .list-view .file-card { display:flex; align-items:center; padding:.75rem; gap:.75rem; }
     .file-preview { height:120px; background:var(--bg-tertiary); display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; }
     .list-view .file-preview { width:48px; height:48px; border-radius:.5rem; flex-shrink:0; }
@@ -852,6 +854,11 @@ BASE_HTML = """
     .fab-menu { position:absolute; bottom:70px; right:0; background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; padding:.5rem; box-shadow:0 4px 12px var(--shadow); display:none; min-width:180px; }
     .fab-menu.active { display:block; animation:fadeIn .2s ease; }
     .fab-menu-item { padding:.625rem .875rem; border-radius:.5rem; cursor:pointer; display:flex; align-items:center; gap:.75rem; font-size:.875rem; color:var(--text-primary); border:none; background:transparent; width:100%; text-align:left; }
+
+    /* Folder Tree */
+    .folder-tree-item { padding: 4px 8px; cursor: pointer; border-radius: 4px; transition: background-color .2s; }
+    .folder-tree-item:hover { background-color: var(--bg-tertiary); }
+    .folder-tree-item.selected { background-color: var(--primary); color: white; }
 
     @media (min-width: 768px) {
       .user-badge { display:block; }
@@ -950,6 +957,12 @@ BASE_HTML = """
           <label class="form-label">Password (set/change when switching to Private)</label>
           <input type="password" id="privacyPassword" class="form-input" placeholder="New password">
         </div>
+        <div class="toggle-container" style="margin-top: 1rem;">
+          <span class="toggle-label" title="If enabled, anyone with access can delete files.">Anyone can delete</span>
+          <div class="toggle-switch" id="allowDeleteToggle">
+            <div class="slider"></div>
+          </div>
+        </div>
         <div style="margin-top:1.5rem;">
           <label class="form-label">API Token</label>
           <div class="row" style="gap:.5rem; margin-top:.5rem;">
@@ -1017,6 +1030,26 @@ BASE_HTML = """
     <div class="modal-footer" style="flex-wrap:wrap; gap:.5rem;">
       <input type="text" id="accCreateNameInput" class="form-input" placeholder="Custom name (optional) e.g. lucky-duck-042" style="flex:1; min-width:220px;">
       <button class="btn btn-primary" id="accCreateBtn"><i class="fas fa-user-plus"></i> Create & Switch</button>
+    </div>
+  </div>
+</div>
+
+<!-- Move Modal -->
+<div class="modal" id="moveModal">
+  <div class="modal-content" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">Move Items</div>
+      <button class="modal-close" onclick="closeModal('moveModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p>Select destination folder:</p>
+      <div id="folderTree" style="height: 300px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary);">
+        Loading...
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('moveModal')">Cancel</button>
+      <button class="btn btn-primary" id="confirmMoveBtn"><i class="fas fa-people-carry"></i> Move Here</button>
     </div>
   </div>
 </div>
@@ -1319,6 +1352,224 @@ async function changeDhikr() {
         const name = (card.dataset.name || '').toLowerCase();
         card.style.display = name.includes(q) ? '' : 'none';
       });
+    }
+
+    // SELECTION
+    let selectedFiles = new Set();
+    function handleSelectionChange(){
+      selectedFiles = new Set(Array.from(document.querySelectorAll('.file-select-checkbox:checked')).map(cb => cb.dataset.rel));
+
+      document.querySelectorAll('.file-card').forEach(card => {
+        const cb = card.querySelector('.file-select-checkbox');
+        if(cb && selectedFiles.has(cb.dataset.rel)){
+          card.classList.add('selected');
+          cb.checked = true;
+        } else {
+          card.classList.remove('selected');
+          if(cb) cb.checked = false;
+        }
+      });
+
+      const bulkToolbar = document.getElementById('bulkActionsToolbar');
+      const selectAllCb = document.getElementById('selectAllCheckbox');
+      if(selectedFiles.size > 0){
+        bulkToolbar.style.display = 'block';
+        document.getElementById('selectionCount').textContent = `${selectedFiles.size} selected`;
+      } else {
+        bulkToolbar.style.display = 'none';
+      }
+
+      if(selectAllCb){
+        const totalCheckboxes = document.querySelectorAll('.file-select-checkbox').length;
+        if(totalCheckboxes > 0 && selectedFiles.size === totalCheckboxes){
+          selectAllCb.checked = true;
+          selectAllCb.indeterminate = false;
+        } else if (selectedFiles.size > 0){
+          selectAllCb.checked = false;
+          selectAllCb.indeterminate = true;
+        } else {
+          selectAllCb.checked = false;
+          selectAllCb.indeterminate = false;
+        }
+      }
+    }
+    function initSelection(){
+      const selectAllCb = document.getElementById('selectAllCheckbox');
+      if(selectAllCb){
+        selectAllCb.addEventListener('change', (e) => {
+          document.querySelectorAll('.file-select-checkbox').forEach(cb => {
+            cb.checked = e.target.checked;
+          });
+          handleSelectionChange();
+        });
+      }
+      const deselectBtn = document.getElementById('deselectAllBtn');
+      if(deselectBtn){
+        deselectBtn.addEventListener('click', ()=>{
+          document.querySelectorAll('.file-select-checkbox').forEach(cb => cb.checked = false);
+          handleSelectionChange();
+        });
+      }
+    }
+
+
+    // MOVE
+    let selectedDestination = '';
+    function renderFolderTree(nodes, level = 0) {
+        let html = '';
+        for (const node of nodes) {
+            html += `
+                <div class="folder-tree-item" data-path="${node.path}" style="padding-left: ${level * 20}px;">
+                    <i class="fas fa-folder"></i> ${node.name}
+                </div>
+            `;
+            if (node.children && node.children.length > 0) {
+                html += renderFolderTree(node.children, level + 1);
+            }
+        }
+        return html;
+    }
+    async function openMoveModal() {
+        if (selectedFiles.size === 0) {
+            showToast('Please select files to move.', 'warning');
+            return;
+        }
+        openModal('moveModal');
+        const folderTreeDiv = document.getElementById('folderTree');
+        folderTreeDiv.innerHTML = 'Loading...';
+
+        try {
+            const response = await fetch('/api/folders');
+            const data = await response.json();
+            if (data.ok) {
+                folderTreeDiv.innerHTML = renderFolderTree(data.tree);
+                selectedDestination = ''; // Reset selection
+                document.getElementById('confirmMoveBtn').disabled = true;
+
+                document.querySelectorAll('.folder-tree-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const destinationPath = item.dataset.path;
+                        for (const sourcePath of selectedFiles) {
+                            if (sourcePath === destinationPath || destinationPath.startsWith(sourcePath + '/')) {
+                                showToast('Cannot move a folder into itself.', 'error');
+                                item.classList.add('invalid');
+                                setTimeout(()=> item.classList.remove('invalid'), 500);
+                                return;
+                            }
+                        }
+                        document.querySelectorAll('.folder-tree-item').forEach(i => i.classList.remove('selected'));
+                        item.classList.add('selected');
+                        selectedDestination = destinationPath;
+                        document.getElementById('confirmMoveBtn').disabled = false;
+                    });
+                });
+            } else {
+                folderTreeDiv.innerHTML = `Error: ${data.error || 'Could not load folders.'}`;
+            }
+        } catch (error) {
+            folderTreeDiv.innerHTML = 'Error loading folders.';
+        }
+    }
+    async function confirmMove() {
+        if (selectedDestination === '' || selectedDestination === null) {
+            showToast('Please select a destination folder.', 'warning');
+            return;
+        }
+
+        const sources = Array.from(selectedFiles);
+        try {
+            const r = await fetch('/api/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sources, destination: selectedDestination })
+            });
+            const j = await r.json();
+            if (j.ok) {
+                showToast('Items moved successfully!', 'success');
+                if(j.errors && j.errors.length > 0){
+                    j.errors.forEach(err => showToast(`Error moving ${err.path}: ${err.error}`, 'error'));
+                }
+                // The socket events will handle the removal of old cards and addition of new ones.
+                // We just need to clear the selection.
+                handleSelectionChange();
+            } else {
+                showToast(j.error || 'Move failed.', 'error');
+            }
+        } catch (e) {
+            showToast('An error occurred during the move.', 'error');
+        }
+        closeModal('moveModal');
+    }
+    async function confirmBulkDelete() {
+        if (selectedFiles.size === 0) { return; }
+        if (!confirm(`Are you sure you want to delete ${selectedFiles.size} item(s)?`)) { return; }
+
+        const sources = Array.from(selectedFiles);
+        try {
+            const r = await fetch('{{ url_for("api_delete") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: sources })
+            });
+            const j = await r.json();
+            if (j.ok) {
+                showToast(`${j.deleted.length} item(s) deleted.`, 'success');
+                // The socket events will handle the removal of cards.
+                // We just need to clear the selection.
+                handleSelectionChange();
+            } else {
+                showToast(j.error || 'Delete failed.', 'error');
+            }
+        } catch (e) {
+            showToast('An error occurred during deletion.', 'error');
+        }
+    }
+
+    async function bulkDownload() {
+        if (selectedFiles.size === 0) { return; }
+        const sources = Array.from(selectedFiles);
+        try {
+            const r = await fetch('/api/download_zip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: sources })
+            });
+
+            if (r.ok) {
+                const blob = await r.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = r.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'download.zip';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            } else {
+                const j = await r.json();
+                showToast(j.error || 'Download failed.', 'error');
+            }
+        } catch (e) {
+            showToast('An error occurred during download.', 'error');
+        }
+    }
+
+    function initBulkActions(){
+        // Move
+        const bulkMoveBtn = document.getElementById('bulkMoveBtn');
+        if(bulkMoveBtn) bulkMoveBtn.addEventListener('click', openMoveModal);
+        const confirmMoveBtn = document.getElementById('confirmMoveBtn');
+        if(confirmMoveBtn) confirmMoveBtn.addEventListener('click', confirmMove);
+
+        // Delete
+        const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+        if(bulkDeleteBtn) bulkDeleteBtn.addEventListener('click', confirmBulkDelete);
+
+        // Download
+        const bulkDownloadBtn = document.getElementById('bulkDownloadBtn');
+        if(bulkDownloadBtn) bulkDownloadBtn.addEventListener('click', bulkDownload);
     }
 
     // SORTING
@@ -1970,6 +2221,7 @@ function renderFileCard(meta){
 
   const openHref = encodeURI(`/b/${meta.rel}`);
   el.innerHTML = `
+    <input type="checkbox" class="file-select-checkbox" data-rel="${meta.rel}" onclick="event.stopPropagation(); handleSelectionChange();">
     <div class="file-preview">${preview}</div>
     <div class="file-info">
       <div class="file-name" title="${safeHTML(meta.name)}">${safeHTML(meta.name)}</div>
@@ -2062,25 +2314,42 @@ function removeFileCard(rel){
       try {
         const r = await fetch('/api/me', {cache:'no-store'});
         const j = await r.json();
-        const toggle = document.getElementById('privacyToggle');
-        if(j.public === false) toggle.classList.add('active'); else toggle.classList.remove('active');
+        const privacyToggle = document.getElementById('privacyToggle');
+        if(j.public === false) privacyToggle.classList.add('active'); else privacyToggle.classList.remove('active');
+
+        const deleteToggle = document.getElementById('allowDeleteToggle');
+        if(j.prefs?.allow_non_admin_delete === false) deleteToggle.classList.remove('active'); else deleteToggle.classList.add('active');
+
         openModal('settingsModal');
       } catch(e){ openModal('settingsModal'); }
     }
     function togglePrivacy(){ const t = document.getElementById('privacyToggle'); t.classList.toggle('active'); }
     document.getElementById('settingsBtn')?.addEventListener('click', openSettings);
     document.getElementById('privacyToggle')?.addEventListener('click', togglePrivacy);
+    document.getElementById('allowDeleteToggle')?.addEventListener('click', ()=> document.getElementById('allowDeleteToggle').classList.toggle('active'));
     document.getElementById('generateTokenBtn')?.addEventListener('click', generateToken);
     document.getElementById('shareTokenBtn')?.addEventListener('click', showTokenShare);
     document.getElementById('saveSettingsBtn')?.addEventListener('click', async ()=>{
       const priv = document.getElementById('privacyToggle').classList.contains('active'); // true => private
       const pwd = document.getElementById('privacyPassword').value || '';
+      const allowDelete = document.getElementById('allowDeleteToggle').classList.contains('active');
+
+      let all_ok = true;
+      try {
+        await savePref('allow_non_admin_delete', allowDelete);
+      } catch(e) { all_ok = false; }
+
       try {
         const r = await fetch('/api/privacy', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({public: !priv, password: pwd})});
         const j = await r.json();
-        if(j.ok){ showToast('Settings saved', 'success'); document.getElementById('privacyPassword').value=''; closeModal('settingsModal'); }
-        else showToast(j.error || 'Failed', 'error');
-      } catch(e){ showToast('Failed', 'error'); }
+        if(!j.ok){ all_ok = false; showToast(j.error || 'Failed to save privacy', 'error'); }
+      } catch(e){ all_ok = false; showToast('Failed to save privacy', 'error'); }
+
+      if(all_ok){
+        showToast('Settings saved', 'success');
+        document.getElementById('privacyPassword').value='';
+        closeModal('settingsModal');
+      }
     });
     
     async function generateToken() {
@@ -2230,6 +2499,8 @@ function removeFileCard(rel){
       initFileGrid();
       initSortControls();
       applySort();
+      initSelection();
+      initBulkActions();
       initSocket();
 
       // Bind Create Folder / Paste text buttons
@@ -2270,9 +2541,26 @@ BROWSE_HTML = """
   </div>
 </div>
 
+<!-- Bulk Actions Toolbar -->
+<div id="bulkActionsToolbar" class="toolbar" style="display:none; background:color-mix(in srgb, var(--bg-secondary) 60%, var(--primary));">
+  <div class="toolbar-row" style="justify-content:space-between;">
+    <div style="font-weight:700;" id="selectionCount"></div>
+    <div style="display:flex; gap:.5rem;">
+      <button class="btn btn-primary" id="bulkMoveBtn"><i class="fas fa-people-carry"></i> Move</button>
+      <button class="btn btn-danger" id="bulkDeleteBtn"><i class="fas fa-trash"></i> Delete</button>
+      <button class="btn btn-success" id="bulkDownloadBtn"><i class="fas fa-download"></i> Download</button>
+      <button class="btn btn-secondary" id="deselectAllBtn">Deselect All</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toolbar -->
 <div class="toolbar">
   <div class="toolbar-row">
+    <div style="display:flex; align-items:center; gap:.5rem; padding-right:1rem;">
+      <input type="checkbox" id="selectAllCheckbox" style="width:18px; height:18px; accent-color:var(--primary);">
+      <label for="selectAllCheckbox" style="cursor:pointer; user-select:none;">Select All</label>
+    </div>
     <div class="search-box">
       <input id="searchInput" class="search-input" placeholder="Search..." />
       <i class="fas fa-search search-icon"></i>
@@ -2331,6 +2619,7 @@ BROWSE_HTML = """
          data-mtime="{{ item.mtime }}"
          data-raw="{{ url_for('raw', path=item.rel) }}"
          data-dl="{{ url_for('download', path=item.rel) }}">
+      <input type="checkbox" class="file-select-checkbox" data-rel="{{ item.rel }}" onclick="event.stopPropagation(); handleSelectionChange();">
       <div class="file-preview">
         {% if item.is_dir %}
           <div class="file-icon-large" style="font-size:2rem;opacity:.6;">📁</div>
@@ -2867,10 +3156,16 @@ def api_upload():
 def api_delete():
     if not is_authed():
         return jsonify({"ok": False, "error": "not authed"}), 401
+
+    base_folder = session.get("folder")
+    cfg = get_user_cfg(base_folder)
+    allow_non_admin_delete = cfg.get("prefs", {}).get("allow_non_admin_delete", True)
+    if not allow_non_admin_delete and not is_admin_device_of(base_folder):
+        return jsonify({"ok": False, "error": "You do not have permission to delete files."}), 403
+
     data = request.get_json(silent=True) or {}
     files = data.get("files") or []
     deleted = []
-    base_folder = session.get("folder")
     for rel in files:
         if first_segment(rel) != base_folder:
             continue
@@ -3005,6 +3300,144 @@ def api_cliptext():
     parent_rel = path_rel(dest_dir) if dest_dir != ROOT_DIR else ""
     socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
     return jsonify({"ok": True, "meta": meta})
+
+@app.route("/api/folders")
+def api_folders():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    base_folder_path = ROOT_DIR / session.get("folder", "")
+
+    def get_dir_structure(path):
+        structure = []
+        try:
+            for item in path.iterdir():
+                if item.is_dir():
+                    children = get_dir_structure(item)
+                    structure.append({
+                        "name": item.name,
+                        "path": path_rel(item),
+                        "children": children
+                    })
+        except Exception as e:
+            print(f"Error reading directory {path}: {e}")
+        return sorted(structure, key=lambda x: x['name'].lower())
+
+    folder_tree = [{
+        "name": session.get("folder", "root"),
+        "path": session.get("folder", ""),
+        "children": get_dir_structure(base_folder_path)
+    }]
+
+    return jsonify({"ok": True, "tree": folder_tree})
+
+@app.route("/api/move", methods=["POST"])
+def api_move():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+    data = request.get_json(silent=True) or {}
+    sources = data.get("sources", [])
+    destination = data.get("destination", "")
+
+    if not sources or destination is None:
+        return jsonify({"ok": False, "error": "sources and destination required"}), 400
+
+    base_folder = session.get("folder")
+    dest_dir = safe_path(destination)
+
+    # Security checks
+    if first_segment(path_rel(dest_dir)) != base_folder and path_rel(dest_dir) != base_folder:
+        return jsonify({"ok": False, "error": "forbidden destination"}), 403
+    if not dest_dir.exists() or not dest_dir.is_dir():
+        return jsonify({"ok": False, "error": "bad destination"}), 400
+
+    moved_files = []
+    errors = []
+
+    for rel_path in sources:
+        if first_segment(rel_path) != base_folder:
+            errors.append({"path": rel_path, "error": "forbidden source"})
+            continue
+
+        source_path = safe_path(rel_path)
+        if not source_path.exists():
+            errors.append({"path": rel_path, "error": "source does not exist"})
+            continue
+
+        if source_path == dest_dir or str(dest_dir).startswith(str(source_path) + os.sep):
+            errors.append({"path": rel_path, "error": "cannot move a folder into itself"})
+            continue
+
+        target_path = dest_dir / source_path.name
+
+        # Handle name conflicts
+        if target_path.exists() and str(target_path) != str(source_path):
+            base, ext = os.path.splitext(source_path.name)
+            i = 1
+            while target_path.exists():
+                target_path = dest_dir / f"{base} ({i}){ext}"
+                i += 1
+
+        try:
+            shutil.move(str(source_path), str(target_path))
+            # Emit socket events for UI update
+            old_parent = str(Path(rel_path).parent)
+            if old_parent == '.': old_parent = ''
+            socketio.emit("file_update", {"action": "deleted", "dir": old_parent, "rel": rel_path})
+            socketio.emit("file_update", {"action": "added", "dir": destination, "meta": get_file_meta(target_path)})
+            moved_files.append({"from": rel_path, "to": path_rel(target_path)})
+        except Exception as e:
+            errors.append({"path": rel_path, "error": str(e)})
+
+    return jsonify({"ok": len(moved_files) > 0, "moved": moved_files, "errors": errors})
+
+@app.route("/api/download_zip", methods=["POST"])
+def api_download_zip():
+    if not is_authed():
+        # This is an API endpoint, so returning JSON error is better than redirect
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    data = request.get_json(silent=True) or {}
+    files = data.get("files", [])
+    if not files:
+        return jsonify({"ok": False, "error": "No files selected"}), 400
+
+    base_folder = session.get("folder")
+
+    memory_file = BytesIO()
+    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for rel_path in files:
+            if first_segment(rel_path) != base_folder:
+                continue # Security check: ensure user can only access their own folder
+
+            abs_path = safe_path(rel_path)
+            if not abs_path.exists():
+                continue
+
+            if abs_path.is_file():
+                zf.write(abs_path, arcname=abs_path.name)
+            elif abs_path.is_dir():
+                # Add the directory entry itself
+                dir_arcname = abs_path.relative_to(abs_path.parent).as_posix()
+                zf.write(abs_path, dir_arcname)
+                # Walk the directory and add all its contents
+                for root, _, dir_files in os.walk(abs_path):
+                    for f_name in dir_files:
+                        file_path = Path(root) / f_name
+                        # Create a relative path for the archive
+                        arcname = file_path.relative_to(abs_path.parent).as_posix()
+                        zf.write(file_path, arcname=arcname)
+
+    memory_file.seek(0)
+
+    zip_name = f"{base_folder}-download.zip" if len(files) > 1 else f"{Path(files[0]).name}.zip"
+
+    return send_file(
+        memory_file,
+        download_name=zip_name,
+        as_attachment=True,
+        mimetype='application/zip'
+    )
 
 # -----------------------------
 # Error handlers: redirect to login on not found/forbidden
