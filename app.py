@@ -1879,12 +1879,8 @@ async function changeDhikr() {
                 const cb = c.querySelector('.file-select-checkbox');
                 if(cb) cb.checked = (index >= start && index <= end);
             });
-        } else if (e.ctrlKey) {
-            checkbox.checked = !checkbox.checked;
-            lastSelectedIndex = currentIndex;
         } else {
-            document.querySelectorAll('.file-select-checkbox').forEach(cb => cb.checked = false);
-            checkbox.checked = true;
+            checkbox.checked = !checkbox.checked;
             lastSelectedIndex = currentIndex;
         }
         handleSelectionChange();
@@ -2317,7 +2313,7 @@ function upsertFileCard(meta){
 
   const noFilesMessage = document.getElementById('noFilesMessage');
   if (noFilesMessage) {
-    noFilesMessage.remove();
+    noFilesMessage.style.display = 'none';
   }
 
   const existing = qsCardByRel(meta.rel);
@@ -2331,9 +2327,19 @@ function upsertFileCard(meta){
   try { applySort(); } catch(e){}
   try { searchFiles(); } catch(e){}
 }
+function checkGridEmpty() {
+    const grid = document.getElementById('fileGrid');
+    const noFilesMessage = document.getElementById('noFilesMessage');
+    if (!grid || !noFilesMessage) return;
+    const hasCards = grid.querySelector('.file-card');
+    noFilesMessage.style.display = hasCards ? 'none' : '';
+}
 function removeFileCard(rel){
   const el = qsCardByRel(rel);
-  if(el) el.remove();
+  if(el) {
+    el.remove();
+    setTimeout(checkGridEmpty, 50);
+  }
 }
     // My QR modal with toggle (optional online/local)
     let qrOnlineMode = localStorage.getItem('qrMode') === 'online';
@@ -2571,6 +2577,7 @@ function removeFileCard(rel){
       initFileGrid();
       initSortControls();
       applySort();
+      checkGridEmpty();
       initSelection();
       initBulkActions();
       initSelectMode();
