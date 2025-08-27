@@ -1988,6 +1988,12 @@ function renderFileCard(meta){
 function upsertFileCard(meta){
   const grid = document.getElementById('fileGrid');
   if(!grid || !meta) return;
+
+  const noFilesMessage = document.getElementById('noFilesMessage');
+  if (noFilesMessage) {
+    noFilesMessage.remove();
+  }
+
   const existing = qsCardByRel(meta.rel);
   const node = renderFileCard(meta);
   if(existing){
@@ -2311,7 +2317,7 @@ BROWSE_HTML = """
 <!-- Files -->
 <div class="file-grid list-view" id="fileGrid">
   {% if not entries %}
-    <div class="card" style="text-align:center; color:var(--text-muted);">No files yet. Upload something!</div>
+    <div id="noFilesMessage" class="card" style="text-align:center; color:var(--text-muted);">No files yet. Upload something!</div>
   {% endif %}
   {% for item in entries %}
     <div class="file-card"
