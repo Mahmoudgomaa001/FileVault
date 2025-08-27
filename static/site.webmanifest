@@ -1,0 +1,15 @@
+{
+  "name": "GomaaFileVault",
+  "short_name": "FileVault",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffe6f2",
+  "theme_color": "#ff4fa3",
+  "icons": [
+    {
+      "src": "/static/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
