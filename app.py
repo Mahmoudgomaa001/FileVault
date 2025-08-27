@@ -797,7 +797,7 @@ BASE_HTML = """
     /* File grid */
     .file-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap:.75rem; margin-top:1rem; }
     .file-grid.list-view { grid-template-columns: 1fr; gap:.5rem; }
-    .file-card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; overflow:hidden; transition:all .2s ease; cursor:pointer; position: relative; }
+    .file-card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; overflow:hidden; transition:all .2s ease; cursor:pointer; }
     .file-card:active { transform:scale(.98); }
     .file-card.selected { border-color: var(--primary); background: color-mix(in srgb, var(--bg-secondary) 80%, var(--primary)); }
     .file-select-checkbox { display: none; position: absolute; top: 8px; left: 8px; z-index: 5; width: 18px; height: 18px; accent-color: var(--primary); }
@@ -855,11 +855,6 @@ BASE_HTML = """
     .fab-menu { position:absolute; bottom:70px; right:0; background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; padding:.5rem; box-shadow:0 4px 12px var(--shadow); display:none; min-width:180px; }
     .fab-menu.active { display:block; animation:fadeIn .2s ease; }
     .fab-menu-item { padding:.625rem .875rem; border-radius:.5rem; cursor:pointer; display:flex; align-items:center; gap:.75rem; font-size:.875rem; color:var(--text-primary); border:none; background:transparent; width:100%; text-align:left; }
-
-    /* Folder Tree */
-    .folder-tree-item { padding: 4px 8px; cursor: pointer; border-radius: 4px; transition: background-color .2s; }
-    .folder-tree-item:hover { background-color: var(--bg-tertiary); }
-    .folder-tree-item.selected { background-color: var(--primary); color: white; }
 
     @media (min-width: 768px) {
       .user-badge { display:block; }
@@ -1020,21 +1015,6 @@ BASE_HTML = """
     </div>
   </div>
 
-<!-- Accounts Modal -->
-<div class="modal" id="accountsModal">
-  <div class="modal-content" style="max-width:620px;">
-    <div class="modal-header">
-      <div class="modal-title">Accounts</div>
-      <button class="modal-close" onclick="closeModal('accountsModal')" aria-label="Close"><i class="fas fa-times"></i></button>
-    </div>
-    <div class="modal-body" id="accountsBody">Loading…</div>
-    <div class="modal-footer" style="flex-wrap:wrap; gap:.5rem;">
-      <input type="text" id="accCreateNameInput" class="form-input" placeholder="Custom name (optional) e.g. lucky-duck-042" style="flex:1; min-width:220px;">
-      <button class="btn btn-primary" id="accCreateBtn"><i class="fas fa-user-plus"></i> Create & Switch</button>
-    </div>
-  </div>
-</div>
-
 <!-- Move Modal -->
 <div class="modal" id="moveModal">
   <div class="modal-content" style="max-width:520px;">
@@ -1051,6 +1031,21 @@ BASE_HTML = """
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('moveModal')">Cancel</button>
       <button class="btn btn-primary" id="confirmMoveBtn"><i class="fas fa-people-carry"></i> Move Here</button>
+    </div>
+  </div>
+</div>
+
+<!-- Accounts Modal -->
+<div class="modal" id="accountsModal">
+  <div class="modal-content" style="max-width:620px;">
+    <div class="modal-header">
+      <div class="modal-title">Accounts</div>
+      <button class="modal-close" onclick="closeModal('accountsModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="accountsBody">Loading…</div>
+    <div class="modal-footer" style="flex-wrap:wrap; gap:.5rem;">
+      <input type="text" id="accCreateNameInput" class="form-input" placeholder="Custom name (optional) e.g. lucky-duck-042" style="flex:1; min-width:220px;">
+      <button class="btn btn-primary" id="accCreateBtn"><i class="fas fa-user-plus"></i> Create & Switch</button>
     </div>
   </div>
 </div>
@@ -1203,6 +1198,51 @@ BASE_HTML = """
   <script>
     'use strict';
 
+    let selectModeActive = false;
+    let selectedFiles = new Set();
+    let lastSelectedIndex = -1;
+
+    function handleSelectionChange(){
+        selectedFiles = new Set(Array.from(document.querySelectorAll('.file-select-checkbox:checked')).map(cb => cb.dataset.rel));
+
+        document.querySelectorAll('.file-card').forEach(card => {
+            const cb = card.querySelector('.file-select-checkbox');
+            if(cb && selectedFiles.has(cb.dataset.rel)){
+                card.classList.add('selected');
+                cb.checked = true;
+            } else {
+                card.classList.remove('selected');
+                if(cb) cb.checked = false;
+            }
+        });
+
+        const bulkToolbar = document.getElementById('bulkActionsToolbar');
+        if (bulkToolbar) {
+            if(selectedFiles.size > 0){
+                bulkToolbar.style.display = 'flex';
+                document.getElementById('selectionCount').textContent = `${selectedFiles.size} selected`;
+            } else {
+                bulkToolbar.style.display = 'none';
+                if (selectModeActive) {
+                    toggleSelectMode(false);
+                }
+            }
+        }
+    }
+
+    function toggleSelectMode(forceState) {
+        selectModeActive = (forceState === undefined) ? !selectModeActive : forceState;
+        document.body.classList.toggle('select-mode', selectModeActive);
+
+        if (!selectModeActive) {
+            // Clear selection when exiting mode
+            document.querySelectorAll('.file-select-checkbox:checked').forEach(cb => {
+                cb.checked = false;
+            });
+            handleSelectionChange();
+        }
+    }
+
     // Dhikr data
     const dhikrList = {{ dhikr_list|tojson }};
     
@@ -1327,12 +1367,28 @@ async function changeDhikr() {
         return;
       }
       
-      if(e.key==='Escape'){ 
-        // Close all active modals
-        document.querySelectorAll('.modal.active').forEach(m=>{
-          // Use closeModal to ensure proper cleanup of event listeners
-          closeModal(m.id);
-        }); 
+      if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+            return;
+        }
+        e.preventDefault();
+        if (!selectModeActive) {
+            toggleSelectMode(true);
+        }
+        document.querySelectorAll('.file-card:not([style*="display: none"]) .file-select-checkbox').forEach(cb => {
+            cb.checked = true;
+        });
+        handleSelectionChange();
+      }
+
+      if(e.key === 'Escape'){
+        if (selectModeActive) {
+            toggleSelectMode(false);
+        } else {
+            document.querySelectorAll('.modal.active').forEach(m=>{
+              closeModal(m.id);
+            });
+        }
       }
     });
 
@@ -1353,266 +1409,6 @@ async function changeDhikr() {
         const name = (card.dataset.name || '').toLowerCase();
         card.style.display = name.includes(q) ? '' : 'none';
       });
-    }
-
-    // SELECTION
-    let selectedFiles = new Set();
-    function handleSelectionChange(){
-      selectedFiles = new Set(Array.from(document.querySelectorAll('.file-select-checkbox:checked')).map(cb => cb.dataset.rel));
-
-      document.querySelectorAll('.file-card').forEach(card => {
-        const cb = card.querySelector('.file-select-checkbox');
-        if(cb && selectedFiles.has(cb.dataset.rel)){
-          card.classList.add('selected');
-          cb.checked = true;
-        } else {
-          card.classList.remove('selected');
-          if(cb) cb.checked = false;
-        }
-      });
-
-      const bulkToolbar = document.getElementById('bulkActionsToolbar');
-      const selectAllCb = document.getElementById('selectAllCheckbox');
-      if(selectedFiles.size > 0){
-        bulkToolbar.style.display = 'block';
-        document.getElementById('selectionCount').textContent = `${selectedFiles.size} selected`;
-      } else {
-        bulkToolbar.style.display = 'none';
-      }
-
-      if(selectAllCb){
-        const totalCheckboxes = document.querySelectorAll('.file-select-checkbox').length;
-        if(totalCheckboxes > 0 && selectedFiles.size === totalCheckboxes){
-          selectAllCb.checked = true;
-          selectAllCb.indeterminate = false;
-        } else if (selectedFiles.size > 0){
-          selectAllCb.checked = false;
-          selectAllCb.indeterminate = true;
-        } else {
-          selectAllCb.checked = false;
-          selectAllCb.indeterminate = false;
-        }
-      }
-    }
-    function initSelection(){
-      const selectAllCb = document.getElementById('selectAllCheckbox');
-      if(selectAllCb){
-        selectAllCb.addEventListener('change', (e) => {
-          document.querySelectorAll('.file-select-checkbox').forEach(cb => {
-            cb.checked = e.target.checked;
-          });
-          handleSelectionChange();
-        });
-      }
-      const deselectBtn = document.getElementById('deselectAllBtn');
-      if(deselectBtn){
-        deselectBtn.addEventListener('click', ()=>{
-          document.querySelectorAll('.file-select-checkbox').forEach(cb => cb.checked = false);
-          handleSelectionChange();
-        });
-      }
-    }
-
-
-    // MOVE
-    let selectedDestination = '';
-    function renderFolderTree(nodes, level = 0) {
-        let html = '';
-        for (const node of nodes) {
-            html += `
-                <div class="folder-tree-item" data-path="${node.path}" style="padding-left: ${level * 20}px;">
-                    <i class="fas fa-folder"></i> ${node.name}
-                </div>
-            `;
-            if (node.children && node.children.length > 0) {
-                html += renderFolderTree(node.children, level + 1);
-            }
-        }
-        return html;
-    }
-    async function openMoveModal() {
-        if (selectedFiles.size === 0) {
-            showToast('Please select files to move.', 'warning');
-            return;
-        }
-        openModal('moveModal');
-        const folderTreeDiv = document.getElementById('folderTree');
-        folderTreeDiv.innerHTML = 'Loading...';
-
-        try {
-            const response = await fetch('/api/folders');
-            const data = await response.json();
-            if (data.ok) {
-                folderTreeDiv.innerHTML = renderFolderTree(data.tree);
-                selectedDestination = ''; // Reset selection
-                document.getElementById('confirmMoveBtn').disabled = true;
-
-                document.querySelectorAll('.folder-tree-item').forEach(item => {
-                    item.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        const destinationPath = item.dataset.path;
-                        for (const sourcePath of selectedFiles) {
-                            if (sourcePath === destinationPath || destinationPath.startsWith(sourcePath + '/')) {
-                                showToast('Cannot move a folder into itself.', 'error');
-                                item.classList.add('invalid');
-                                setTimeout(()=> item.classList.remove('invalid'), 500);
-                                return;
-                            }
-                        }
-                        document.querySelectorAll('.folder-tree-item').forEach(i => i.classList.remove('selected'));
-                        item.classList.add('selected');
-                        selectedDestination = destinationPath;
-                        document.getElementById('confirmMoveBtn').disabled = false;
-                    });
-                });
-            } else {
-                folderTreeDiv.innerHTML = `Error: ${data.error || 'Could not load folders.'}`;
-            }
-        } catch (error) {
-            folderTreeDiv.innerHTML = 'Error loading folders.';
-        }
-    }
-    async function confirmMove() {
-        if (selectedDestination === '' || selectedDestination === null) {
-            showToast('Please select a destination folder.', 'warning');
-            return;
-        }
-
-        const sources = Array.from(selectedFiles);
-        try {
-            const r = await fetch('/api/move', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sources, destination: selectedDestination })
-            });
-            const j = await r.json();
-            if (j.ok) {
-                showToast('Items moved successfully!', 'success');
-                if(j.errors && j.errors.length > 0){
-                    j.errors.forEach(err => showToast(`Error moving ${err.path}: ${err.error}`, 'error'));
-                }
-                // The socket events will handle the removal of old cards and addition of new ones.
-                // We just need to clear the selection.
-                handleSelectionChange();
-            } else {
-                showToast(j.error || 'Move failed.', 'error');
-            }
-        } catch (e) {
-            showToast('An error occurred during the move.', 'error');
-        }
-        closeModal('moveModal');
-    }
-    async function confirmBulkDelete() {
-        if (selectedFiles.size === 0) { return; }
-        if (!confirm(`Are you sure you want to delete ${selectedFiles.size} item(s)?`)) { return; }
-
-        const sources = Array.from(selectedFiles);
-        try {
-            const r = await fetch('{{ url_for("api_delete") }}', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ files: sources })
-            });
-            const j = await r.json();
-            if (j.ok) {
-                showToast(`${j.deleted.length} item(s) deleted.`, 'success');
-                // The socket events will handle the removal of cards.
-                // We just need to clear the selection.
-                handleSelectionChange();
-            } else {
-                showToast(j.error || 'Delete failed.', 'error');
-            }
-        } catch (e) {
-            showToast('An error occurred during deletion.', 'error');
-        }
-    }
-
-    async function bulkDownload() {
-        if (selectedFiles.size === 0) { return; }
-        const sources = Array.from(selectedFiles);
-        try {
-            const r = await fetch('/api/download_zip', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ files: sources })
-            });
-
-            if (r.ok) {
-                const blob = await r.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = r.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'download.zip';
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                a.remove();
-            } else {
-                const j = await r.json();
-                showToast(j.error || 'Download failed.', 'error');
-            }
-        } catch (e) {
-            showToast('An error occurred during download.', 'error');
-        }
-    }
-
-    function initBulkActions(){
-        // Move
-        const bulkMoveBtn = document.getElementById('bulkMoveBtn');
-        if(bulkMoveBtn) bulkMoveBtn.addEventListener('click', openMoveModal);
-        const confirmMoveBtn = document.getElementById('confirmMoveBtn');
-        if(confirmMoveBtn) confirmMoveBtn.addEventListener('click', confirmMove);
-
-        // Delete
-        const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
-        if(bulkDeleteBtn) bulkDeleteBtn.addEventListener('click', confirmBulkDelete);
-
-        // Download
-        const bulkDownloadBtn = document.getElementById('bulkDownloadBtn');
-        if(bulkDownloadBtn) bulkDownloadBtn.addEventListener('click', bulkDownload);
-    }
-
-    // SELECT MODE
-    let selectModeActive = false;
-    function toggleSelectMode() {
-        selectModeActive = !selectModeActive;
-        document.body.classList.toggle('select-mode', selectModeActive);
-        const btn = document.getElementById('toggleSelectModeBtn');
-        if (selectModeActive) {
-            btn.innerHTML = '<i class="fas fa-times"></i> Done';
-            btn.classList.add('btn-primary');
-            btn.classList.remove('btn-secondary');
-        } else {
-            btn.innerHTML = '<i class="fas fa-check-square"></i> Select';
-            btn.classList.remove('btn-primary');
-            btn.classList.add('btn-secondary');
-
-            document.querySelectorAll('.file-select-checkbox:checked').forEach(cb => {
-                cb.checked = false;
-            });
-            handleSelectionChange();
-        }
-    }
-    function initSelectMode() {
-        const btn = document.getElementById('toggleSelectModeBtn');
-        if (btn) {
-            btn.addEventListener('click', toggleSelectMode);
-        }
-        document.addEventListener('keydown', (e)=>{
-            if(e.key === 'Escape' && selectModeActive){
-                toggleSelectMode();
-            }
-            if(e.key === 'a' && e.ctrlKey){
-                if(selectModeActive){
-                    e.preventDefault();
-                    document.querySelectorAll('.file-card:not([style*="display: none"]) .file-select-checkbox').forEach(cb => {
-                        cb.checked = true;
-                    });
-                    handleSelectionChange();
-                }
-            }
-        });
     }
 
     // SORTING
@@ -1860,14 +1656,13 @@ async function changeDhikr() {
     // PREVIEW (pointerup to avoid double-tap; throttle duplicates)
     let lastPreviewAt = 0;
     let _pvTextCache = '';
-    let lastSelectedIndex = -1;
     function handleCardOpenEvent(e){
       const card = e.target.closest('.file-card'); if(!card) return;
 
-      if (selectModeActive) {
-        if(e.target.closest('.file-actions') || e.target.classList.contains('file-select-checkbox')) return;
+      if (e.target.closest('.file-actions')) return;
 
-        const allCards = Array.from(document.querySelectorAll('.file-card'));
+      if (selectModeActive) {
+        const allCards = Array.from(document.querySelectorAll('.file-card:not([style*="display: none"])'));
         const currentIndex = allCards.indexOf(card);
         const checkbox = card.querySelector('.file-select-checkbox');
         if (!checkbox) return;
@@ -1875,14 +1670,23 @@ async function changeDhikr() {
         if (e.shiftKey && lastSelectedIndex !== -1) {
             const start = Math.min(lastSelectedIndex, currentIndex);
             const end = Math.max(lastSelectedIndex, currentIndex);
-            allCards.forEach((c, index) => {
+            // First, uncheck everything to handle complex shift-click scenarios
+            allCards.forEach(c => {
                 const cb = c.querySelector('.file-select-checkbox');
-                if(cb) cb.checked = (index >= start && index <= end);
+                if(cb) cb.checked = false;
+            });
+            // Then, check the items in the range
+            allCards.forEach((c, index) => {
+                if (index >= start && index <= end) {
+                    const cb = c.querySelector('.file-select-checkbox');
+                    if(cb) cb.checked = true;
+                }
             });
         } else {
             checkbox.checked = !checkbox.checked;
-            lastSelectedIndex = currentIndex;
         }
+
+        lastSelectedIndex = currentIndex;
         handleSelectionChange();
         return;
       }
@@ -1891,32 +1695,216 @@ async function changeDhikr() {
       if(now - lastPreviewAt < 250) return;
       lastPreviewAt = now;
 
-      if(e.target.closest('.file-actions')) return;
-
       const isDir = card.dataset.isDir === '1';
       const rel = card.dataset.rel, name = card.dataset.name, mime = card.dataset.mime, raw = card.dataset.raw, dl = card.dataset.dl;
       if(isDir){ window.location = "{{ url_for('browse') }}/" + rel; }
       else { openPreview(rel, name, mime, raw, dl); }
     }
 
-    function initFileGrid(){
-      const grid = document.getElementById('fileGrid');
-      if(!grid) return;
-      if(window.PointerEvent){
-        grid.addEventListener('pointerup', (e)=>{
-          if(e.pointerType === 'mouse' && e.button !== 0) return;
-          handleCardOpenEvent(e);
+    let selectedDestination = '';
+    function renderFolderTree(nodes, level = 0) {
+        let html = '';
+        for (const node of nodes) {
+            html += `
+                <div class="folder-tree-item" data-path="${node.path}" style="padding-left: ${level * 20}px;">
+                    <i class="fas fa-folder"></i> ${node.name}
+                </div>
+            `;
+            if (node.children && node.children.length > 0) {
+                html += renderFolderTree(node.children, level + 1);
+            }
+        }
+        return html;
+    }
+    async function openMoveModal() {
+        if (selectedFiles.size === 0) {
+            showToast('Please select files to move.', 'warning');
+            return;
+        }
+        openModal('moveModal');
+        const folderTreeDiv = document.getElementById('folderTree');
+        folderTreeDiv.innerHTML = 'Loading...';
+
+        try {
+            const response = await fetch('/api/folders');
+            const data = await response.json();
+            if (data.ok) {
+                folderTreeDiv.innerHTML = renderFolderTree(data.tree);
+                selectedDestination = ''; // Reset selection
+                document.getElementById('confirmMoveBtn').disabled = true;
+
+                document.querySelectorAll('.folder-tree-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const destinationPath = item.dataset.path;
+                        for (const sourcePath of selectedFiles) {
+                            if (sourcePath === destinationPath || destinationPath.startsWith(sourcePath + '/')) {
+                                showToast('Cannot move a folder into itself.', 'error');
+                                item.classList.add('invalid');
+                                setTimeout(()=> item.classList.remove('invalid'), 500);
+                                return;
+                            }
+                        }
+                        document.querySelectorAll('.folder-tree-item').forEach(i => i.classList.remove('selected'));
+                        item.classList.add('selected');
+                        selectedDestination = destinationPath;
+                        document.getElementById('confirmMoveBtn').disabled = false;
+                    });
+                });
+            } else {
+                folderTreeDiv.innerHTML = `Error: ${data.error || 'Could not load folders.'}`;
+            }
+        } catch (error) {
+            folderTreeDiv.innerHTML = 'Error loading folders.';
+        }
+    }
+    async function confirmMove() {
+        if (selectedDestination === '' || selectedDestination === null) {
+            showToast('Please select a destination folder.', 'warning');
+            return;
+        }
+
+        const sources = Array.from(selectedFiles);
+        try {
+            const r = await fetch('/api/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sources, destination: selectedDestination })
+            });
+            const j = await r.json();
+            if (j.ok) {
+                showToast('Items moved successfully!', 'success');
+                if(j.errors && j.errors.length > 0){
+                    j.errors.forEach(err => showToast(`Error moving ${err.path}: ${err.error}`, 'error'));
+                }
+                // The socket events will handle the removal of old cards and addition of new ones.
+                // We just need to clear the selection.
+                toggleSelectMode(false); // This will clear selection and hide toolbar
+            } else {
+                showToast(j.error || 'Move failed.', 'error');
+            }
+        } catch (e) {
+            showToast('An error occurred during the move.', 'error');
+        }
+        closeModal('moveModal');
+    }
+    async function confirmBulkDelete() {
+        if (selectedFiles.size === 0) { return; }
+        if (!confirm(`Are you sure you want to delete ${selectedFiles.size} item(s)?`)) { return; }
+
+        const sources = Array.from(selectedFiles);
+        try {
+            const r = await fetch('{{ url_for("api_delete") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: sources })
+            });
+            const j = await r.json();
+            if (j.ok) {
+                showToast(`${j.deleted.length} item(s) deleted.`, 'success');
+                toggleSelectMode(false); // This will clear selection and hide toolbar
+            } else {
+                showToast(j.error || 'Delete failed.', 'error');
+            }
+        } catch (e) {
+            showToast('An error occurred during deletion.', 'error');
+        }
+    }
+
+    async function bulkDownload() {
+        if (selectedFiles.size === 0) { return; }
+        const sources = Array.from(selectedFiles);
+        try {
+            const r = await fetch('/api/download_zip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: sources })
+            });
+
+            if (r.ok) {
+                const blob = await r.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = r.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || 'download.zip';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            } else {
+                const j = await r.json();
+                showToast(j.error || 'Download failed.', 'error');
+            }
+        } catch (e) {
+            showToast('An error occurred during download.', 'error');
+        }
+    }
+
+    function initBulkActions(){
+        document.getElementById('bulkMoveBtn')?.addEventListener('click', openMoveModal);
+        document.getElementById('confirmMoveBtn')?.addEventListener('click', confirmMove);
+        document.getElementById('bulkDeleteBtn')?.addEventListener('click', confirmBulkDelete);
+        document.getElementById('bulkDownloadBtn')?.addEventListener('click', bulkDownload);
+        document.getElementById('deselectAllBtn')?.addEventListener('click', () => toggleSelectMode(false));
+    }
+
+    function initFileGrid() {
+        const grid = document.getElementById('fileGrid');
+        if (!grid) return;
+
+        let pressTimer = null;
+        let startX, startY;
+        let isLongPress = false;
+
+        grid.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            const card = e.target.closest('.file-card');
+            if (!card || e.target.closest('.file-actions')) return;
+
+            startX = e.clientX;
+            startY = e.clientY;
+            isLongPress = false;
+
+            pressTimer = setTimeout(() => {
+                isLongPress = true;
+                pressTimer = null;
+
+                toggleSelectMode(true);
+                const checkbox = card.querySelector('.file-select-checkbox');
+                if (checkbox) {
+                    checkbox.checked = true;
+                    handleSelectionChange();
+                }
+                if (navigator.vibrate) navigator.vibrate(50);
+
+            }, 500);
         });
-      } else {
-        grid.addEventListener('click', handleCardOpenEvent);
-      }
-      
-      // Add up folder button if we're not at the root
-      
-      
-      // Add event listeners for navigation buttons
-      document.getElementById('pvPrevBtn')?.addEventListener('click', () => navigateToFile('prev'));
-      document.getElementById('pvNextBtn')?.addEventListener('click', () => navigateToFile('next'));
+
+        grid.addEventListener('pointermove', (e) => {
+            if (!pressTimer) return;
+            if (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10) {
+                clearTimeout(pressTimer);
+                pressTimer = null;
+            }
+        });
+
+        grid.addEventListener('pointerup', (e) => {
+            if (pressTimer) {
+                clearTimeout(pressTimer);
+                pressTimer = null;
+            }
+            if (!isLongPress) {
+                handleCardOpenEvent(e);
+            }
+        });
+
+        if (!window.PointerEvent) {
+            grid.addEventListener('click', handleCardOpenEvent);
+        }
+
+        document.getElementById('pvPrevBtn')?.addEventListener('click', () => navigateToFile('prev'));
+        document.getElementById('pvNextBtn')?.addEventListener('click', () => navigateToFile('next'));
     }
     
     
@@ -2289,7 +2277,6 @@ function renderFileCard(meta){
 
   const openHref = encodeURI(`/b/${meta.rel}`);
   el.innerHTML = `
-    <input type="checkbox" class="file-select-checkbox" data-rel="${meta.rel}" onclick="handleSelectionChange();">
     <div class="file-preview">${preview}</div>
     <div class="file-info">
       <div class="file-name" title="${safeHTML(meta.name)}">${safeHTML(meta.name)}</div>
@@ -2577,10 +2564,8 @@ function removeFileCard(rel){
       initFileGrid();
       initSortControls();
       applySort();
-      checkGridEmpty();
-      initSelection();
       initBulkActions();
-      initSelectMode();
+      checkGridEmpty();
       initSocket();
 
       // Bind Create Folder / Paste text buttons
@@ -2626,10 +2611,10 @@ BROWSE_HTML = """
   <div class="toolbar-row" style="justify-content:space-between;">
     <div style="font-weight:700;" id="selectionCount"></div>
     <div style="display:flex; gap:.5rem;">
-      <button class="btn btn-primary" id="bulkMoveBtn" title="Move"><i class="fas fa-people-carry"></i> </button>
-      <button class="btn btn-danger" id="bulkDeleteBtn" title="Delete" ><i class="fas fa-trash"></i> </button>
-      <button class="btn btn-success" id="bulkDownloadBtn" title="Download"><i class="fas fa-download" ></i> </button>
-      <button class="btn btn-secondary" id="deselectAllBtn" title="Deselect All"><i class="fa-solid fa-x"></i> </button>
+      <button class="btn btn-primary" id="bulkMoveBtn"><i class="fas fa-people-carry"></i> Move</button>
+      <button class="btn btn-danger" id="bulkDeleteBtn"><i class="fas fa-trash"></i> Delete</button>
+      <button class="btn btn-success" id="bulkDownloadBtn"><i class="fas fa-download"></i> Download</button>
+      <button class="btn btn-secondary" id="deselectAllBtn">Deselect All</button>
     </div>
   </div>
 </div>
@@ -2657,7 +2642,6 @@ BROWSE_HTML = """
       <label class="btn btn-secondary" style="gap:.5rem; cursor:pointer;">
         <input type="checkbox" id="foldersFirst" style="accent-color:#3B82F6; width:16px; height:16px;"> Folders first </label>
     </div>
-    <button class="btn btn-secondary" id="toggleSelectModeBtn"><i class="fas fa-check-square"></i> Select</button>
     <button class="btn btn-secondary" onclick="showNewFolderModal()"><i class="fas fa-folder-plus"></i> New Folder</button>
     <button class="btn btn-primary" id="openClipBtn"><i class="fas fa-clipboard"></i> Paste Text</button>
     <nav class="nav-menu">
@@ -2684,7 +2668,7 @@ BROWSE_HTML = """
 <!-- Files -->
 <div class="file-grid list-view" id="fileGrid">
   {% if not entries %}
-    <div id="noFilesMessage" class="card" style="text-align:center; color:var(--text-muted);">No files yet. Upload something!</div>
+    <div class="card" style="text-align:center; color:var(--text-muted);">No files yet. Upload something!</div>
   {% endif %}
   {% for item in entries %}
     <div class="file-card"
@@ -2696,7 +2680,7 @@ BROWSE_HTML = """
          data-mtime="{{ item.mtime }}"
          data-raw="{{ url_for('raw', path=item.rel) }}"
          data-dl="{{ url_for('download', path=item.rel) }}">
-      <input type="checkbox" class="file-select-checkbox" data-rel="{{ item.rel }}" onclick="handleSelectionChange();">
+      <input type="checkbox" class="file-select-checkbox" data-rel="{{ item.rel }}" onchange="handleSelectionChange()" onclick="event.stopPropagation();">
       <div class="file-preview">
         {% if item.is_dir %}
           <div class="file-icon-large" style="font-size:2rem;opacity:.6;">📁</div>
@@ -3471,7 +3455,6 @@ def api_move():
 @app.route("/api/download_zip", methods=["POST"])
 def api_download_zip():
     if not is_authed():
-        # This is an API endpoint, so returning JSON error is better than redirect
         return jsonify({"ok": False, "error": "not authed"}), 401
 
     data = request.get_json(silent=True) or {}
@@ -3485,7 +3468,7 @@ def api_download_zip():
     with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
         for rel_path in files:
             if first_segment(rel_path) != base_folder:
-                continue # Security check: ensure user can only access their own folder
+                continue
 
             abs_path = safe_path(rel_path)
             if not abs_path.exists():
@@ -3494,14 +3477,9 @@ def api_download_zip():
             if abs_path.is_file():
                 zf.write(abs_path, arcname=abs_path.name)
             elif abs_path.is_dir():
-                # Add the directory entry itself
-                dir_arcname = abs_path.relative_to(abs_path.parent).as_posix()
-                zf.write(abs_path, dir_arcname)
-                # Walk the directory and add all its contents
                 for root, _, dir_files in os.walk(abs_path):
                     for f_name in dir_files:
                         file_path = Path(root) / f_name
-                        # Create a relative path for the archive
                         arcname = file_path.relative_to(abs_path.parent).as_posix()
                         zf.write(file_path, arcname=arcname)
 
