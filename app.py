@@ -964,7 +964,7 @@ BASE_HTML = """
     <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
     <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
   {% endif %}
-  <button class="btn btn-primary" id="installBtn" title="Install App" style="display: none;"><i class="fas fa-download"></i> Install</button>
+  <button class="btn btn-secondary" id="installBtn" title="App cannot be installed yet" disabled><i class="fas fa-download"></i> Install</button>
   <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
   <button id="themeBtn" class="btn btn-secondary btn-icon" title="Toggle theme"><i class="fas fa-moon"></i></button>
   <a href="{{ url_for('logout') }}" class="btn btn-danger btn-icon" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
@@ -2817,7 +2817,11 @@ function removeFileCard(rel){
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        installBtn.style.display = 'flex';
+        // Make the button active
+        installBtn.disabled = false;
+        installBtn.classList.remove('btn-secondary');
+        installBtn.classList.add('btn-primary');
+        installBtn.title = 'Install App';
       });
 
       installBtn.addEventListener('click', async () => {
@@ -2828,12 +2832,18 @@ function removeFileCard(rel){
             showToast('App installed!', 'success');
           }
           deferredPrompt = null;
-          installBtn.style.display = 'none';
+          // Disable the button after prompt
+          installBtn.disabled = true;
+          installBtn.title = 'App is installed or prompt was dismissed';
         }
       });
 
       window.addEventListener('appinstalled', () => {
-        installBtn.style.display = 'none';
+        // Keep the button disabled after installation and give visual feedback
+        installBtn.disabled = true;
+        installBtn.title = 'App successfully installed';
+        installBtn.classList.remove('btn-primary');
+        installBtn.classList.add('btn-success');
         deferredPrompt = null;
         showToast('Installation complete!', 'success');
       });
