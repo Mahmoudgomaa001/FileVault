@@ -741,6 +741,17 @@ BASE_HTML = """
 <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
 <link rel="stylesheet" href="/static/vendor/fontawesome/css/fa-shims.css" />
 
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/static/sw.js').then(registration => {
+        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+      }, err => {
+        console.log('ServiceWorker registration failed: ', err);
+      });
+    });
+  }
+</script>
 
   <style>
     * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
