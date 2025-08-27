@@ -144,7 +144,7 @@ def ensure_favicon_assets():
 
     # Minimal PWA manifest using SVG icons (offline-friendly)
     manifest = {
-        "name": "GomaaFileVault",
+        "name": "FileVault",
         "short_name": "FileVault",
         "start_url": "/",
         "display": "standalone",
