@@ -2626,10 +2626,10 @@ BROWSE_HTML = """
   <div class="toolbar-row" style="justify-content:space-between;">
     <div style="font-weight:700;" id="selectionCount"></div>
     <div style="display:flex; gap:.5rem;">
-      <button class="btn btn-primary" id="bulkMoveBtn"><i class="fas fa-people-carry"></i> Move</button>
-      <button class="btn btn-danger" id="bulkDeleteBtn"><i class="fas fa-trash"></i> Delete</button>
-      <button class="btn btn-success" id="bulkDownloadBtn"><i class="fas fa-download"></i> Download</button>
-      <button class="btn btn-secondary" id="deselectAllBtn">Deselect All</button>
+      <button class="btn btn-primary" id="bulkMoveBtn" title="Move"><i class="fas fa-people-carry"></i> </button>
+      <button class="btn btn-danger" id="bulkDeleteBtn" title="Delete" ><i class="fas fa-trash"></i> </button>
+      <button class="btn btn-success" id="bulkDownloadBtn" title="Download"><i class="fas fa-download" ></i> </button>
+      <button class="btn btn-secondary" id="deselectAllBtn" title="Deselect All"><i class="fa-solid fa-x"></i> </button>
     </div>
   </div>
 </div>
