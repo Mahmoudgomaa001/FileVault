@@ -152,7 +152,20 @@ def ensure_favicon_assets():
         "theme_color": "#ff4fa3",
         "icons": [
             {"src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml"}
-        ]
+        ],
+        "share_target": {
+            "action": "/share-receiver",
+            "method": "POST",
+            "enctype": "multipart/form-data",
+            "params": {
+                "files": [
+                    {
+                        "name": "files",
+                        "accept": ["*/*"]
+                    }
+                ]
+            }
+        }
     }
     manifest_path = base / "site.webmanifest"
     try:
@@ -405,6 +418,62 @@ def api_accounts_switch():
         save_device_map(app.config["DEVICE_MAP"])
 
     return jsonify({"ok": True, "folder": folder, "browse_url": url_for("browse", subpath=folder)})
+
+@app.route("/api/accounts/rename", methods=["POST"])
+def api_accounts_rename():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    data = request.get_json(silent=True) or {}
+    old_name = data.get("old_name", "").strip()
+    new_name_raw = data.get("new_name", "").strip()
+
+    if not old_name or not new_name_raw:
+        return jsonify({"ok": False, "error": "Old and new names are required"}), 400
+
+    if not is_admin_device_of(old_name):
+        return jsonify({"ok": False, "error": "Only the admin can rename this account"}), 403
+
+    new_name = sanitize_filename(new_name_raw.lower())
+    if not re.fullmatch(r"[a-z0-9][a-z0-9\-]{1,200}", new_name):
+        return jsonify({"ok": False, "error": "Invalid new name (use a-z, 0-9, -)"}), 400
+
+    old_path = safe_path(old_name)
+    new_path = safe_path(new_name)
+
+    if not old_path.exists() or not old_path.is_dir():
+        return jsonify({"ok": False, "error": "Old account folder not found"}), 404
+
+    if new_path.exists():
+        return jsonify({"ok": False, "error": "An account with the new name already exists"}), 409
+
+    try:
+        shutil.move(str(old_path), str(new_path))
+
+        users = app.config.setdefault("USERS", load_users())
+        if old_name in users:
+            users[new_name] = users.pop(old_name)
+            save_users(users)
+
+        device_map = app.config["DEVICE_MAP"]
+        updated_device_map = False
+        for device_id, info in device_map.items():
+            if info.get("folder") == old_name:
+                info["folder"] = new_name
+                updated_device_map = True
+        if updated_device_map:
+            save_device_map(device_map)
+
+        if session.get("folder") == old_name:
+            session["folder"] = new_name
+            session["icon"] = get_user_icon(new_name)
+
+        return jsonify({"ok": True, "message": "Account renamed successfully"})
+
+    except Exception as e:
+        if new_path.exists() and not old_path.exists():
+            shutil.move(str(new_path), str(old_path))
+        return jsonify({"ok": False, "error": f"An error occurred: {e}"}), 500
 
 def get_user_by_token(token):
     """Find a user by their API token"""
@@ -1072,6 +1141,31 @@ BASE_HTML = """
     </div>
   </div>
 </div>
+
+<!-- Rename Account Modal -->
+<div class="modal" id="renameAccountModal">
+  <div class="modal-content" style="max-width:520px;">
+    <div class="modal-header">
+      <h3 class="modal-title">Rename Account</h3>
+      <button class="modal-close" onclick="closeModal('renameAccountModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p>Renaming account: <strong id="renameAccountOldName"></strong></p>
+      <div class="form-group">
+        <label class="form-label">New Account Name</label>
+        <input type="text" id="renameAccountInput" class="form-input" placeholder="Enter new name" autocomplete="off">
+        <input type="hidden" id="renameAccountHiddenOldName">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('renameAccountModal')">Cancel</button>
+      <button class="btn btn-primary" id="confirmRenameBtn"><i class="fas fa-save"></i> Rename</button>
+    </div>
+  </div>
+</div>
+
+{{SHARE_MODAL_HTML|safe}}
+
 </div>
 
   <script src="/static/socket.io.min.js"></script>
@@ -1102,6 +1196,7 @@ BASE_HTML = """
             </div>
             <div style="display:flex; gap:.5rem;">
               <button class="btn btn-primary" onclick="switchAccount('${a.folder.replace(/'/g,"\\'")}', true)"><i class="fas fa-right-left"></i> Switch</button>
+              <button class="btn btn-secondary" onclick="openRenameModal('${a.folder.replace(/'/g,"\\'")}')"><i class="fas fa-pencil-alt"></i> Rename</button>
               <button class="btn btn-secondary" onclick="openTransferAdmin('${a.folder.replace(/'/g,"\\'")}')"><i class="fas fa-key"></i> Transfer Admin</button>
             </div>
           </div>`;
@@ -1193,6 +1288,46 @@ BASE_HTML = """
       showToast('Failed to start transfer', 'error');
     }
   }
+
+    function openRenameModal(oldName) {
+        document.getElementById('renameAccountOldName').textContent = oldName;
+        document.getElementById('renameAccountHiddenOldName').value = oldName;
+        document.getElementById('renameAccountInput').value = '';
+        openModal('renameAccountModal');
+        setTimeout(()=> document.getElementById('renameAccountInput').focus(), 50);
+    }
+
+    async function confirmRename() {
+        const oldName = document.getElementById('renameAccountHiddenOldName').value;
+        const newName = document.getElementById('renameAccountInput').value.trim();
+
+        if (!newName) {
+            showToast('Please enter a new name.', 'warning');
+            return;
+        }
+
+        try {
+            const r = await fetch('/api/accounts/rename', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ old_name: oldName, new_name: newName })
+            });
+            const j = await r.json();
+            if (j.ok) {
+                showToast('Account renamed!', 'success');
+                closeModal('renameAccountModal');
+                openAccounts();
+                const currentFolder = {{ session.get('folder', '')|tojson }};
+                if (currentFolder === oldName) {
+                    setTimeout(()=> window.location.href = window.location.pathname.replace('/b/' + oldName, '/b/' + newName), 300);
+                }
+            } else {
+                showToast(j.error || 'Rename failed.', 'error');
+            }
+        } catch (e) {
+            showToast('An error occurred during rename.', 'error');
+        }
+    }
 </script>
 
   <script>
@@ -1811,6 +1946,86 @@ async function changeDhikr() {
         }
     }
 
+    // PWA SHARE HANDLING
+    let selectedShareDestination = '';
+    let currentPendingFile = null;
+
+    async function checkForPendingShares(){
+        try {
+            const r = await fetch('/api/pending_shares');
+            const j = await r.json();
+            if(j.ok && j.files && j.files.length > 0){
+                if (!document.getElementById('shareModal').classList.contains('active')) {
+                    currentPendingFile = j.files[0];
+                    openShareModal(currentPendingFile);
+                }
+            }
+        } catch(e) {
+            console.error('Failed to check for pending shares', e);
+        }
+    }
+
+    async function openShareModal(file) {
+        if (!file) return;
+        document.getElementById('shareFileName').textContent = file.name;
+
+        const folderTreeDiv = document.getElementById('shareFolderTree');
+        folderTreeDiv.innerHTML = 'Loading...';
+        openModal('shareModal');
+
+        try {
+            const response = await fetch('/api/folders');
+            const data = await response.json();
+            if (data.ok) {
+                folderTreeDiv.innerHTML = renderFolderTree(data.tree);
+                selectedShareDestination = '';
+                const confirmBtn = document.getElementById('confirmShareBtn');
+                if(confirmBtn) confirmBtn.disabled = true;
+
+                document.querySelectorAll('#shareFolderTree .folder-tree-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        document.querySelectorAll('#shareFolderTree .folder-tree-item').forEach(i => i.classList.remove('selected'));
+                        item.classList.add('selected');
+                        selectedShareDestination = item.dataset.path;
+                        if(confirmBtn) confirmBtn.disabled = false;
+                    });
+                });
+            } else {
+                folderTreeDiv.innerHTML = `Error: ${data.error || 'Could not load folders.'}`;
+            }
+        } catch (error) {
+            folderTreeDiv.innerHTML = 'Error loading folders.';
+        }
+    }
+
+    async function confirmShare() {
+        if (!currentPendingFile || selectedShareDestination === '') {
+            showToast('Please select a destination folder.', 'warning');
+            return;
+        }
+
+        try {
+            const r = await fetch('/api/commit_share', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: currentPendingFile.id, destination: selectedShareDestination })
+            });
+            const j = await r.json();
+            if (j.ok) {
+                showToast(`File '${j.meta.name}' saved successfully!`, 'success');
+            } else {
+                showToast(j.error || 'Share failed.', 'error');
+            }
+        } catch (e) {
+            showToast('An error occurred during the share.', 'error');
+        }
+        closeModal('shareModal');
+        currentPendingFile = null;
+
+        setTimeout(checkForPendingShares, 500);
+    }
+
     async function bulkDownload() {
         if (selectedFiles.size === 0) { return; }
         const sources = Array.from(selectedFiles);
@@ -1945,6 +2160,12 @@ async function changeDhikr() {
 
 
 
+// The buggy global keydown listener below was removed to fix a TypeError.
+// It was attempting to access properties on `pvModal` which could be null
+// on pages where the preview modal does not exist (e.g., the login page),
+// causing a "Cannot read properties of null (reading 'classList')" error.
+// The correct keyboard handling for the preview modal is managed by the
+// `handlePreviewKeydown` function, which is dynamically added and removed.
 
 
     function openPreview(rel, name, mime, rawUrl, downloadUrl){
@@ -2217,6 +2438,14 @@ function initSocket(){
 
       // Keep your dhikr shuffle if you like
       try { changeDhikr(); } catch(e){}
+    });
+
+    socket.on('share_ready', (msg)=> {
+        const folder = {{ session.get('folder', '')|tojson }};
+        if(msg && msg.folder === folder){
+            showToast('Received a shared file!', 'info');
+            checkForPendingShares();
+        }
     });
 
   } catch(e){
@@ -2553,6 +2782,7 @@ function removeFileCard(rel){
       initBulkActions();
       checkGridEmpty();
       initSocket();
+      checkForPendingShares(); // Check for shares on page load
 
       // Bind Create Folder / Paste text buttons
       document.getElementById('mkdirCreateBtn')?.addEventListener('click', createNewFolder);
@@ -2561,7 +2791,41 @@ function removeFileCard(rel){
       document.getElementById('clipSaveBtn')?.addEventListener('click', saveClipboardText);
       document.getElementById('clipTextInput')?.addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); saveClipboardText(); }});
       document.getElementById('clipNameInput')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveClipboardText(); }});
+      document.getElementById('confirmShareBtn')?.addEventListener('click', confirmShare);
+      document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
+      initPwaInstall();
     });
+
+    // PWA INSTALL
+    function initPwaInstall() {
+      let deferredPrompt;
+      const installBtn = document.getElementById('installBtn');
+      if (!installBtn) return;
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        installBtn.style.display = 'flex';
+      });
+
+      installBtn.addEventListener('click', async () => {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === 'accepted') {
+            showToast('App installed!', 'success');
+          }
+          deferredPrompt = null;
+          installBtn.style.display = 'none';
+        }
+      });
+
+      window.addEventListener('appinstalled', () => {
+        installBtn.style.display = 'none';
+        deferredPrompt = null;
+        showToast('Installation complete!', 'success');
+      });
+    }
 
     // FAB
     function toggleFabMenu(){ document.getElementById('fabMenu')?.classList.toggle('active'); }
@@ -2654,7 +2918,7 @@ BROWSE_HTML = """
 <!-- Files -->
 <div class="file-grid list-view" id="fileGrid">
   {% if not entries %}
-    <div class="card" style="text-align:center; color:var(--text-muted);">No files yet. Upload something!</div>
+    <div class="card" id="noFilesMessage" style="text-align:center; color:var(--text-muted);">No files yet. Upload something!</div>
   {% endif %}
   {% for item in entries %}
     <div class="file-card"
@@ -2742,6 +3006,7 @@ BROWSE_HTML = """
 <!-- FAB -->
 <div class="fab-container">
   <div class="fab-menu" id="fabMenu">
+    <button class="fab-menu-item" id="installBtn" style="display: none;"><i class="fas fa-download"></i> Install App</button>
     <button class="fab-menu-item" onclick="showNewFolderModal()"><i class="fas fa-folder-plus"></i> New Folder</button>
     <button class="fab-menu-item" onclick="document.getElementById('uploadInput').click()"><i class="fas fa-file-upload"></i> Upload Files</button>
     <button class="fab-menu-item" onclick="openClipModal()"><i class="fas fa-clipboard"></i> Paste Text</button>
@@ -3481,6 +3746,124 @@ def api_download_zip():
     )
 
 # -----------------------------
+# -----------------------------
+# Routes: PWA Share Target
+# -----------------------------
+SHARE_MODAL_HTML = """
+<div class="modal" id="shareModal">
+  <div class="modal-content" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">Complete Your Share</div>
+      <button class="modal-close" onclick="closeModal('shareModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:.5rem;">Saving file: <strong id="shareFileName"></strong></p>
+      <p>Select destination folder:</p>
+      <div id="shareFolderTree" style="height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary);">
+        Loading...
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('shareModal')">Cancel</button>
+      <button class="btn btn-primary" id="confirmShareBtn"><i class="fas fa-save"></i> Save Here</button>
+    </div>
+  </div>
+</div>
+"""
+
+@app.route("/share-receiver", methods=["POST"])
+def share_receiver():
+    device_id, folder = get_or_create_device_folder(request)
+    if not folder:
+        return Response("Device not recognized. Please log in to the app first.", status=401)
+
+    f = request.files.get("files")
+    if not f or not f.filename:
+        return Response("No file was shared.", status=400)
+
+    pending_dir = safe_path(folder) / ".pending_shares"
+    pending_dir.mkdir(exist_ok=True)
+
+    filename = sanitize_filename(f.filename)
+    # Use a UUID to avoid filename collisions in the pending folder
+    save_name = f"{str(uuid.uuid4())}__{filename}"
+    save_path = pending_dir / save_name
+
+    try:
+        f.save(save_path)
+    except Exception as e:
+        print(f"[share] Save failed: {e}")
+        return Response("Failed to save shared file.", status=500)
+
+    # Let the main app know a share is ready via socket
+    socketio.emit("share_ready", {"folder": folder})
+    return Response(status=204)
+
+@app.route("/api/pending_shares")
+def api_pending_shares():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    folder = session.get("folder")
+    pending_dir = safe_path(folder) / ".pending_shares"
+    files = []
+    if pending_dir.exists():
+        for p in pending_dir.iterdir():
+            if p.is_file():
+                try:
+                    uuid_part, name_part = p.name.split("__", 1)
+                    files.append({"id": p.name, "name": name_part})
+                except ValueError:
+                    continue # Skip files not in the expected format
+    return jsonify({"ok": True, "files": files})
+
+@app.route("/api/commit_share", methods=["POST"])
+def api_commit_share():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    data = request.get_json(silent=True) or {}
+    pending_id = data.get("id")
+    destination_rel = data.get("destination")
+
+    if not pending_id or destination_rel is None:
+        return jsonify({"ok": False, "error": "id and destination required"}), 400
+
+    base_folder = session.get("folder")
+    if first_segment(destination_rel) != base_folder and destination_rel != base_folder:
+        return jsonify({"ok": False, "error": "forbidden destination"}), 403
+
+    pending_dir = safe_path(base_folder) / ".pending_shares"
+    pending_file = pending_dir / pending_id
+
+    if not pending_file.exists() or not pending_file.is_file():
+        return jsonify({"ok": False, "error": "pending file not found"}), 404
+
+    try:
+        _, original_filename = pending_id.split("__", 1)
+    except ValueError:
+        original_filename = pending_id # fallback
+
+    dest_dir = safe_path(destination_rel)
+    save_path = dest_dir / original_filename
+
+    # Handle name conflicts
+    base, ext = os.path.splitext(original_filename)
+    i = 1
+    while save_path.exists():
+        save_path = dest_dir / f"{base} ({i}){ext}"
+        i += 1
+
+    try:
+        shutil.move(str(pending_file), str(save_path))
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Failed to move file: {e}"}), 500
+
+    meta = get_file_meta(save_path)
+    socketio.emit("file_update", {"action":"added", "dir": destination_rel, "meta": meta})
+    return jsonify({"ok": True, "meta": meta})
+
+
 # Error handlers: redirect to login on not found/forbidden
 # -----------------------------
 @app.errorhandler(404)
