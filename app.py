@@ -144,7 +144,7 @@ def ensure_favicon_assets():
 
     # Minimal PWA manifest using SVG icons (offline-friendly)
     manifest = {
-        "name": "FileVault",
+        "name": "GomaaFileVault",
         "short_name": "FileVault",
         "start_url": "/",
         "display": "standalone",
@@ -800,7 +800,8 @@ BASE_HTML = """
     .file-card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; overflow:hidden; transition:all .2s ease; cursor:pointer; position: relative; }
     .file-card:active { transform:scale(.98); }
     .file-card.selected { border-color: var(--primary); background: color-mix(in srgb, var(--bg-secondary) 80%, var(--primary)); }
-    .file-select-checkbox { position: absolute; top: 8px; left: 8px; z-index: 5; width: 18px; height: 18px; accent-color: var(--primary); }
+    .file-select-checkbox { display: none; position: absolute; top: 8px; left: 8px; z-index: 5; width: 18px; height: 18px; accent-color: var(--primary); }
+    .select-mode .file-select-checkbox { display: block; }
     .list-view .file-card { display:flex; align-items:center; padding:.75rem; gap:.75rem; }
     .file-preview { height:120px; background:var(--bg-tertiary); display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; }
     .list-view .file-preview { width:48px; height:48px; border-radius:.5rem; flex-shrink:0; }
@@ -1572,6 +1573,48 @@ async function changeDhikr() {
         if(bulkDownloadBtn) bulkDownloadBtn.addEventListener('click', bulkDownload);
     }
 
+    // SELECT MODE
+    let selectModeActive = false;
+    function toggleSelectMode() {
+        selectModeActive = !selectModeActive;
+        document.body.classList.toggle('select-mode', selectModeActive);
+        const btn = document.getElementById('toggleSelectModeBtn');
+        if (selectModeActive) {
+            btn.innerHTML = '<i class="fas fa-times"></i> Done';
+            btn.classList.add('btn-primary');
+            btn.classList.remove('btn-secondary');
+        } else {
+            btn.innerHTML = '<i class="fas fa-check-square"></i> Select';
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-secondary');
+
+            document.querySelectorAll('.file-select-checkbox:checked').forEach(cb => {
+                cb.checked = false;
+            });
+            handleSelectionChange();
+        }
+    }
+    function initSelectMode() {
+        const btn = document.getElementById('toggleSelectModeBtn');
+        if (btn) {
+            btn.addEventListener('click', toggleSelectMode);
+        }
+        document.addEventListener('keydown', (e)=>{
+            if(e.key === 'Escape' && selectModeActive){
+                toggleSelectMode();
+            }
+            if(e.key === 'a' && e.ctrlKey){
+                if(selectModeActive){
+                    e.preventDefault();
+                    document.querySelectorAll('.file-card:not([style*="display: none"]) .file-select-checkbox').forEach(cb => {
+                        cb.checked = true;
+                    });
+                    handleSelectionChange();
+                }
+            }
+        });
+    }
+
     // SORTING
     function getSortPrefs(){
       return {
@@ -1817,12 +1860,41 @@ async function changeDhikr() {
     // PREVIEW (pointerup to avoid double-tap; throttle duplicates)
     let lastPreviewAt = 0;
     let _pvTextCache = '';
+    let lastSelectedIndex = -1;
     function handleCardOpenEvent(e){
+      const card = e.target.closest('.file-card'); if(!card) return;
+
+      if (selectModeActive) {
+        if(e.target.closest('.file-actions') || e.target.classList.contains('file-select-checkbox')) return;
+
+        const allCards = Array.from(document.querySelectorAll('.file-card'));
+        const currentIndex = allCards.indexOf(card);
+        const checkbox = card.querySelector('.file-select-checkbox');
+        if (!checkbox) return;
+
+        if (e.shiftKey && lastSelectedIndex !== -1) {
+            const start = Math.min(lastSelectedIndex, currentIndex);
+            const end = Math.max(lastSelectedIndex, currentIndex);
+            allCards.forEach((c, index) => {
+                const cb = c.querySelector('.file-select-checkbox');
+                if(cb) cb.checked = (index >= start && index <= end);
+            });
+        } else if (e.ctrlKey) {
+            checkbox.checked = !checkbox.checked;
+            lastSelectedIndex = currentIndex;
+        } else {
+            document.querySelectorAll('.file-select-checkbox').forEach(cb => cb.checked = false);
+            checkbox.checked = true;
+            lastSelectedIndex = currentIndex;
+        }
+        handleSelectionChange();
+        return;
+      }
+
       const now = Date.now();
       if(now - lastPreviewAt < 250) return;
       lastPreviewAt = now;
 
-      const card = e.target.closest('.file-card'); if(!card) return;
       if(e.target.closest('.file-actions')) return;
 
       const isDir = card.dataset.isDir === '1';
@@ -2221,7 +2293,7 @@ function renderFileCard(meta){
 
   const openHref = encodeURI(`/b/${meta.rel}`);
   el.innerHTML = `
-    <input type="checkbox" class="file-select-checkbox" data-rel="${meta.rel}" onclick="event.stopPropagation(); handleSelectionChange();">
+    <input type="checkbox" class="file-select-checkbox" data-rel="${meta.rel}" onclick="handleSelectionChange();">
     <div class="file-preview">${preview}</div>
     <div class="file-info">
       <div class="file-name" title="${safeHTML(meta.name)}">${safeHTML(meta.name)}</div>
@@ -2501,6 +2573,7 @@ function removeFileCard(rel){
       applySort();
       initSelection();
       initBulkActions();
+      initSelectMode();
       initSocket();
 
       // Bind Create Folder / Paste text buttons
@@ -2557,10 +2630,6 @@ BROWSE_HTML = """
 <!-- Toolbar -->
 <div class="toolbar">
   <div class="toolbar-row">
-    <div style="display:flex; align-items:center; gap:.5rem; padding-right:1rem;">
-      <input type="checkbox" id="selectAllCheckbox" style="width:18px; height:18px; accent-color:var(--primary);">
-      <label for="selectAllCheckbox" style="cursor:pointer; user-select:none;">Select All</label>
-    </div>
     <div class="search-box">
       <input id="searchInput" class="search-input" placeholder="Search..." />
       <i class="fas fa-search search-icon"></i>
@@ -2581,6 +2650,7 @@ BROWSE_HTML = """
       <label class="btn btn-secondary" style="gap:.5rem; cursor:pointer;">
         <input type="checkbox" id="foldersFirst" style="accent-color:#3B82F6; width:16px; height:16px;"> Folders first </label>
     </div>
+    <button class="btn btn-secondary" id="toggleSelectModeBtn"><i class="fas fa-check-square"></i> Select</button>
     <button class="btn btn-secondary" onclick="showNewFolderModal()"><i class="fas fa-folder-plus"></i> New Folder</button>
     <button class="btn btn-primary" id="openClipBtn"><i class="fas fa-clipboard"></i> Paste Text</button>
     <nav class="nav-menu">
@@ -2619,7 +2689,7 @@ BROWSE_HTML = """
          data-mtime="{{ item.mtime }}"
          data-raw="{{ url_for('raw', path=item.rel) }}"
          data-dl="{{ url_for('download', path=item.rel) }}">
-      <input type="checkbox" class="file-select-checkbox" data-rel="{{ item.rel }}" onclick="event.stopPropagation(); handleSelectionChange();">
+      <input type="checkbox" class="file-select-checkbox" data-rel="{{ item.rel }}" onclick="handleSelectionChange();">
       <div class="file-preview">
         {% if item.is_dir %}
           <div class="file-icon-large" style="font-size:2rem;opacity:.6;">📁</div>
