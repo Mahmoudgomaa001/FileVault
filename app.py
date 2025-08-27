@@ -109,6 +109,7 @@ TEMPLATE_HTML = """
         #file-list li .checkbox-container { margin-right: 15px; display: none; }
         #file-list.select-mode li .checkbox-container { display: block; }
         #file-list li .checkbox-container input { width: 18px; height: 18px; cursor: pointer; }
+<<<<<<< HEAD
 
         #selection-exit-bar {
             position: fixed;
@@ -134,6 +135,11 @@ TEMPLATE_HTML = """
     <div id="selection-exit-bar" style="display: none;" onclick="exitSelectMode()">
         <span>Done</span>
     </div>
+=======
+    </style>
+</head>
+<body>
+>>>>>>> parent of 161a9be (Revert "Implement Advanced Selection UX, Fix Bugs, and Restore App State")
     <div class="container">
         <h1>File Manager</h1>
         <div class="toolbar">
@@ -328,7 +334,10 @@ TEMPLATE_HTML = """
         function enterSelectMode() {
             if (isSelectMode) return;
             isSelectMode = true;
+<<<<<<< HEAD
             document.body.classList.add('select-mode-active');
+=======
+>>>>>>> parent of 161a9be (Revert "Implement Advanced Selection UX, Fix Bugs, and Restore App State")
             document.getElementById('file-list').classList.add('select-mode');
             updateBulkActionsToolbar();
         }
@@ -336,7 +345,10 @@ TEMPLATE_HTML = """
         function exitSelectMode() {
             if (!isSelectMode) return;
             isSelectMode = false;
+<<<<<<< HEAD
             document.body.classList.remove('select-mode-active');
+=======
+>>>>>>> parent of 161a9be (Revert "Implement Advanced Selection UX, Fix Bugs, and Restore App State")
             selectedItems.clear();
             lastSelectedItem = null;
             document.getElementById('file-list').classList.remove('select-mode');
@@ -350,7 +362,11 @@ TEMPLATE_HTML = """
 
             const path = li.dataset.path;
             const checkbox = li.querySelector('input[type="checkbox"]');
+<<<<<<< HEAD
             
+=======
+
+>>>>>>> parent of 161a9be (Revert "Implement Advanced Selection UX, Fix Bugs, and Restore App State")
             if (selectedItems.has(path)) {
                 selectedItems.delete(path);
                 li.classList.remove('selected');
@@ -391,12 +407,17 @@ TEMPLATE_HTML = """
             lastSelectedItem = allVisibleItems[allVisibleItems.length - 1];
             updateBulkActionsToolbar();
         }
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> parent of 161a9be (Revert "Implement Advanced Selection UX, Fix Bugs, and Restore App State")
         function selectRange(startLi, endLi) {
             const items = Array.from(document.querySelectorAll('#file-list li'));
             const startIndex = items.indexOf(startLi);
             const endIndex = items.indexOf(endLi);
             if (startIndex === -1 || endIndex === -1) return;
+<<<<<<< HEAD
 
             // Determine the new range of paths that should be selected
             const [min, max] = [Math.min(startIndex, endIndex), Math.max(startIndex, endIndex)];
@@ -429,6 +450,21 @@ TEMPLATE_HTML = """
                 }
             });
 
+=======
+            
+            const [min, max] = [Math.min(startIndex, endIndex), Math.max(startIndex, endIndex)];
+
+            for (let i = min; i <= max; i++) {
+                const li = items[i];
+                const path = li.dataset.path;
+                const checkbox = li.querySelector('input[type="checkbox"]');
+                if (!selectedItems.has(path)) {
+                    selectedItems.add(path);
+                    li.classList.add('selected');
+                    if(checkbox) checkbox.checked = true;
+                }
+            }
+>>>>>>> parent of 161a9be (Revert "Implement Advanced Selection UX, Fix Bugs, and Restore App State")
             lastSelectedItem = endLi;
             updateBulkActionsToolbar();
         }
