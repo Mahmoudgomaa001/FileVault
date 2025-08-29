@@ -1,3 +1,7 @@
-/shared
-/static
-/static
+/shared/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
