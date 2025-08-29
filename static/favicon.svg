@@ -1,18 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="128" height="128">
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
   <defs>
-    <!-- Gradient fill -->
-    <linearGradient id="shieldGradient" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#3b82f6"/>
-      <stop offset="100%" stop-color="#8b5cf6"/>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff8ccf"/>
+      <stop offset="100%" stop-color="#ff4fa3"/>
     </linearGradient>
+    <filter id="s" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#ff4fa3" flood-opacity="0.35"/>
+    </filter>
   </defs>
-
-  <!-- Half-shield with gradient + white border -->
-  <path d="M320 64C324.6 64 329.2 65 333.4 66.9L521.8 146.8C543.8 156.1 560.2 177.8 560.1 204C559.6 303.2 518.8 484.7 346.5 567.2C329.8 575.2 310.4 575.2 293.7 567.2C121.3 484.7 80.6 303.2 80.1 204C80 177.8 96.4 156.1 118.4 146.8L306.7 66.9C310.9 65 315.4 64 320 64zM320 130.8L320 508.9C458 442.1 495.1 294.1 496 205.5L320 130.9z"
-        fill="url(#shieldGradient)"
-        stroke="white"
-        stroke-width="25"
-        stroke-linejoin="round"/>
+  <rect width="128" height="128" rx="28" fill="#ffe6f2"/>
+  <circle cx="64" cy="64" r="50" fill="url(#g)" filter="url(#s)"/>
+  <text x="50%" y="50%" font-size="70" text-anchor="middle" dominant-baseline="central">💖</text>
 </svg>
-

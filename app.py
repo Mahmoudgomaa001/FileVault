@@ -144,7 +144,7 @@ def ensure_favicon_assets():
 
     # Minimal PWA manifest using SVG icons (offline-friendly)
     manifest = {
-        "name": "GomaaFileVault",
+        "name": "FileVault",
         "short_name": "FileVault",
         "start_url": "/",
         "display": "standalone",
@@ -731,6 +731,7 @@ BASE_HTML = """
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <title>FileVault</title>
 
@@ -2883,9 +2884,9 @@ BROWSE_HTML = """
   <div class="toolbar-row" style="justify-content:space-between;">
     <div style="font-weight:700;" id="selectionCount"></div>
     <div style="display:flex; gap:.5rem;">
-      <button class="btn btn-primary" id="bulkMoveBtn"><i class="fas fa-people-carry"></i> Move</button>
-      <button class="btn btn-danger" id="bulkDeleteBtn"><i class="fas fa-trash"></i> Delete</button>
-      <button class="btn btn-success" id="bulkDownloadBtn"><i class="fas fa-download"></i> Download</button>
+      <button class="btn btn-primary btn-icon" id="bulkMoveBtn" title="Move selected"><i class="fas fa-people-carry"></i></button>
+      <button class="btn btn-danger btn-icon" id="bulkDeleteBtn" title="Delete selected"><i class="fas fa-trash"></i></button>
+      <button class="btn btn-success btn-icon" id="bulkDownloadBtn" title="Download selected"><i class="fas fa-download"></i></button>
       <button class="btn btn-secondary" id="deselectAllBtn">Cancel</button>
     </div>
   </div>
