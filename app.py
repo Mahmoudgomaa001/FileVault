@@ -936,6 +936,13 @@ BASE_HTML = """
     .fab-menu { position:absolute; bottom:70px; right:0; background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; padding:.5rem; box-shadow:0 4px 12px var(--shadow); display:none; min-width:180px; }
     .fab-menu.active { display:block; animation:fadeIn .2s ease; }
     .fab-menu-item { padding:.625rem .875rem; border-radius:.5rem; cursor:pointer; display:flex; align-items:center; gap:.75rem; font-size:.875rem; color:var(--text-primary); border:none; background:transparent; width:100%; text-align:left; }
+    .account-actions { display: flex; gap: .5rem; flex-shrink: 0; }
+
+    @media (max-width: 640px) {
+      .accounts-card { flex-direction: column; align-items: stretch; }
+      .account-actions { flex-direction: column; align-items: stretch; width: 100%; margin-top: .75rem; }
+      .account-actions .btn { width: 100%; justify-content: center; }
+    }
 
     @media (min-width: 768px) {
       .user-badge { display:block; }
@@ -1052,9 +1059,12 @@ BASE_HTML = """
         </div>
         <div style="margin-top:.75rem; color:var(--text-muted); font-size:.85rem;">Only the first device (admin) can change privacy.</div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeModal('settingsModal')">Close</button>
-        <button class="btn btn-primary" id="saveSettingsBtn"><i class="fas fa-save"></i> Save</button>
+      <div class="modal-footer" style="justify-content: space-between; align-items: center;">
+        <span style="font-size: 0.75rem; color: var(--text-muted);">Version 1.1.0</span>
+        <div>
+          <button class="btn btn-secondary" onclick="closeModal('settingsModal')">Close</button>
+          <button class="btn btn-primary" id="saveSettingsBtn"><i class="fas fa-save"></i> Save</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1202,12 +1212,12 @@ BASE_HTML = """
         const badge = a.is_default ? '<span style="font-size:.75rem; background:var(--success); color:white; padding:.125rem .375rem; border-radius:.375rem; margin-left:.5rem;">default</span>' : '';
         const privacy = a.public ? '<span style="color:var(--text-muted); font-size:.8rem;">public</span>' : '<span style="color:var(--warning); font-size:.8rem;">private</span>';
         return `
-          <div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
+          <div class="card accounts-card" style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
             <div style="min-width:0;">
               <div style="font-weight:700; overflow:hidden; text-overflow:ellipsis;">${safeHTML(a.folder)} ${badge}</div>
               <div style="color:var(--text-muted); font-size:.8rem;">${privacy}</div>
             </div>
-            <div style="display:flex; gap:.5rem;">
+            <div class="account-actions">
               <button class="btn btn-primary" onclick="switchAccount('${a.folder.replace(/'/g,"\\'")}', true)"><i class="fas fa-right-left"></i> Switch</button>
               <button class="btn btn-secondary" onclick="openRenameModal('${a.folder.replace(/'/g,"\\'")}')"><i class="fas fa-pencil-alt"></i> Rename</button>
               <button class="btn btn-secondary" onclick="openTransferAdmin('${a.folder.replace(/'/g,"\\'")}')"><i class="fas fa-key"></i> Transfer Admin</button>
