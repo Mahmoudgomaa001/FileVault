@@ -1,7 +1,9 @@
-const CACHE_NAME = 'filevault-cache-v4';
+const CACHE_NAME = 'filevault-cache-v5';
 const OFFLINE_URL = 'static/offline.html';
 const APP_SHELL_URLS = [
-  '/',
+  // Do not cache the root '/' because it redirects to /login when not authenticated,
+  // which causes cache.addAll() to fail.
+  // The root page will be cached on first visit by the 'navigate' fetch handler anyway.
   '/static/fonts.css',
   '/static/vendor/fontawesome/css/all.min.css',
   '/static/vendor/fontawesome/css/fa-shims.css',
@@ -72,8 +74,6 @@ self.addEventListener('fetch', event => {
   }
 
   // For other requests, use a cache-first strategy.
-  // This is not ideal for API calls, but for the app shell assets it's fine.
-  // A more advanced implementation would handle API calls differently.
   event.respondWith(
     caches.match(event.request).then(cachedResponse => {
       return cachedResponse || fetch(event.request);

@@ -2797,23 +2797,28 @@ function removeFileCard(rel){
         setView(v);
       } catch(e){ setView(localStorage.getItem('fileView') || 'grid'); }
 
-      document.getElementById('searchInput')?.addEventListener('input', searchFiles);
-      initUploadArea();
-      initFileGrid();
-      initSortControls();
-      applySort();
-      initBulkActions();
-      checkGridEmpty();
-      initSocket();
-      checkForPendingShares(); // Check for shares on page load
+      // Page-specific initializations for the main file browser
+      if (document.getElementById('fileGrid')) {
+        document.getElementById('searchInput')?.addEventListener('input', searchFiles);
+        initUploadArea();
+        initFileGrid();
+        initSortControls();
+        applySort();
+        initBulkActions();
+        checkGridEmpty();
+        initSocket();
+        checkForPendingShares();
 
-      // Bind Create Folder / Paste text buttons
-      document.getElementById('mkdirCreateBtn')?.addEventListener('click', createNewFolder);
-      document.getElementById('folderNameInput')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); createNewFolder(); }});
-      document.getElementById('openClipBtn')?.addEventListener('click', openClipModal);
-      document.getElementById('clipSaveBtn')?.addEventListener('click', saveClipboardText);
-      document.getElementById('clipTextInput')?.addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); saveClipboardText(); }});
-      document.getElementById('clipNameInput')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveClipboardText(); }});
+        // Bind Create Folder / Paste text buttons
+        document.getElementById('mkdirCreateBtn')?.addEventListener('click', createNewFolder);
+        document.getElementById('folderNameInput')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); createNewFolder(); }});
+        document.getElementById('openClipBtn')?.addEventListener('click', openClipModal);
+        document.getElementById('clipSaveBtn')?.addEventListener('click', saveClipboardText);
+        document.getElementById('clipTextInput')?.addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); saveClipboardText(); }});
+        document.getElementById('clipNameInput')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveClipboardText(); }});
+      }
+
+      // Global initializations for all pages
       document.getElementById('confirmShareBtn')?.addEventListener('click', confirmShare);
       document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
       initPwaInstall();
