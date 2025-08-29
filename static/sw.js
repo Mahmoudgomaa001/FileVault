@@ -1,9 +1,8 @@
-const CACHE_NAME = 'filevault-cache-v5';
+const CACHE_NAME = 'filevault-cache-v6';
 const OFFLINE_URL = 'static/offline.html';
 const APP_SHELL_URLS = [
-  // Do not cache the root '/' because it redirects to /login when not authenticated,
-  // which causes cache.addAll() to fail.
-  // The root page will be cached on first visit by the 'navigate' fetch handler anyway.
+  // The root '/' is intentionally omitted. It's cached on first visit via the 'navigate' fetch handler.
+  // Precaching it can fail if the user is not logged in, as it would redirect.
   '/static/fonts.css',
   '/static/vendor/fontawesome/css/all.min.css',
   '/static/vendor/fontawesome/css/fa-shims.css',
@@ -13,70 +12,79 @@ const APP_SHELL_URLS = [
   OFFLINE_URL
 ];
 
-// Install event: cache the app shell and offline page
 self.addEventListener('install', event => {
+  console.log('[ServiceWorker] Install event fired');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('[ServiceWorker] Pre-caching App Shell and Offline page');
+        console.log('[ServiceWorker] Caching app shell and offline page');
         return cache.addAll(APP_SHELL_URLS);
       })
-      .then(() => self.skipWaiting())
+      .then(() => {
+        // Force the waiting service worker to become the active service worker.
+        return self.skipWaiting();
+      })
   );
 });
 
-// Activate event: clean up old caches
 self.addEventListener('activate', event => {
+  console.log('[ServiceWorker] Activate event fired');
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
+          // Delete old caches
           if (cacheName !== CACHE_NAME) {
             console.log('[ServiceWorker] Clearing old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => self.clients.claim())
+    }).then(() => {
+      // Tell the active service worker to take control of the page immediately.
+      return self.clients.claim();
+    })
   );
 });
 
-// Fetch event: handle requests
 self.addEventListener('fetch', event => {
-  // We only want to call event.respondWith() if this is a navigation request
-  // for an HTML page.
+  // We only want to handle navigation requests for the offline fallback.
   if (event.request.mode === 'navigate') {
     event.respondWith(
       (async () => {
         try {
-          // First, try to use the navigation preloader if available.
-          const preloadResponse = await event.preloadResponse;
-          if (preloadResponse) {
-            return preloadResponse;
-          }
-
-          // Always try the network first.
+          // Try the network first.
           const networkResponse = await fetch(event.request);
+          // If successful, cache the response for future offline use.
+          const cache = await caches.open(CACHE_NAME);
+          cache.put(event.request, networkResponse.clone());
           return networkResponse;
         } catch (error) {
-          // catch is only triggered if an exception is thrown, which is likely
-          // a network error.
-          // If fetch() returns a valid HTTP response with a response code in
-          // the 4xx or 5xx range, the catch() will NOT be called.
-          console.log('Fetch failed; returning offline page instead.', error);
+          // The network failed.
+          console.log('[ServiceWorker] Fetch failed; returning offline page or cached page.', error);
 
           const cache = await caches.open(CACHE_NAME);
-          const cachedResponse = await cache.match(OFFLINE_URL);
-          return cachedResponse;
+          // Try to serve the page from the cache.
+          const cachedResponse = await cache.match(event.request);
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          // If the page is not in the cache, serve the master offline page.
+          return await cache.match(OFFLINE_URL);
         }
       })()
     );
+  } else {
+    // For all other requests (CSS, JS, images, etc.), use a Cache First strategy.
+    event.respondWith(
+      caches.match(event.request).then(cachedResponse => {
+        // If we have a cached response, return it.
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        // Otherwise, fetch from the network.
+        return fetch(event.request);
+      })
+    );
   }
-
-  // For other requests, use a cache-first strategy.
-  event.respondWith(
-    caches.match(event.request).then(cachedResponse => {
-      return cachedResponse || fetch(event.request);
-    })
-  );
 });
