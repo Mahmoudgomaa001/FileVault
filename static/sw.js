@@ -1,8 +1,6 @@
-const CACHE_NAME = 'filevault-cache-v2';
-const OFFLINE_URL = '/static/offline.html';
-
-// Add all the assets we want to cache on install
-const urlsToCache = [
+const CACHE_NAME = 'filevault-cache-v4';
+const OFFLINE_URL = 'static/offline.html';
+const APP_SHELL_URLS = [
   '/',
   '/static/fonts.css',
   '/static/vendor/fontawesome/css/all.min.css',
@@ -13,16 +11,16 @@ const urlsToCache = [
   OFFLINE_URL
 ];
 
-// Install event: open a cache and add the assets
+// Install event: cache the app shell and offline page
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('[ServiceWorker] Pre-caching App Shell');
-        return cache.addAll(urlsToCache);
+        console.log('[ServiceWorker] Pre-caching App Shell and Offline page');
+        return cache.addAll(APP_SHELL_URLS);
       })
+      .then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 // Activate event: clean up old caches
@@ -37,59 +35,48 @@ self.addEventListener('activate', event => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  return self.clients.claim();
 });
 
 // Fetch event: handle requests
 self.addEventListener('fetch', event => {
-  const { request } = event;
-
-  // For navigation requests (HTML pages), use a Network Falling Back to Cache strategy.
-  if (request.mode === 'navigate') {
+  // We only want to call event.respondWith() if this is a navigation request
+  // for an HTML page.
+  if (event.request.mode === 'navigate') {
     event.respondWith(
       (async () => {
         try {
-          const networkResponse = await fetch(request);
-          // If the network request is successful, cache it and return it.
-          const cache = await caches.open(CACHE_NAME);
-          cache.put(request, networkResponse.clone());
+          // First, try to use the navigation preloader if available.
+          const preloadResponse = await event.preloadResponse;
+          if (preloadResponse) {
+            return preloadResponse;
+          }
+
+          // Always try the network first.
+          const networkResponse = await fetch(event.request);
           return networkResponse;
         } catch (error) {
-          // If the network fails, try to get the response from the cache.
-          console.log('[ServiceWorker] Network request failed, trying cache for:', request.url);
-          const cachedResponse = await caches.match(request);
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          // If the request is not in the cache, show the offline page.
-          const offlinePage = await caches.match(OFFLINE_URL);
-          return offlinePage;
+          // catch is only triggered if an exception is thrown, which is likely
+          // a network error.
+          // If fetch() returns a valid HTTP response with a response code in
+          // the 4xx or 5xx range, the catch() will NOT be called.
+          console.log('Fetch failed; returning offline page instead.', error);
+
+          const cache = await caches.open(CACHE_NAME);
+          const cachedResponse = await cache.match(OFFLINE_URL);
+          return cachedResponse;
         }
       })()
     );
-    return;
   }
 
-  // For other requests (CSS, JS, images), use a Cache First strategy.
+  // For other requests, use a cache-first strategy.
+  // This is not ideal for API calls, but for the app shell assets it's fine.
+  // A more advanced implementation would handle API calls differently.
   event.respondWith(
-    caches.match(request).then(cachedResponse => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      // If not in cache, fetch from network and cache it for next time.
-      return fetch(request).then(networkResponse => {
-        // Check if we received a valid response
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-          return networkResponse;
-        }
-        const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME).then(cache => {
-          cache.put(request, responseToCache);
-        });
-        return networkResponse;
-      });
+    caches.match(event.request).then(cachedResponse => {
+      return cachedResponse || fetch(event.request);
     })
   );
 });
