@@ -24,6 +24,12 @@ from flask import (
 from flask_socketio import SocketIO
 import qrcode
 from qrcode.constants import ERROR_CORRECT_H
+import ipaddress
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.backends import default_backend
 
 # -----------------------------
 # Islamic Dhikr (Remembrance)
@@ -184,6 +190,79 @@ except Exception as e:
 
 
 mimetypes.add_type("font/woff2", ".woff2")  # make sure .woff2 served correctly
+
+
+# -----------------------------
+# SSL Certificate Generation
+# -----------------------------
+def ensure_ssl_certificate():
+    """
+    Ensures that a self-signed SSL certificate and key exist, creating them if not.
+    Returns the paths to the cert and key files.
+    """
+    cert_dir = Path("./.certs")
+    cert_dir.mkdir(exist_ok=True)
+    key_file = cert_dir / "key.pem"
+    cert_file = cert_dir / "cert.pem"
+
+    if key_file.exists() and cert_file.exists():
+        print("[ssl] Certificate and key found.")
+        return (str(cert_file), str(key_file))
+
+    print("[ssl] Generating self-signed certificate...")
+
+    # Generate private key
+    key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+        backend=default_backend()
+    )
+
+    # Write key to disk
+    with open(key_file, "wb") as f:
+        f.write(key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption()
+        ))
+
+    # Create certificate details
+    local_ip = get_local_ip()
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME, u"US"),
+        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, u"CA"),
+        x509.NameAttribute(NameOID.LOCALITY_NAME, u"San Francisco"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"FileVault Self-Signed"),
+        x509.NameAttribute(NameOID.COMMON_NAME, u"localhost"),
+    ])
+
+    cert = x509.CertificateBuilder().subject_name(
+        subject
+    ).issuer_name(
+        issuer
+    ).public_key(
+        key.public_key()
+    ).serial_number(
+        x509.random_serial_number()
+    ).not_valid_before(
+        datetime.utcnow()
+    ).not_valid_after(
+        datetime.utcnow() + datetime.timedelta(days=365*5) # 5 year validity
+    ).add_extension(
+        x509.SubjectAlternativeName([
+            x509.DNSName(u"localhost"),
+            x509.DNSName(local_ip),
+            x509.IPAddress(ipaddress.ip_address(local_ip))
+        ]),
+        critical=False,
+    ).sign(key, hashes.SHA256(), default_backend())
+
+    # Write certificate to disk
+    with open(cert_file, "wb") as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+    print(f"[ssl] Certificate and key generated at {cert_dir.resolve()}")
+    return (str(cert_file), str(key_file))
 
 
 # -----------------------------
@@ -3994,13 +4073,24 @@ def handle_403(e):
 # -----------------------------
 # Main
 # -----------------------------
+
+CERT_PATH, KEY_PATH = ensure_ssl_certificate()
+
 if __name__ == "__main__":
     ip = get_local_ip()
-    print(f"Serving FileVault on http://0.0.0.0:{PORT}  (scan: http://{ip}:{PORT})")
+    print(f"Serving FileVault on https://0.0.0.0:{PORT}  (scan: https://{ip}:{PORT})")
+    print("NOTE: You will need to accept the self-signed certificate in your browser.")
     ngrok_url = get_ngrok_url()
     if ngrok_url:
         print(f"Ngrok URL detected: {ngrok_url}")
     else:
-        print("Ngrok not detected. To enable online access, run: ngrok http 5000")
+        print("Ngrok not detected. For external access, run: ngrok http 5000")
     print(f"Root directory: {ROOT_DIR}")
-    socketio.run(app, host="0.0.0.0", port=PORT, debug=False)
+    socketio.run(
+        app,
+        host="0.0.0.0",
+        port=PORT,
+        debug=False,
+        certfile=CERT_PATH,
+        keyfile=KEY_PATH
+    )
