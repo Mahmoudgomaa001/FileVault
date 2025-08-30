@@ -1,0 +1,7 @@
+Flask
+Flask-SocketIO
+qrcode
+cryptography
+requests
+Pillow
+eventlet

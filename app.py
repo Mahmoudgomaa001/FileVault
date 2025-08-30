@@ -14,7 +14,7 @@ import hashlib
 import zipfile
 from io import BytesIO
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from flask import (
@@ -104,7 +104,7 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 app.config["SESSION_COOKIE_NAME"] = SESSION_COOKIE_NAME
 app.config["LOGIN_TOKENS"] = {}  # pc_token -> folder
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # In-memory pending sessions for QR login
 pending_sessions: dict[str, dict] = {}
@@ -245,9 +245,9 @@ def ensure_ssl_certificate():
     ).serial_number(
         x509.random_serial_number()
     ).not_valid_before(
-        datetime.utcnow()
+        datetime.now(timezone.utc)
     ).not_valid_after(
-        datetime.utcnow() + datetime.timedelta(days=365*5) # 5 year validity
+        datetime.now(timezone.utc) + timedelta(days=365*5) # 5 year validity
     ).add_extension(
         x509.SubjectAlternativeName([
             x509.DNSName(u"localhost"),
@@ -380,7 +380,7 @@ def get_or_create_device_folder(req) -> tuple[str, str]:
     device_id = secrets.token_urlsafe(12)
     folder = ensure_unique_folder_name()
     (ROOT_DIR / folder).mkdir(parents=True, exist_ok=True)
-    app.config["DEVICE_MAP"][device_id] = {"folder": folder, "created": datetime.utcnow().isoformat() + "Z"}
+    app.config["DEVICE_MAP"][device_id] = {"folder": folder, "created": datetime.now(timezone.utc).isoformat()}
     save_device_map(app.config["DEVICE_MAP"])
     cfg = get_user_cfg(folder)
     if not cfg.get("admin_device"):
@@ -463,7 +463,7 @@ def api_accounts_create():
     save_users(app.config["USERS"])
 
     if make_default:
-        app.config["DEVICE_MAP"][did] = {"folder": name, "created": datetime.utcnow().isoformat() + "Z"}
+        app.config["DEVICE_MAP"][did] = {"folder": name, "created": datetime.now(timezone.utc).isoformat()}
         save_device_map(app.config["DEVICE_MAP"])
         session["folder"] = name
         session["icon"] = get_user_icon(name)
@@ -493,7 +493,7 @@ def api_accounts_switch():
     session["icon"] = get_user_icon(folder)
 
     if make_default:
-        app.config["DEVICE_MAP"][did] = {"folder": folder, "created": datetime.utcnow().isoformat() + "Z"}
+        app.config["DEVICE_MAP"][did] = {"folder": folder, "created": datetime.now(timezone.utc).isoformat()}
         save_device_map(app.config["DEVICE_MAP"])
 
     return jsonify({"ok": True, "folder": folder, "browse_url": url_for("browse", subpath=folder)})
@@ -608,7 +608,7 @@ def api_accounts_token():
     token_id = str(uuid.uuid4())
     tokens[token_id] = {
         "token": token,
-        "created": datetime.utcnow().isoformat() + "Z",
+        "created": datetime.now(timezone.utc).isoformat(),
         "name": data.get("name", "API Token"),
         "expires": None
     }
@@ -3275,7 +3275,7 @@ def api_accounts_transfer_admin_start():
     token = secrets.token_urlsafe(16)
     admin_claim_tokens[token] = {
         "folder": folder,
-        "created": datetime.utcnow().isoformat() + "Z"
+        "created": datetime.now(timezone.utc).isoformat()
     }
 
     # Build claim URL (external-aware)
@@ -3306,7 +3306,7 @@ def scan_admin(token: str):
     session["authed"] = True
     session["folder"] = folder
     session["icon"] = get_user_icon(folder)
-    app.config["DEVICE_MAP"][device_id] = {"folder": folder, "created": datetime.utcnow().isoformat() + "Z"}
+    app.config["DEVICE_MAP"][device_id] = {"folder": folder, "created": datetime.now(timezone.utc).isoformat()}
     save_device_map(app.config["DEVICE_MAP"])
 
     resp = make_response(redirect(url_for("browse", subpath=folder)))
@@ -3493,7 +3493,7 @@ def browse(subpath: Optional[str] = None):
         if info.get("folder") == session.get("folder"):
             since_iso = info.get("created")
             break
-    since_txt = datetime.fromisoformat(since_iso.replace("Z","")) if since_iso else datetime.utcnow()
+    since_txt = datetime.fromisoformat(since_iso.replace("Z", "+00:00")) if since_iso else datetime.now(timezone.utc)
     since = since_txt.strftime("%b %Y")
 
     dhikr = get_random_dhikr()
@@ -3756,7 +3756,7 @@ def api_cliptext():
     if name:
         filename = sanitize_filename(name)
     else:
-        ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         filename = f"clip-{ts}.txt"
     if "." not in filename:
         filename += ".txt"
