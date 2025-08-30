@@ -738,6 +738,60 @@ BASE_HTML = """
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
 <link rel="manifest" href="/static/site.webmanifest" />
 <meta name="theme-color" content="#0F172A" id="themeColorMeta" />
+<script>
+  window.API_CONFIG = {
+    localBaseUrl: {{ local_api_base|tojson|default('""') }},
+    publicBaseUrl: {{ public_api_base|tojson|default('""') }},
+    currentBaseUrl: null,
+    apiReady: false
+  };
+</script>
+<script>
+  (async () => {
+    // Function to check if a URL is reachable with a timeout
+    async function isReachable(url) {
+      if(!url) return false;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 800); // 800ms timeout
+      try {
+        // We use a lightweight endpoint for the check. /api/me requires auth, so let's use a static asset.
+        await fetch(`${url}/static/favicon.svg`, { method: 'HEAD', signal: controller.signal, cache: 'no-store' });
+        clearTimeout(timeoutId);
+        return true;
+      } catch (e) {
+        clearTimeout(timeoutId);
+        return false;
+      }
+    }
+
+    const { localBaseUrl, publicBaseUrl } = window.API_CONFIG;
+
+    // Default to public URL
+    window.API_CONFIG.currentBaseUrl = publicBaseUrl;
+
+    // If a local URL is defined and we are not on a secure (https) public URL, check if local is reachable
+    if (localBaseUrl && !(publicBaseUrl && publicBaseUrl.startsWith('https'))) {
+      console.log('Checking for local API server at:', localBaseUrl);
+      const localIsUp = await isReachable(localBaseUrl);
+      if (localIsUp) {
+        console.log('Local API server is up! Using:', localBaseUrl);
+        window.API_CONFIG.currentBaseUrl = localBaseUrl;
+      } else {
+        console.log('Local API server is down. Using public URL:', publicBaseUrl);
+      }
+    } else {
+        if (!localBaseUrl) {
+            console.log('No local base URL configured.');
+        } else {
+            console.log('On a secure public URL, defaulting to public API to avoid mixed content errors.');
+        }
+    }
+
+    window.API_CONFIG.apiReady = true;
+    // Dispatch an event to let other scripts know the API is ready
+    document.dispatchEvent(new CustomEvent('api-ready', { detail: { baseUrl: window.API_CONFIG.currentBaseUrl } }));
+  })();
+</script>
 <link rel="stylesheet" href="/static/fonts.css" />
 <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
 <link rel="stylesheet" href="/static/vendor/fontawesome/css/fa-shims.css" />
@@ -1204,7 +1258,7 @@ BASE_HTML = """
   // ACCOUNTS (admin)
   async function openAccounts(){
     try {
-      const r = await fetch('/api/accounts', {cache:'no-store'});
+      const r = await apiFetch('/api/accounts', {cache:'no-store'});
       const j = await r.json();
       if(!j.ok){ showToast(j.error || 'Failed to load accounts', 'error'); return; }
 
@@ -1243,7 +1297,7 @@ BASE_HTML = """
   async function createAccountAndSwitch(){
     const name = (document.getElementById('accCreateNameInput')?.value || '').trim();
     try {
-      const r = await fetch('/api/accounts/create', {
+      const r = await apiFetch('/api/accounts/create', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({name, make_default:true})
@@ -1263,7 +1317,7 @@ BASE_HTML = """
 
   async function switchAccount(folder, makeDefault=true){
     try {
-      const r = await fetch('/api/accounts/switch', {
+      const r = await apiFetch('/api/accounts/switch', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({folder, make_default: makeDefault})
@@ -1284,7 +1338,7 @@ BASE_HTML = """
   // TRANSFER ADMIN (QR)
   async function openTransferAdmin(folder){
     try {
-      const r = await fetch('/api/accounts/transfer_admin_start', {
+      const r = await apiFetch('/api/accounts/transfer_admin_start', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({folder})
@@ -1330,7 +1384,7 @@ BASE_HTML = """
         }
 
         try {
-            const r = await fetch('/api/accounts/rename', {
+            const r = await apiFetch('/api/accounts/rename', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ old_name: oldName, new_name: newName })
@@ -1406,7 +1460,7 @@ BASE_HTML = """
 
 async function changeDhikr() {
   try {
-    const response = await fetch('/api/dhikr');
+    const response = await apiFetch('/api/dhikr');
     const data = await response.json();
 
     if (data.dhikr) {
@@ -1441,7 +1495,7 @@ async function changeDhikr() {
   const root = document.documentElement;
 
   async function savePref(key, value){
-    try { await fetch('/api/prefs', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({key, value})}); } catch(e){}
+    try { await apiFetch('/api/prefs', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({key, value})}); } catch(e){}
   }
 
   function updateThemeBtnIcon(t){
@@ -1477,18 +1531,6 @@ async function changeDhikr() {
   }
 
   document.getElementById('themeBtn')?.addEventListener('click', toggleTheme);
-
-  (async ()=>{
-    try {
-      const r = await fetch('/api/prefs');
-      const j = await r.json();
-      const saved = j?.prefs?.theme;
-      if(saved){ applyTheme(saved, {save:false}); }
-      else { applyTheme(getStartupTheme(), {save:false}); }
-    } catch(e){
-      applyTheme(getStartupTheme(), {save:false});
-    }
-  })();
 
      // TOASTS
     function showToast(message, type='info'){
@@ -1751,7 +1793,7 @@ async function changeDhikr() {
         row.remove();
       });
 
-      xhr.open('POST', '{{ url_for("api_upload") }}');
+      xhr.open('POST', new URL('{{ url_for("api_upload") }}', window.API_CONFIG.currentBaseUrl).href);
       xhr.send(form);
     }
 
@@ -1884,7 +1926,7 @@ async function changeDhikr() {
         folderTreeDiv.innerHTML = 'Loading...';
 
         try {
-            const response = await fetch('/api/folders');
+            const response = await apiFetch('/api/folders');
             const data = await response.json();
             if (data.ok) {
                 folderTreeDiv.innerHTML = renderFolderTree(data.tree);
@@ -1924,7 +1966,7 @@ async function changeDhikr() {
 
         const sources = Array.from(selectedFiles);
         try {
-            const r = await fetch('/api/move', {
+            const r = await apiFetch('/api/move', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sources, destination: selectedDestination })
@@ -1952,7 +1994,7 @@ async function changeDhikr() {
 
         const sources = Array.from(selectedFiles);
         try {
-            const r = await fetch('{{ url_for("api_delete") }}', {
+            const r = await apiFetch('{{ url_for("api_delete") }}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ files: sources })
@@ -1975,7 +2017,7 @@ async function changeDhikr() {
 
     async function checkForPendingShares(){
         try {
-            const r = await fetch('/api/pending_shares');
+            const r = await apiFetch('/api/pending_shares');
             const j = await r.json();
             if(j.ok && j.files && j.files.length > 0){
                 if (!document.getElementById('shareModal').classList.contains('active')) {
@@ -1997,7 +2039,7 @@ async function changeDhikr() {
         openModal('shareModal');
 
         try {
-            const response = await fetch('/api/folders');
+            const response = await apiFetch('/api/folders');
             const data = await response.json();
             if (data.ok) {
                 folderTreeDiv.innerHTML = renderFolderTree(data.tree);
@@ -2029,7 +2071,7 @@ async function changeDhikr() {
         }
 
         try {
-            const r = await fetch('/api/commit_share', {
+            const r = await apiFetch('/api/commit_share', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: currentPendingFile.id, destination: selectedShareDestination })
@@ -2053,7 +2095,7 @@ async function changeDhikr() {
         if (selectedFiles.size === 0) { return; }
         const sources = Array.from(selectedFiles);
         try {
-            const r = await fetch('/api/download_zip', {
+            const r = await apiFetch('/api/download_zip', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ files: sources })
@@ -2358,7 +2400,7 @@ async function changeDhikr() {
     // DELETE
     function deleteFile(rel){
       if(!confirm('Delete this item?')) return;
-      fetch('{{ url_for("api_delete") }}', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({files:[rel]})})
+      apiFetch('{{ url_for("api_delete") }}', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({files:[rel]})})
         .then(r=>r.json()).then(j=>{
           if(j.ok){ showToast('Deleted', 'success'); setTimeout(()=> location.reload(), 400); }
           else showToast(j.error || 'Delete failed', 'error');
@@ -2371,7 +2413,7 @@ async function changeDhikr() {
       const name = (document.getElementById('folderNameInput')?.value || '').trim();
       if(!name){ showToast('Enter folder name', 'warning'); return; }
       try{
-        const r = await fetch('{{ url_for("api_mkdir") }}', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({dest: window.currentPath || '', name})});
+        const r = await apiFetch('{{ url_for("api_mkdir") }}', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({dest: window.currentPath || '', name})});
         const j = await r.json();
         if(j.ok){ showToast('Folder created', 'success'); closeModal('newFolderModal'); setTimeout(()=> location.reload(), 300); }
         else showToast(j.error || 'Failed', 'error');
@@ -2395,7 +2437,7 @@ async function changeDhikr() {
       }
 
       try {
-        const r = await fetch('{{ url_for("api_cliptext") }}', {
+        const r = await apiFetch('{{ url_for("api_cliptext") }}', {
           method: 'POST',
           headers: {'Content-Type':'application/json'},
           body: JSON.stringify({ dest: window.currentPath || '', name: fname, text })
@@ -2437,7 +2479,7 @@ async function changeDhikr() {
 // SOCKET (live update without reload)
 function initSocket(){
   try {
-    const socket = io({reconnection:true, reconnectionAttempts:5, reconnectionDelay:1000});
+    const socket = io(window.API_CONFIG.currentBaseUrl, {reconnection:true, reconnectionAttempts:5, reconnectionDelay:1000});
 
     socket.on('file_update', (msg)=> {
       // Server emits:
@@ -2571,7 +2613,7 @@ function removeFileCard(rel){
     async function showMyQR(){
       try {
         const mode = qrOnlineMode ? 'online' : 'local';
-        const r = await fetch(`{{ url_for("api_my_qr") }}?mode=${mode}`, {cache:'no-store'});
+        const r = await apiFetch(`{{ url_for("api_my_qr") }}?mode=${mode}`, {cache:'no-store'});
         const j = await r.json();
         if(j.ok){
           const toggleId = 'qrToggle-' + Date.now();
@@ -2615,7 +2657,7 @@ function removeFileCard(rel){
     // Settings (only for admin; button is hidden for non-admin)
     async function openSettings(){
       try {
-        const r = await fetch('/api/me', {cache:'no-store'});
+        const r = await apiFetch('/api/me', {cache:'no-store'});
         const j = await r.json();
         const privacyToggle = document.getElementById('privacyToggle');
         if(j.public === false) privacyToggle.classList.add('active'); else privacyToggle.classList.remove('active');
@@ -2643,7 +2685,7 @@ function removeFileCard(rel){
       } catch(e) { all_ok = false; }
 
       try {
-        const r = await fetch('/api/privacy', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({public: !priv, password: pwd})});
+        const r = await apiFetch('/api/privacy', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({public: !priv, password: pwd})});
         const j = await r.json();
         if(!j.ok){ all_ok = false; showToast(j.error || 'Failed to save privacy', 'error'); }
       } catch(e){ all_ok = false; showToast('Failed to save privacy', 'error'); }
@@ -2657,7 +2699,7 @@ function removeFileCard(rel){
 
     async function generateToken() {
       try {
-        const r = await fetch('/api/accounts/token', {
+        const r = await apiFetch('/api/accounts/token', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({name: 'Non-expiring API Token'})
@@ -2694,7 +2736,7 @@ function removeFileCard(rel){
 
         // Generate QR code for token URL
         const mode = localStorage.getItem('qrMode') === 'online' ? 'online' : 'local';
-        const r = await fetch(`{{ url_for("api_my_qr") }}?mode=${mode}&token=${encodeURIComponent(token)}`, {cache:'no-store'});
+        const r = await apiFetch(`{{ url_for("api_my_qr") }}?mode=${mode}&token=${encodeURIComponent(token)}`, {cache:'no-store'});
         const j = await r.json();
 
         if (j.ok) {
@@ -2789,13 +2831,30 @@ function removeFileCard(rel){
     }
 
     // INIT
-    document.addEventListener('DOMContentLoaded', async ()=>{
+    function apiFetch(path, options) {
+      const url = new URL(path, window.API_CONFIG.currentBaseUrl);
+      return fetch(url.href, options);
+    }
+
+    function startApp() {
       window.currentPath = "{{ current_rel|default('', true) }}";
+
+      // Load user preferences (theme and view)
       try {
-        const r = await fetch('/api/prefs'); const j = await r.json();
-        const v = j?.prefs?.view || localStorage.getItem('fileView') || 'grid';
-        setView(v);
-      } catch(e){ setView(localStorage.getItem('fileView') || 'grid'); }
+        apiFetch('/api/prefs').then(r => r.json()).then(j => {
+          const theme = j?.prefs?.theme || getStartupTheme();
+          applyTheme(theme, {save:false});
+
+          const view = j?.prefs?.view || localStorage.getItem('fileView') || 'grid';
+          setView(view);
+        }).catch(() => {
+          applyTheme(getStartupTheme(), {save:false});
+          setView(localStorage.getItem('fileView') || 'grid');
+        });
+      } catch(e) {
+        applyTheme(getStartupTheme(), {save:false});
+        setView(localStorage.getItem('fileView') || 'grid');
+      }
 
       // Page-specific initializations for the main file browser
       if (document.getElementById('fileGrid')) {
@@ -2822,6 +2881,14 @@ function removeFileCard(rel){
       document.getElementById('confirmShareBtn')?.addEventListener('click', confirmShare);
       document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
       initPwaInstall();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        if (window.API_CONFIG.apiReady) {
+            startApp();
+        } else {
+            document.addEventListener('api-ready', startApp, { once: true });
+        }
     });
 
     // PWA INSTALL
@@ -3375,6 +3442,11 @@ def browse(subpath: Optional[str] = None):
     is_admin = bool(device_id and device_id == cfg.get("admin_device"))
 
     body = render_template_string(BROWSE_HTML, entries=items, stats=stats, since=since)
+
+    local_ip = get_local_ip()
+    local_api_base = f"http://{local_ip}:{PORT}"
+    public_api_base = get_ngrok_url() or request.url_root
+
     return render_template_string(
         BASE_HTML,
         body=body,
@@ -3383,7 +3455,9 @@ def browse(subpath: Optional[str] = None):
         user_label=session.get("folder",""),
         current_rel=(path_rel(dest) if dest != ROOT_DIR else ""),
         dhikr=dhikr, dhikr_list=dhikr_list,
-        is_admin=is_admin
+        is_admin=is_admin,
+        local_api_base=local_api_base,
+        public_api_base=public_api_base.rstrip('/')
     )
 
 @app.route("/download")
@@ -3820,7 +3894,7 @@ SHARE_SELECT_ACCOUNT_HTML = """
     const accountsListBody = document.getElementById('accountsListBody');
 
     try {
-      const r = await fetch('/api/accounts', {cache:'no-store'});
+      const r = await apiFetch('/api/accounts', {cache:'no-store'});
       const j = await r.json();
       if(!j.ok){
         accountsListBody.innerHTML = `<p style="color:var(--danger);">Error: ${j.error || 'Failed to load accounts'}</p>`;
@@ -3849,7 +3923,7 @@ SHARE_SELECT_ACCOUNT_HTML = """
     const pendingFileId = '{{ pending_file_id }}';
     showToast(`Saving to ${folder}...`, 'info');
     try {
-      const r = await fetch('/api/commit_share', {
+      const r = await apiFetch('/api/commit_share', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: pendingFileId, destination: folder })
@@ -3906,7 +3980,9 @@ def share_select_account(pending_file_id: str):
         dhikr=dhikr,
         dhikr_list=dhikr_list,
         is_admin=is_admin,
-        SHARE_MODAL_HTML=""
+        SHARE_MODAL_HTML="",
+        local_api_base=local_api_base,
+        public_api_base=public_api_base.rstrip('/')
     )
 
 @app.route("/share-receiver", methods=["POST"])

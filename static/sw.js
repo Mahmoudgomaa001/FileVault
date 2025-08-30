@@ -48,43 +48,53 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // We only want to handle navigation requests for the offline fallback.
+  const url = new URL(event.request.url);
+
+  // For API and Socket.IO requests, always go to the network and do not cache.
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/socket.io/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // For navigation requests, use a network-first strategy.
   if (event.request.mode === 'navigate') {
     event.respondWith(
       (async () => {
         try {
-          // Try the network first.
           const networkResponse = await fetch(event.request);
-          // If successful, cache the response for future offline use.
           const cache = await caches.open(CACHE_NAME);
           cache.put(event.request, networkResponse.clone());
           return networkResponse;
         } catch (error) {
-          // The network failed.
-          console.log('[ServiceWorker] Fetch failed; returning offline page or cached page.', error);
-
+          console.log('[ServiceWorker] Navigate fetch failed, trying cache.', error);
           const cache = await caches.open(CACHE_NAME);
-          // Try to serve the page from the cache.
           const cachedResponse = await cache.match(event.request);
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          // If the page is not in the cache, serve the master offline page.
-          return await cache.match(OFFLINE_URL);
+          return cachedResponse || await cache.match(OFFLINE_URL);
         }
       })()
     );
-  } else {
-    // For all other requests (CSS, JS, images, etc.), use a Cache First strategy.
-    event.respondWith(
-      caches.match(event.request).then(cachedResponse => {
-        // If we have a cached response, return it.
+    return;
+  }
+
+  // For all other requests (static assets), use a cache-first strategy.
+  event.respondWith(
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.match(event.request).then(cachedResponse => {
         if (cachedResponse) {
           return cachedResponse;
         }
-        // Otherwise, fetch from the network.
-        return fetch(event.request);
-      })
-    );
-  }
+
+        return fetch(event.request).then(networkResponse => {
+          // Clone the response because it's a stream and can only be consumed once.
+          const responseToCache = networkResponse.clone();
+          cache.put(event.request, responseToCache);
+          return networkResponse;
+        }).catch(error => {
+          console.error('[ServiceWorker] Asset fetch failed:', error);
+          // For static assets, we don't return an offline page, just let the request fail.
+          throw error;
+        });
+      });
+    })
+  );
 });
