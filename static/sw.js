@@ -9,12 +9,6 @@ const APP_SHELL_URLS = [
   '/static/socket.io.min.js',
   '/static/site.webmanifest',
   '/static/favicon.svg',
-  '/static/vendor/fontawesome/webfonts/fa-brands-400.woff2',
-  '/static/vendor/fontawesome/webfonts/fa-regular-400.woff2',
-  '/static/vendor/fontawesome/webfonts/fa-solid-900.woff2',
-  '/static/vendor/fontawesome/webfonts/fa-brands-400.ttf',
-  '/static/vendor/fontawesome/webfonts/fa-regular-400.ttf',
-  '/static/vendor/fontawesome/webfonts/fa-solid-900.ttf',
   OFFLINE_URL
 ];
 
@@ -81,27 +75,15 @@ self.addEventListener('fetch', event => {
       })()
     );
   } else {
-    // For all other requests (CSS, JS, images, etc.), use a "cache first, then network" strategy.
-    // This ensures that any new static assets are cached as they are requested.
+    // For all other requests (CSS, JS, images, etc.), use a Cache First strategy.
     event.respondWith(
-      caches.open(CACHE_NAME).then(async (cache) => {
-        const cachedResponse = await cache.match(event.request);
+      caches.match(event.request).then(cachedResponse => {
+        // If we have a cached response, return it.
         if (cachedResponse) {
           return cachedResponse;
         }
-
-        // Not in cache, go to network.
-        try {
-            const networkResponse = await fetch(event.request);
-            // Cache the new response for future offline use.
-            cache.put(event.request, networkResponse.clone());
-            return networkResponse;
-        } catch (error) {
-            console.log('[ServiceWorker] Fetch failed for non-navigation request.', event.request.url, error);
-            // When offline, this will fail, but that's expected for assets not in the cache.
-            // We don't have a generic fallback for random assets, so we just let the request fail.
-            // It will be caught as a failed network request in the browser.
-        }
+        // Otherwise, fetch from the network.
+        return fetch(event.request);
       })
     );
   }

@@ -14,7 +14,7 @@ import hashlib
 import zipfile
 from io import BytesIO
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Optional
 
 from flask import (
@@ -24,12 +24,6 @@ from flask import (
 from flask_socketio import SocketIO
 import qrcode
 from qrcode.constants import ERROR_CORRECT_H
-import ipaddress
-from cryptography import x509
-from cryptography.x509.oid import NameOID
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.backends import default_backend
 
 # -----------------------------
 # Islamic Dhikr (Remembrance)
@@ -104,7 +98,7 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 app.config["SESSION_COOKIE_NAME"] = SESSION_COOKIE_NAME
 app.config["LOGIN_TOKENS"] = {}  # pc_token -> folder
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 # In-memory pending sessions for QR login
 pending_sessions: dict[str, dict] = {}
@@ -190,79 +184,6 @@ except Exception as e:
 
 
 mimetypes.add_type("font/woff2", ".woff2")  # make sure .woff2 served correctly
-
-
-# -----------------------------
-# SSL Certificate Generation
-# -----------------------------
-def ensure_ssl_certificate():
-    """
-    Ensures that a self-signed SSL certificate and key exist, creating them if not.
-    Returns the paths to the cert and key files.
-    """
-    cert_dir = Path("./.certs")
-    cert_dir.mkdir(exist_ok=True)
-    key_file = cert_dir / "key.pem"
-    cert_file = cert_dir / "cert.pem"
-
-    if key_file.exists() and cert_file.exists():
-        print("[ssl] Certificate and key found.")
-        return (str(cert_file), str(key_file))
-
-    print("[ssl] Generating self-signed certificate...")
-
-    # Generate private key
-    key = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=2048,
-        backend=default_backend()
-    )
-
-    # Write key to disk
-    with open(key_file, "wb") as f:
-        f.write(key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
-            encryption_algorithm=serialization.NoEncryption()
-        ))
-
-    # Create certificate details
-    local_ip = get_local_ip()
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, u"US"),
-        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, u"CA"),
-        x509.NameAttribute(NameOID.LOCALITY_NAME, u"San Francisco"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"FileVault Self-Signed"),
-        x509.NameAttribute(NameOID.COMMON_NAME, u"localhost"),
-    ])
-
-    cert = x509.CertificateBuilder().subject_name(
-        subject
-    ).issuer_name(
-        issuer
-    ).public_key(
-        key.public_key()
-    ).serial_number(
-        x509.random_serial_number()
-    ).not_valid_before(
-        datetime.now(timezone.utc)
-    ).not_valid_after(
-        datetime.now(timezone.utc) + timedelta(days=365*5) # 5 year validity
-    ).add_extension(
-        x509.SubjectAlternativeName([
-            x509.DNSName(u"localhost"),
-            x509.DNSName(local_ip),
-            x509.IPAddress(ipaddress.ip_address(local_ip))
-        ]),
-        critical=False,
-    ).sign(key, hashes.SHA256(), default_backend())
-
-    # Write certificate to disk
-    with open(cert_file, "wb") as f:
-        f.write(cert.public_bytes(serialization.Encoding.PEM))
-
-    print(f"[ssl] Certificate and key generated at {cert_dir.resolve()}")
-    return (str(cert_file), str(key_file))
 
 
 # -----------------------------
@@ -380,7 +301,7 @@ def get_or_create_device_folder(req) -> tuple[str, str]:
     device_id = secrets.token_urlsafe(12)
     folder = ensure_unique_folder_name()
     (ROOT_DIR / folder).mkdir(parents=True, exist_ok=True)
-    app.config["DEVICE_MAP"][device_id] = {"folder": folder, "created": datetime.now(timezone.utc).isoformat()}
+    app.config["DEVICE_MAP"][device_id] = {"folder": folder, "created": datetime.utcnow().isoformat() + "Z"}
     save_device_map(app.config["DEVICE_MAP"])
     cfg = get_user_cfg(folder)
     if not cfg.get("admin_device"):
@@ -463,7 +384,7 @@ def api_accounts_create():
     save_users(app.config["USERS"])
 
     if make_default:
-        app.config["DEVICE_MAP"][did] = {"folder": name, "created": datetime.now(timezone.utc).isoformat()}
+        app.config["DEVICE_MAP"][did] = {"folder": name, "created": datetime.utcnow().isoformat() + "Z"}
         save_device_map(app.config["DEVICE_MAP"])
         session["folder"] = name
         session["icon"] = get_user_icon(name)
@@ -493,7 +414,7 @@ def api_accounts_switch():
     session["icon"] = get_user_icon(folder)
 
     if make_default:
-        app.config["DEVICE_MAP"][did] = {"folder": folder, "created": datetime.now(timezone.utc).isoformat()}
+        app.config["DEVICE_MAP"][did] = {"folder": folder, "created": datetime.utcnow().isoformat() + "Z"}
         save_device_map(app.config["DEVICE_MAP"])
 
     return jsonify({"ok": True, "folder": folder, "browse_url": url_for("browse", subpath=folder)})
@@ -608,7 +529,7 @@ def api_accounts_token():
     token_id = str(uuid.uuid4())
     tokens[token_id] = {
         "token": token,
-        "created": datetime.now(timezone.utc).isoformat(),
+        "created": datetime.utcnow().isoformat() + "Z",
         "name": data.get("name", "API Token"),
         "expires": None
     }
@@ -2071,60 +1992,18 @@ async function changeDhikr() {
         if (!file) return;
         document.getElementById('shareFileName').textContent = file.name;
 
-        const accountListDiv = document.getElementById('shareAccountList');
         const folderTreeDiv = document.getElementById('shareFolderTree');
-        accountListDiv.innerHTML = 'Loading accounts...';
-        folderTreeDiv.innerHTML = 'Select an account above first.';
+        folderTreeDiv.innerHTML = 'Loading...';
         openModal('shareModal');
 
         try {
-            const r = await fetch('/api/accounts', {cache:'no-store'});
-            const j = await r.json();
-            if(!j.ok){
-                accountListDiv.innerHTML = `<p style="color:var(--danger);">${j.error || 'Failed to load accounts'}</p>`;
-                return;
-            }
-
-            if (j.accounts.length === 1) {
-                // If only one account, select it automatically and load its folders.
-                const accountCard = `<div class="card accounts-card selected"><div style="font-weight:700;">${safeHTML(j.accounts[0].folder)}</div></div>`;
-                accountListDiv.innerHTML = accountCard;
-                loadShareFolderTree(j.accounts[0].folder);
-            } else {
-                const items = j.accounts.map(a => `
-                    <div class="card accounts-card" style="cursor:pointer; padding: .75rem;" data-account-folder="${a.folder}">
-                        <div style="font-weight:700;">${safeHTML(a.folder)}</div>
-                    </div>
-                `).join('');
-                accountListDiv.innerHTML = items;
-
-                document.querySelectorAll('#shareAccountList .accounts-card').forEach(card => {
-                    card.addEventListener('click', () => {
-                        const folder = card.dataset.accountFolder;
-                        // Highlight selected account
-                        document.querySelectorAll('#shareAccountList .accounts-card').forEach(c => c.classList.remove('selected'));
-                        card.classList.add('selected');
-                        loadShareFolderTree(folder);
-                    });
-                });
-            }
-        } catch(e) {
-            accountListDiv.innerHTML = `<p style="color:var(--danger);">Failed to load accounts.</p>`;
-        }
-    }
-
-    async function loadShareFolderTree(accountFolder) {
-        const folderTreeDiv = document.getElementById('shareFolderTree');
-        folderTreeDiv.innerHTML = `Loading folders for <strong>${accountFolder}</strong>...`;
-        selectedShareDestination = '';
-        const confirmBtn = document.getElementById('confirmShareBtn');
-        if(confirmBtn) confirmBtn.disabled = true;
-
-        try {
-            const response = await fetch(`/api/folders?account=${encodeURIComponent(accountFolder)}`);
+            const response = await fetch('/api/folders');
             const data = await response.json();
             if (data.ok) {
                 folderTreeDiv.innerHTML = renderFolderTree(data.tree);
+                selectedShareDestination = '';
+                const confirmBtn = document.getElementById('confirmShareBtn');
+                if(confirmBtn) confirmBtn.disabled = true;
 
                 document.querySelectorAll('#shareFolderTree .folder-tree-item').forEach(item => {
                     item.addEventListener('click', (e) => {
@@ -2136,10 +2015,10 @@ async function changeDhikr() {
                     });
                 });
             } else {
-                folderTreeDiv.innerHTML = `<p style="color:var(--danger);">Error: ${data.error || 'Could not load folders.'}</p>`;
+                folderTreeDiv.innerHTML = `Error: ${data.error || 'Could not load folders.'}`;
             }
         } catch (error) {
-            folderTreeDiv.innerHTML = `<p style="color:var(--danger);">Error loading folders.</p>`;
+            folderTreeDiv.innerHTML = 'Error loading folders.';
         }
     }
 
@@ -2707,17 +2586,13 @@ function removeFileCard(rel){
             </div>
             ` : ''}
             <div class="qr-box"><img src="data:image/png;base64,${j.b64}" alt="QR" style="image-rendering:pixelated; image-rendering:crisp-edges;"/></div>
-            <div class="row" style="justify-content:space-between; margin-top:.75rem; align-items: center;">
-              <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all; flex: 1;" id="myQRLink">${j.url}</div>
-              <div style="display:flex; gap: .5rem;">
-                <button class="btn btn-secondary" id="copyQRBtn"><i class="fas fa-link"></i> Copy</button>
-                <button class="btn btn-primary" id="goQRBtn"><i class="fas fa-arrow-right"></i> Go</button>
-              </div>
+            <div class="row" style="justify-content:space-between; margin-top:.75rem;">
+              <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all;" id="myQRLink">${j.url}</div>
+              <button class="btn btn-secondary" id="copyQRBtn"><i class="fas fa-link"></i> Copy</button>
             </div>
             ${!j.ngrok_available && qrOnlineMode ? '<p style="color:var(--warning); text-align:center; margin-top:.5rem;"><i class="fas fa-exclamation-triangle"></i> Ngrok not available. Showing local QR.</p>' : ''}
           `;
           document.getElementById('copyQRBtn')?.addEventListener('click', ()=> copyLink(j.url));
-          document.getElementById('goQRBtn')?.addEventListener('click', ()=> window.open(j.url, '_blank'));
           if(j.ngrok_available){
             const toggle = document.getElementById(toggleId);
             if(toggle){
@@ -2835,19 +2710,15 @@ function removeFileCard(rel){
             </div>
             ` : ''}
             <div class="qr-box"><img src="data:image/png;base64,${j.b64}" alt="QR" style="image-rendering:pixelated; image-rendering:crisp-edges;"/></div>
-            <div class="row" style="justify-content:space-between; margin-top:.75rem; align-items: center;">
-              <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all; flex: 1;" id="tokenShareLink">${j.url}</div>
-              <div style="display:flex; gap: .5rem;">
-                <button class="btn btn-secondary" id="copyTokenShareBtn"><i class="fas fa-link"></i> Copy</button>
-                <button class="btn btn-primary" id="goTokenShareBtn"><i class="fas fa-arrow-right"></i> Go</button>
-              </div>
+            <div class="row" style="justify-content:space-between; margin-top:.75rem;">
+              <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all;" id="tokenShareLink">${j.url}</div>
+              <button class="btn btn-secondary" id="copyTokenShareBtn"><i class="fas fa-link"></i> Copy</button>
             </div>
             <p style="margin-top:0.5rem; text-align:center;">Share this link to allow others to access your server with this token</p>
             ${!j.ngrok_available && qrOnlineMode ? '<p style="color:var(--warning); text-align:center; margin-top:.5rem;"><i class="fas fa-exclamation-triangle"></i> Ngrok not available. Showing local QR.</p>' : ''}
           `;
 
           document.getElementById('copyTokenShareBtn')?.addEventListener('click', () => copyTokenShareLink());
-          document.getElementById('goTokenShareBtn')?.addEventListener('click', ()=> window.open(j.url, '_blank'));
 
           if (j.ngrok_available) {
             const toggle = document.getElementById(toggleId);
@@ -3275,7 +3146,7 @@ def api_accounts_transfer_admin_start():
     token = secrets.token_urlsafe(16)
     admin_claim_tokens[token] = {
         "folder": folder,
-        "created": datetime.now(timezone.utc).isoformat()
+        "created": datetime.utcnow().isoformat() + "Z"
     }
 
     # Build claim URL (external-aware)
@@ -3306,7 +3177,7 @@ def scan_admin(token: str):
     session["authed"] = True
     session["folder"] = folder
     session["icon"] = get_user_icon(folder)
-    app.config["DEVICE_MAP"][device_id] = {"folder": folder, "created": datetime.now(timezone.utc).isoformat()}
+    app.config["DEVICE_MAP"][device_id] = {"folder": folder, "created": datetime.utcnow().isoformat() + "Z"}
     save_device_map(app.config["DEVICE_MAP"])
 
     resp = make_response(redirect(url_for("browse", subpath=folder)))
@@ -3493,7 +3364,7 @@ def browse(subpath: Optional[str] = None):
         if info.get("folder") == session.get("folder"):
             since_iso = info.get("created")
             break
-    since_txt = datetime.fromisoformat(since_iso.replace("Z", "+00:00")) if since_iso else datetime.now(timezone.utc)
+    since_txt = datetime.fromisoformat(since_iso.replace("Z","")) if since_iso else datetime.utcnow()
     since = since_txt.strftime("%b %Y")
 
     dhikr = get_random_dhikr()
@@ -3756,7 +3627,7 @@ def api_cliptext():
     if name:
         filename = sanitize_filename(name)
     else:
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
         filename = f"clip-{ts}.txt"
     if "." not in filename:
         filename += ".txt"
@@ -3784,15 +3655,7 @@ def api_folders():
     if not is_authed():
         return jsonify({"ok": False, "error": "not authed"}), 401
 
-    target_folder = request.args.get("account", session.get("folder", ""))
-
-    # A user can only request folders for an account they administer.
-    device_id = request.cookies.get(DEVICE_COOKIE_NAME)
-    users = app.config.setdefault("USERS", load_users())
-    if not target_folder or target_folder not in users or users[target_folder].get("admin_device") != device_id:
-        return jsonify({"ok": False, "error": "forbidden"}), 403
-
-    base_folder_path = ROOT_DIR / target_folder
+    base_folder_path = ROOT_DIR / session.get("folder", "")
 
     def get_dir_structure(path):
         structure = []
@@ -3810,8 +3673,8 @@ def api_folders():
         return sorted(structure, key=lambda x: x['name'].lower())
 
     folder_tree = [{
-        "name": target_folder,
-        "path": target_folder,
+        "name": session.get("folder", "root"),
+        "path": session.get("folder", ""),
         "children": get_dir_structure(base_folder_path)
     }]
 
@@ -3932,11 +3795,9 @@ SHARE_MODAL_HTML = """
     </div>
     <div class="modal-body">
       <p style="margin-bottom:.5rem;">Saving file: <strong id="shareFileName"></strong></p>
-      <p>1. Select destination account:</p>
-      <div id="shareAccountList" style="margin-bottom: 1rem; max-height: 150px; overflow-y: auto;"></div>
-      <p>2. Select destination folder:</p>
+      <p>Select destination folder:</p>
       <div id="shareFolderTree" style="height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary);">
-        Select an account above first.
+        Loading...
       </div>
     </div>
     <div class="modal-footer">
@@ -3947,11 +3808,113 @@ SHARE_MODAL_HTML = """
 </div>
 """
 
+SHARE_SELECT_ACCOUNT_HTML = """
+<div class="card" style="max-width:620px; margin:0 auto;">
+  <h2 style="margin-bottom:.5rem;">Save Shared File</h2>
+  <p style="color:var(--text-secondary); margin-bottom:1.5rem;">Choose an account to save <strong>{{ filename }}</strong> to:</p>
+  <div id="accountsListBody">Loading accounts...</div>
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    const pendingFileId = '{{ pending_file_id }}';
+    const accountsListBody = document.getElementById('accountsListBody');
+
+    try {
+      const r = await fetch('/api/accounts', {cache:'no-store'});
+      const j = await r.json();
+      if(!j.ok){
+        accountsListBody.innerHTML = `<p style="color:var(--danger);">Error: ${j.error || 'Failed to load accounts'}</p>`;
+        return;
+      }
+
+      if (!j.accounts || j.accounts.length === 0) {
+        accountsListBody.innerHTML = '<p>No accounts found.</p>';
+        return;
+      }
+
+      const items = j.accounts.map(a => {
+        return `
+          <div class="card" style="cursor:pointer; margin-bottom:.5rem;" onclick="selectAccount('${a.folder.replace(/'/g,"\\\\'")}')">
+            <div style="font-weight:700;">${safeHTML(a.folder)}</div>
+          </div>`;
+      }).join('');
+      accountsListBody.innerHTML = items;
+
+    } catch(e) {
+      accountsListBody.innerHTML = `<p style="color:var(--danger);">Error: Could not connect to server.</p>`;
+    }
+  });
+
+  async function selectAccount(folder) {
+    const pendingFileId = '{{ pending_file_id }}';
+    showToast(`Saving to ${folder}...`, 'info');
+    try {
+      const r = await fetch('/api/commit_share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: pendingFileId, destination: folder })
+      });
+      const j = await r.json();
+      if (j.ok) {
+        showToast(`File saved to ${folder}!`, 'success');
+        // Redirect to the folder where the file was saved
+        setTimeout(() => { window.location.href = `/b/${folder}`; }, 500);
+      } else {
+        showToast(j.error || 'Failed to save file.', 'error');
+      }
+    } catch (e) {
+      showToast('An error occurred while saving the file.', 'error');
+    }
+  }
+
+  // A simple version of safeHTML for the template, as the full one might not be available
+  function safeHTML(s){
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+</script>
+"""
+
+@app.route("/share-select-account/<pending_file_id>")
+def share_select_account(pending_file_id: str):
+    if not is_authed():
+        return redirect(url_for("login"))
+
+    try:
+        _, original_filename = pending_file_id.split("__", 1)
+    except ValueError:
+        original_filename = "your file"
+
+    body = render_template_string(
+        SHARE_SELECT_ACCOUNT_HTML,
+        filename=original_filename,
+        pending_file_id=pending_file_id
+    )
+
+    dhikr = get_random_dhikr()
+    dhikr_list = [{"dhikr": d} for d in ISLAMIC_DHIKR]
+    device_id = request.cookies.get(DEVICE_COOKIE_NAME)
+    cfg = get_user_cfg(session.get("folder",""))
+    is_admin = bool(device_id and device_id == cfg.get("admin_device"))
+
+    return render_template_string(
+        BASE_HTML,
+        body=body,
+        authed=True,
+        icon=session.get("icon"),
+        user_label=session.get("folder",""),
+        current_rel="",
+        dhikr=dhikr,
+        dhikr_list=dhikr_list,
+        is_admin=is_admin,
+        SHARE_MODAL_HTML=""
+    )
+
 @app.route("/share-receiver", methods=["POST"])
 def share_receiver():
     device_id, folder = get_or_create_device_folder(request)
     if not folder:
-        return Response("Device not recognized. Please log in to the app first.", status=401)
+        # The user needs to have visited the app once to get a device cookie.
+        return Response("Device not recognized. Please visit the app once to register your device.", status=401)
 
     f = request.files.get("files")
     if not f or not f.filename:
@@ -3961,7 +3924,6 @@ def share_receiver():
     pending_dir.mkdir(exist_ok=True)
 
     filename = sanitize_filename(f.filename)
-    # Use a UUID to avoid filename collisions in the pending folder
     save_name = f"{str(uuid.uuid4())}__{filename}"
     save_path = pending_dir / save_name
 
@@ -3971,9 +3933,8 @@ def share_receiver():
         print(f"[share] Save failed: {e}")
         return Response("Failed to save shared file.", status=500)
 
-    # Let the main app know a share is ready via socket
-    socketio.emit("share_ready", {"folder": folder})
-    return Response(status=204)
+    # Redirect to the new account selection page
+    return redirect(url_for('share_select_account', pending_file_id=save_name))
 
 @app.route("/api/pending_shares")
 def api_pending_shares():
@@ -4005,21 +3966,16 @@ def api_commit_share():
     if not pending_id or destination_rel is None:
         return jsonify({"ok": False, "error": "id and destination required"}), 400
 
-    # The pending file is stored relative to the device's default folder.
-    device_id, source_folder = get_or_create_device_folder(request)
-    if not source_folder:
-        return jsonify({"ok": False, "error": "device not recognized"}), 401
+    # Security check: User must be the admin of the destination folder.
+    if not is_admin_device_of(destination_rel):
+        return jsonify({"ok": False, "error": "permission denied: not admin of destination"}), 403
 
-    # The destination account is the first part of the destination_rel path.
-    dest_account = first_segment(destination_rel)
-    if not dest_account:
-        return jsonify({"ok": False, "error": "invalid destination"}), 400
+    # The pending file is stored in the ".pending_shares" directory of the *device's default folder*.
+    device_id = request.cookies.get(DEVICE_COOKIE_NAME)
+    if not device_id or device_id not in app.config["DEVICE_MAP"]:
+        return jsonify({"ok": False, "error": "device not recognized"}), 400
 
-    # Security: Check that the user's device is the admin of the destination account.
-    users = app.config.setdefault("USERS", load_users())
-    if dest_account not in users or users[dest_account].get("admin_device") != device_id:
-        return jsonify({"ok": False, "error": "not authorized for destination account"}), 403
-
+    source_folder = app.config["DEVICE_MAP"][device_id]["folder"]
     pending_dir = safe_path(source_folder) / ".pending_shares"
     pending_file = pending_dir / pending_id
 
@@ -4047,7 +4003,6 @@ def api_commit_share():
         return jsonify({"ok": False, "error": f"Failed to move file: {e}"}), 500
 
     meta = get_file_meta(save_path)
-    # The destination for the socket event is the parent of the new file, which is correct.
     socketio.emit("file_update", {"action":"added", "dir": destination_rel, "meta": meta})
     return jsonify({"ok": True, "meta": meta})
 
@@ -4073,24 +4028,13 @@ def handle_403(e):
 # -----------------------------
 # Main
 # -----------------------------
-
-CERT_PATH, KEY_PATH = ensure_ssl_certificate()
-
 if __name__ == "__main__":
     ip = get_local_ip()
-    print(f"Serving FileVault on https://0.0.0.0:{PORT}  (scan: https://{ip}:{PORT})")
-    print("NOTE: You will need to accept the self-signed certificate in your browser.")
+    print(f"Serving FileVault on http://0.0.0.0:{PORT}  (scan: http://{ip}:{PORT})")
     ngrok_url = get_ngrok_url()
     if ngrok_url:
         print(f"Ngrok URL detected: {ngrok_url}")
     else:
-        print("Ngrok not detected. For external access, run: ngrok http 5000")
+        print("Ngrok not detected. To enable online access, run: ngrok http 5000")
     print(f"Root directory: {ROOT_DIR}")
-    socketio.run(
-        app,
-        host="0.0.0.0",
-        port=PORT,
-        debug=False,
-        certfile=CERT_PATH,
-        keyfile=KEY_PATH
-    )
+    socketio.run(app, host="0.0.0.0", port=PORT, debug=False)
