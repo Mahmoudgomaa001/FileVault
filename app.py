@@ -3296,7 +3296,23 @@ def login():
                                    ngrok_available=ngrok_available,
                                    message=message)
     # On login page, no dhikr banner
-    return render_template_string(BASE_HTML, body=body, authed=is_authed(), icon=None, user_label="", current_rel="", dhikr="", dhikr_list=[], is_admin=False)
+    local_ip = get_local_ip()
+    local_api_base = f"http://{local_ip}:{PORT}"
+    public_api_base = get_ngrok_url() or request.url_root
+
+    return render_template_string(
+        BASE_HTML,
+        body=body,
+        authed=is_authed(),
+        icon=None,
+        user_label="",
+        current_rel="",
+        dhikr="",
+        dhikr_list=[],
+        is_admin=False,
+        local_api_base=local_api_base,
+        public_api_base=public_api_base.rstrip('/')
+    )
 
 @app.route("/api/login_qr")
 def api_login_qr():
