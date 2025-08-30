@@ -1992,18 +1992,60 @@ async function changeDhikr() {
         if (!file) return;
         document.getElementById('shareFileName').textContent = file.name;
 
+        const accountListDiv = document.getElementById('shareAccountList');
         const folderTreeDiv = document.getElementById('shareFolderTree');
-        folderTreeDiv.innerHTML = 'Loading...';
+        accountListDiv.innerHTML = 'Loading accounts...';
+        folderTreeDiv.innerHTML = 'Select an account above first.';
         openModal('shareModal');
 
         try {
-            const response = await fetch('/api/folders');
+            const r = await fetch('/api/accounts', {cache:'no-store'});
+            const j = await r.json();
+            if(!j.ok){
+                accountListDiv.innerHTML = `<p style="color:var(--danger);">${j.error || 'Failed to load accounts'}</p>`;
+                return;
+            }
+
+            if (j.accounts.length === 1) {
+                // If only one account, select it automatically and load its folders.
+                const accountCard = `<div class="card accounts-card selected"><div style="font-weight:700;">${safeHTML(j.accounts[0].folder)}</div></div>`;
+                accountListDiv.innerHTML = accountCard;
+                loadShareFolderTree(j.accounts[0].folder);
+            } else {
+                const items = j.accounts.map(a => `
+                    <div class="card accounts-card" style="cursor:pointer; padding: .75rem;" data-account-folder="${a.folder}">
+                        <div style="font-weight:700;">${safeHTML(a.folder)}</div>
+                    </div>
+                `).join('');
+                accountListDiv.innerHTML = items;
+
+                document.querySelectorAll('#shareAccountList .accounts-card').forEach(card => {
+                    card.addEventListener('click', () => {
+                        const folder = card.dataset.accountFolder;
+                        // Highlight selected account
+                        document.querySelectorAll('#shareAccountList .accounts-card').forEach(c => c.classList.remove('selected'));
+                        card.classList.add('selected');
+                        loadShareFolderTree(folder);
+                    });
+                });
+            }
+        } catch(e) {
+            accountListDiv.innerHTML = `<p style="color:var(--danger);">Failed to load accounts.</p>`;
+        }
+    }
+
+    async function loadShareFolderTree(accountFolder) {
+        const folderTreeDiv = document.getElementById('shareFolderTree');
+        folderTreeDiv.innerHTML = `Loading folders for <strong>${accountFolder}</strong>...`;
+        selectedShareDestination = '';
+        const confirmBtn = document.getElementById('confirmShareBtn');
+        if(confirmBtn) confirmBtn.disabled = true;
+
+        try {
+            const response = await fetch(`/api/folders?account=${encodeURIComponent(accountFolder)}`);
             const data = await response.json();
             if (data.ok) {
                 folderTreeDiv.innerHTML = renderFolderTree(data.tree);
-                selectedShareDestination = '';
-                const confirmBtn = document.getElementById('confirmShareBtn');
-                if(confirmBtn) confirmBtn.disabled = true;
 
                 document.querySelectorAll('#shareFolderTree .folder-tree-item').forEach(item => {
                     item.addEventListener('click', (e) => {
@@ -2015,10 +2057,10 @@ async function changeDhikr() {
                     });
                 });
             } else {
-                folderTreeDiv.innerHTML = `Error: ${data.error || 'Could not load folders.'}`;
+                folderTreeDiv.innerHTML = `<p style="color:var(--danger);">Error: ${data.error || 'Could not load folders.'}</p>`;
             }
         } catch (error) {
-            folderTreeDiv.innerHTML = 'Error loading folders.';
+            folderTreeDiv.innerHTML = `<p style="color:var(--danger);">Error loading folders.</p>`;
         }
     }
 
@@ -2586,13 +2628,17 @@ function removeFileCard(rel){
             </div>
             ` : ''}
             <div class="qr-box"><img src="data:image/png;base64,${j.b64}" alt="QR" style="image-rendering:pixelated; image-rendering:crisp-edges;"/></div>
-            <div class="row" style="justify-content:space-between; margin-top:.75rem;">
-              <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all;" id="myQRLink">${j.url}</div>
-              <button class="btn btn-secondary" id="copyQRBtn"><i class="fas fa-link"></i> Copy</button>
+            <div class="row" style="justify-content:space-between; margin-top:.75rem; align-items: center;">
+              <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all; flex: 1;" id="myQRLink">${j.url}</div>
+              <div style="display:flex; gap: .5rem;">
+                <button class="btn btn-secondary" id="copyQRBtn"><i class="fas fa-link"></i> Copy</button>
+                <button class="btn btn-primary" id="goQRBtn"><i class="fas fa-arrow-right"></i> Go</button>
+              </div>
             </div>
             ${!j.ngrok_available && qrOnlineMode ? '<p style="color:var(--warning); text-align:center; margin-top:.5rem;"><i class="fas fa-exclamation-triangle"></i> Ngrok not available. Showing local QR.</p>' : ''}
           `;
           document.getElementById('copyQRBtn')?.addEventListener('click', ()=> copyLink(j.url));
+          document.getElementById('goQRBtn')?.addEventListener('click', ()=> window.open(j.url, '_blank'));
           if(j.ngrok_available){
             const toggle = document.getElementById(toggleId);
             if(toggle){
@@ -2710,15 +2756,19 @@ function removeFileCard(rel){
             </div>
             ` : ''}
             <div class="qr-box"><img src="data:image/png;base64,${j.b64}" alt="QR" style="image-rendering:pixelated; image-rendering:crisp-edges;"/></div>
-            <div class="row" style="justify-content:space-between; margin-top:.75rem;">
-              <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all;" id="tokenShareLink">${j.url}</div>
-              <button class="btn btn-secondary" id="copyTokenShareBtn"><i class="fas fa-link"></i> Copy</button>
+            <div class="row" style="justify-content:space-between; margin-top:.75rem; align-items: center;">
+              <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all; flex: 1;" id="tokenShareLink">${j.url}</div>
+              <div style="display:flex; gap: .5rem;">
+                <button class="btn btn-secondary" id="copyTokenShareBtn"><i class="fas fa-link"></i> Copy</button>
+                <button class="btn btn-primary" id="goTokenShareBtn"><i class="fas fa-arrow-right"></i> Go</button>
+              </div>
             </div>
             <p style="margin-top:0.5rem; text-align:center;">Share this link to allow others to access your server with this token</p>
             ${!j.ngrok_available && qrOnlineMode ? '<p style="color:var(--warning); text-align:center; margin-top:.5rem;"><i class="fas fa-exclamation-triangle"></i> Ngrok not available. Showing local QR.</p>' : ''}
           `;
 
           document.getElementById('copyTokenShareBtn')?.addEventListener('click', () => copyTokenShareLink());
+          document.getElementById('goTokenShareBtn')?.addEventListener('click', ()=> window.open(j.url, '_blank'));
 
           if (j.ngrok_available) {
             const toggle = document.getElementById(toggleId);
@@ -3655,7 +3705,15 @@ def api_folders():
     if not is_authed():
         return jsonify({"ok": False, "error": "not authed"}), 401
 
-    base_folder_path = ROOT_DIR / session.get("folder", "")
+    target_folder = request.args.get("account", session.get("folder", ""))
+
+    # A user can only request folders for an account they administer.
+    device_id = request.cookies.get(DEVICE_COOKIE_NAME)
+    users = app.config.setdefault("USERS", load_users())
+    if not target_folder or target_folder not in users or users[target_folder].get("admin_device") != device_id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    base_folder_path = ROOT_DIR / target_folder
 
     def get_dir_structure(path):
         structure = []
@@ -3673,8 +3731,8 @@ def api_folders():
         return sorted(structure, key=lambda x: x['name'].lower())
 
     folder_tree = [{
-        "name": session.get("folder", "root"),
-        "path": session.get("folder", ""),
+        "name": target_folder,
+        "path": target_folder,
         "children": get_dir_structure(base_folder_path)
     }]
 
@@ -3795,9 +3853,11 @@ SHARE_MODAL_HTML = """
     </div>
     <div class="modal-body">
       <p style="margin-bottom:.5rem;">Saving file: <strong id="shareFileName"></strong></p>
-      <p>Select destination folder:</p>
+      <p>1. Select destination account:</p>
+      <div id="shareAccountList" style="margin-bottom: 1rem; max-height: 150px; overflow-y: auto;"></div>
+      <p>2. Select destination folder:</p>
       <div id="shareFolderTree" style="height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary);">
-        Loading...
+        Select an account above first.
       </div>
     </div>
     <div class="modal-footer">
@@ -3866,11 +3926,22 @@ def api_commit_share():
     if not pending_id or destination_rel is None:
         return jsonify({"ok": False, "error": "id and destination required"}), 400
 
-    base_folder = session.get("folder")
-    if first_segment(destination_rel) != base_folder and destination_rel != base_folder:
-        return jsonify({"ok": False, "error": "forbidden destination"}), 403
+    # The pending file is stored relative to the device's default folder.
+    device_id, source_folder = get_or_create_device_folder(request)
+    if not source_folder:
+        return jsonify({"ok": False, "error": "device not recognized"}), 401
 
-    pending_dir = safe_path(base_folder) / ".pending_shares"
+    # The destination account is the first part of the destination_rel path.
+    dest_account = first_segment(destination_rel)
+    if not dest_account:
+        return jsonify({"ok": False, "error": "invalid destination"}), 400
+
+    # Security: Check that the user's device is the admin of the destination account.
+    users = app.config.setdefault("USERS", load_users())
+    if dest_account not in users or users[dest_account].get("admin_device") != device_id:
+        return jsonify({"ok": False, "error": "not authorized for destination account"}), 403
+
+    pending_dir = safe_path(source_folder) / ".pending_shares"
     pending_file = pending_dir / pending_id
 
     if not pending_file.exists() or not pending_file.is_file():
@@ -3897,6 +3968,7 @@ def api_commit_share():
         return jsonify({"ok": False, "error": f"Failed to move file: {e}"}), 500
 
     meta = get_file_meta(save_path)
+    # The destination for the socket event is the parent of the new file, which is correct.
     socketio.emit("file_update", {"action":"added", "dir": destination_rel, "meta": meta})
     return jsonify({"ok": True, "meta": meta})
 
