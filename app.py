@@ -880,7 +880,7 @@ BASE_HTML = """
     .file-grid.list-view { grid-template-columns: 1fr; gap:.5rem; }
     .file-card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; overflow:hidden; transition:all .2s ease; cursor:pointer; }
     .file-card:active { transform:scale(.98); }
-    .file-card.selected { border-color: var(--primary); background: color-mix(in srgb, var(--bg-secondary) 80%, var(--primary)); }
+    .file-card.selected { border: 5px solid var(--primary); }
     .file-select-checkbox { display: none; position: absolute; top: 8px; left: 8px; z-index: 5; width: 18px; height: 18px; accent-color: var(--primary); }
     .select-mode .file-select-checkbox { display: block; }
     .list-view .file-card { display:flex; align-items:center; padding:.75rem; gap:.75rem; }
@@ -972,7 +972,7 @@ BASE_HTML = """
     <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
     <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
   {% endif %}
-  <button class="btn btn-secondary" id="installBtn" title="App cannot be installed yet" disabled><i class="fas fa-download"></i> Install</button>
+  <button class="btn btn-secondary btn-icon" id="installBtn" title="Install App" style="display: none;"><i class="fas fa-arrow-down-to-bracket"></i></button>
   <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
   <button id="themeBtn" class="btn btn-secondary btn-icon" title="Toggle theme"><i class="fas fa-moon"></i></button>
   <a href="{{ url_for('logout') }}" class="btn btn-danger btn-icon" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
@@ -2743,18 +2743,23 @@ function removeFileCard(rel){
 
     // PWA INSTALL
     function initPwaInstall() {
-      let deferredPrompt;
       const installBtn = document.getElementById('installBtn');
       if (!installBtn) return;
 
+      // Hide button if app is already installed
+      if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+        installBtn.style.display = 'none';
+        return;
+      }
+
+      let deferredPrompt;
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        // Make the button active
-        installBtn.disabled = false;
+        // Show the button if the app can be installed
+        installBtn.style.display = 'inline-flex';
         installBtn.classList.remove('btn-secondary');
         installBtn.classList.add('btn-primary');
-        installBtn.title = 'Install App';
       });
 
       installBtn.addEventListener('click', async () => {
@@ -2763,22 +2768,15 @@ function removeFileCard(rel){
           const { outcome } = await deferredPrompt.userChoice;
           if (outcome === 'accepted') {
             showToast('App installed!', 'success');
+            installBtn.style.display = 'none'; // Hide after accepting
           }
           deferredPrompt = null;
-          // Disable the button after prompt
-          installBtn.disabled = true;
-          installBtn.title = 'App is installed or prompt was dismissed';
         }
       });
 
       window.addEventListener('appinstalled', () => {
-        // Keep the button disabled after installation and give visual feedback
-        installBtn.disabled = true;
-        installBtn.title = 'App successfully installed';
-        installBtn.classList.remove('btn-primary');
-        installBtn.classList.add('btn-success');
+        installBtn.style.display = 'none';
         deferredPrompt = null;
-        showToast('Installation complete!', 'success');
       });
     }
 
@@ -3987,4 +3985,4 @@ if __name__ == "__main__":
     else:
         print("Ngrok not detected. To enable online access, run: ngrok http 5000")
     print(f"Root directory: {ROOT_DIR}")
-    socketio.run(app, host="0.0.0.0", port=PORT, debug=False)
+    socketio.run(app, host="0.0.0.0", port=PORT, debug=False, allow_unsafe_werkzeug=True)
