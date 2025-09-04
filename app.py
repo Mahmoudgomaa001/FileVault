@@ -3703,7 +3703,7 @@ def api_download_zip():
 # -----------------------------
 # Routes: PWA Share Target
 # -----------------------------
-SHARE_PAGE_TEMPLATE = \"\"\"
+SHARE_PAGE_TEMPLATE = """
 <!doctype html>
 <html lang="en">
 <head>
@@ -3846,7 +3846,7 @@ SHARE_PAGE_TEMPLATE = \"\"\"
   </script>
 </body>
 </html>
-\"\"\"
+"""
 
 @app.route("/share")
 def share_page():
