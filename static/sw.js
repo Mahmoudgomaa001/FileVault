@@ -3,7 +3,6 @@ const OFFLINE_URL = 'static/offline.html';
 const APP_SHELL_URLS = [
   // The root '/' is intentionally omitted. It's cached on first visit via the 'navigate' fetch handler.
   // Precaching it can fail if the user is not logged in, as it would redirect.
-  // '/static/fonts.css',
   '/static/fonts.css',
   '/static/vendor/fontawesome/css/all.min.css',
   '/static/vendor/fontawesome/css/fa-shims.css',

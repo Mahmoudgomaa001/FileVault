@@ -24,6 +24,8 @@ from flask import (
 from flask_socketio import SocketIO
 import qrcode
 from qrcode.constants import ERROR_CORRECT_H
+import threading
+from werkzeug.serving import make_server
 
 # -----------------------------
 # Islamic Dhikr (Remembrance)
@@ -3048,12 +3050,6 @@ UNLOCK_HTML = """
 # -----------------------------
 # Routes: Auth with persistent device folders + Privacy
 # -----------------------------
-@app.before_request
-def before_request():
-    if not request.is_secure and request.endpoint and 'static' not in request.endpoint:
-        url = request.url.replace('http://', 'https://', 1)
-        return redirect(url, code=301)
-
 @app.route("/api/accounts/transfer_admin_start", methods=["POST"])
 def api_accounts_transfer_admin_start():
     if not is_authed():
@@ -3981,9 +3977,37 @@ def handle_403(e):
     return redirect(url_for('home'))
 
 # -----------------------------
+# HTTP to HTTPS Redirector
+# -----------------------------
+def run_redirect_server():
+    redirect_app = Flask('redirect_app')
+
+    @redirect_app.before_request
+    def redirect_to_https():
+        # Construct the new URL, replacing the scheme and pointing to the correct port
+        host_header = request.headers.get('Host', '')
+        hostname = host_header.split(':')[0]
+
+        # Build the new URL with the correct port for HTTPS
+        new_url = f"https://{hostname}:{PORT}{request.full_path}"
+        return redirect(new_url, code=301)
+
+    # Running on a different port, e.g., 80 or a custom one like 5001
+    # Note: Port 80 would require root privileges.
+    redirect_port = 8080
+    print(f"Redirecting HTTP requests from port {redirect_port} to HTTPS on port {PORT}")
+
+    server = make_server("0.0.0.0", redirect_port, redirect_app)
+    server.serve_forever()
+
+# -----------------------------
 # Main
 # -----------------------------
 if __name__ == "__main__":
+    # Start the redirect server in a background thread
+    redirect_thread = threading.Thread(target=run_redirect_server, daemon=True)
+    redirect_thread.start()
+
     ip = get_local_ip()
     print(f"Serving FileVault on http://0.0.0.0:{PORT}  (scan: http://{ip}:{PORT})")
     ngrok_url = get_ngrok_url()
