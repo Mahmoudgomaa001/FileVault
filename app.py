@@ -24,8 +24,6 @@ from flask import (
 from flask_socketio import SocketIO
 import qrcode
 from qrcode.constants import ERROR_CORRECT_H
-import threading
-from werkzeug.serving import make_server
 
 # -----------------------------
 # Islamic Dhikr (Remembrance)
@@ -882,7 +880,7 @@ BASE_HTML = """
     .file-grid.list-view { grid-template-columns: 1fr; gap:.5rem; }
     .file-card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; overflow:hidden; transition:all .2s ease; cursor:pointer; }
     .file-card:active { transform:scale(.98); }
-    .file-card.selected { border: 5px solid var(--primary); }
+    .file-card.selected { border-color: var(--primary); background: color-mix(in srgb, var(--bg-secondary) 80%, var(--primary)); }
     .file-select-checkbox { display: none; position: absolute; top: 8px; left: 8px; z-index: 5; width: 18px; height: 18px; accent-color: var(--primary); }
     .select-mode .file-select-checkbox { display: block; }
     .list-view .file-card { display:flex; align-items:center; padding:.75rem; gap:.75rem; }
@@ -921,8 +919,7 @@ BASE_HTML = """
     .modal-footer { padding:1rem; border-top:1px solid var(--border); display:flex; gap:.5rem; justify-content:flex-end; }
     .form-input { margin-top: 5px; width: 100%; padding: 0.625rem 0.875rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 0.5rem; color: var(--text-primary); font-size: 0.875rem; }
     .form-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
-    .qr-box { display:flex; align-items:center; justify-content:center; padding:16px; background:#fff; border-radius:12px; max-width: 320px; margin: 0 auto; }
-    .qr-box img { max-width: 100%; height: auto; }
+    .qr-box { display:flex; align-items:center; justify-content:center; padding:16px; background:#fff; border-radius:12px; }
 
     /* Stats */
     .stats-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:.75rem; margin-bottom:1rem; }
@@ -975,8 +972,9 @@ BASE_HTML = """
     <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
     <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
   {% endif %}
-  <button class="btn btn-secondary btn-icon" id="installBtn" title="Install App" style="display: none;"><i class="fas fa-arrow-down-to-bracket"></i></button>
+  <button class="btn btn-secondary" id="installBtn" title="App cannot be installed yet" disabled><i class="fas fa-download"></i> Install</button>
   <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
+  <button class="btn btn-secondary" id="goToLocalBtn" title="Go to Local Network"><i class="fas fa-house-signal"></i> Go Local</button>
   <button id="themeBtn" class="btn btn-secondary btn-icon" title="Toggle theme"><i class="fas fa-moon"></i></button>
   <a href="{{ url_for('logout') }}" class="btn btn-danger btn-icon" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
 {% endif %}
@@ -1190,10 +1188,13 @@ BASE_HTML = """
   </div>
 </div>
 
+{{SHARE_MODAL_HTML|safe}}
+
 </div>
 
   <script src="/static/socket.io.min.js"></script>
   <script>
+    window.local_ip = "{{ local_ip or '' }}";
     if (typeof io === 'undefined') {
       var s = document.createElement('script');
       s.src = '/socket.io/socket.io.js';
@@ -1970,6 +1971,85 @@ async function changeDhikr() {
         }
     }
 
+    // PWA SHARE HANDLING
+    let selectedShareDestination = '';
+    let currentPendingFile = null;
+
+    async function checkForPendingShares(){
+        try {
+            const r = await fetch('/api/pending_shares');
+            const j = await r.json();
+            if(j.ok && j.files && j.files.length > 0){
+                if (!document.getElementById('shareModal').classList.contains('active')) {
+                    currentPendingFile = j.files[0];
+                    openShareModal(currentPendingFile);
+                }
+            }
+        } catch(e) {
+            console.error('Failed to check for pending shares', e);
+        }
+    }
+
+    async function openShareModal(file) {
+        if (!file) return;
+        document.getElementById('shareFileName').textContent = file.name;
+
+        const folderTreeDiv = document.getElementById('shareFolderTree');
+        folderTreeDiv.innerHTML = 'Loading...';
+        openModal('shareModal');
+
+        try {
+            const response = await fetch('/api/folders');
+            const data = await response.json();
+            if (data.ok) {
+                folderTreeDiv.innerHTML = renderFolderTree(data.tree);
+                selectedShareDestination = '';
+                const confirmBtn = document.getElementById('confirmShareBtn');
+                if(confirmBtn) confirmBtn.disabled = true;
+
+                document.querySelectorAll('#shareFolderTree .folder-tree-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        document.querySelectorAll('#shareFolderTree .folder-tree-item').forEach(i => i.classList.remove('selected'));
+                        item.classList.add('selected');
+                        selectedShareDestination = item.dataset.path;
+                        if(confirmBtn) confirmBtn.disabled = false;
+                    });
+                });
+            } else {
+                folderTreeDiv.innerHTML = `Error: ${data.error || 'Could not load folders.'}`;
+            }
+        } catch (error) {
+            folderTreeDiv.innerHTML = 'Error loading folders.';
+        }
+    }
+
+    async function confirmShare() {
+        if (!currentPendingFile || selectedShareDestination === '') {
+            showToast('Please select a destination folder.', 'warning');
+            return;
+        }
+
+        try {
+            const r = await fetch('/api/commit_share', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: currentPendingFile.id, destination: selectedShareDestination })
+            });
+            const j = await r.json();
+            if (j.ok) {
+                showToast(`File '${j.meta.name}' saved successfully!`, 'success');
+            } else {
+                showToast(j.error || 'Share failed.', 'error');
+            }
+        } catch (e) {
+            showToast('An error occurred during the share.', 'error');
+        }
+        closeModal('shareModal');
+        currentPendingFile = null;
+
+        setTimeout(checkForPendingShares, 500);
+    }
 
     async function bulkDownload() {
         if (selectedFiles.size === 0) { return; }
@@ -2729,6 +2809,7 @@ function removeFileCard(rel){
         initBulkActions();
         checkGridEmpty();
         initSocket();
+        checkForPendingShares();
 
         // Bind Create Folder / Paste text buttons
         document.getElementById('mkdirCreateBtn')?.addEventListener('click', createNewFolder);
@@ -2740,29 +2821,33 @@ function removeFileCard(rel){
       }
 
       // Global initializations for all pages
+      document.getElementById('confirmShareBtn')?.addEventListener('click', confirmShare);
       document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
+      document.getElementById('goToLocalBtn')?.addEventListener('click', () => {
+        if (window.local_ip) {
+          const localUrl = `http://${window.local_ip}:{{ config.PORT }}`;
+          window.location.href = localUrl;
+        } else {
+          showToast('Could not determine local IP address.', 'error');
+        }
+      });
       initPwaInstall();
     });
 
     // PWA INSTALL
     function initPwaInstall() {
+      let deferredPrompt;
       const installBtn = document.getElementById('installBtn');
       if (!installBtn) return;
 
-      // Hide button if app is already installed
-      if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
-        installBtn.style.display = 'none';
-        return;
-      }
-
-      let deferredPrompt;
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        // Show the button if the app can be installed
-        installBtn.style.display = 'inline-flex';
+        // Make the button active
+        installBtn.disabled = false;
         installBtn.classList.remove('btn-secondary');
         installBtn.classList.add('btn-primary');
+        installBtn.title = 'Install App';
       });
 
       installBtn.addEventListener('click', async () => {
@@ -2771,15 +2856,22 @@ function removeFileCard(rel){
           const { outcome } = await deferredPrompt.userChoice;
           if (outcome === 'accepted') {
             showToast('App installed!', 'success');
-            installBtn.style.display = 'none'; // Hide after accepting
           }
           deferredPrompt = null;
+          // Disable the button after prompt
+          installBtn.disabled = true;
+          installBtn.title = 'App is installed or prompt was dismissed';
         }
       });
 
       window.addEventListener('appinstalled', () => {
-        installBtn.style.display = 'none';
+        // Keep the button disabled after installation and give visual feedback
+        installBtn.disabled = true;
+        installBtn.title = 'App successfully installed';
+        installBtn.classList.remove('btn-primary');
+        installBtn.classList.add('btn-success');
         deferredPrompt = null;
+        showToast('Installation complete!', 'success');
       });
     }
 
@@ -3147,7 +3239,8 @@ def login():
                                    ngrok_available=ngrok_available,
                                    message=message)
     # On login page, no dhikr banner
-    return render_template_string(BASE_HTML, body=body, authed=is_authed(), icon=None, user_label="", current_rel="", dhikr="", dhikr_list=[], is_admin=False)
+    local_ip = get_local_ip()
+    return render_template_string(BASE_HTML, body=body, authed=is_authed(), icon=None, user_label="", current_rel="", dhikr="", dhikr_list=[], is_admin=False, local_ip=local_ip)
 
 @app.route("/api/login_qr")
 def api_login_qr():
@@ -3293,9 +3386,11 @@ def browse(subpath: Optional[str] = None):
     is_admin = bool(device_id and device_id == cfg.get("admin_device"))
 
     body = render_template_string(BROWSE_HTML, entries=items, stats=stats, since=since)
+    local_ip = get_local_ip()
     return render_template_string(
         BASE_HTML,
         body=body,
+        local_ip=local_ip,
         authed=True,
         icon=session.get("icon"),
         user_label=session.get("folder",""),
@@ -3704,208 +3799,73 @@ def api_download_zip():
 # -----------------------------
 # Routes: PWA Share Target
 # -----------------------------
-SHARE_PAGE_TEMPLATE = """
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Save Shared Files - FileVault</title>
-  <link rel="stylesheet" href="/static/fonts.css" />
-  <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
-  <link rel="stylesheet" href="/static/vendor/fontawesome/css/fa-shims.css" />
-  <style>
-    /* Re-using some styles from BASE_HTML for consistency */
-    * { margin:0; padding:0; box-sizing:border-box; }
-    :root {
-      --primary:#3B82F6; --primary-dark:#2563EB; --secondary:#8B5CF6; --success:#10B981; --danger:#EF4444; --warning:#F59E0B;
-      --bg-primary:#0F172A; --bg-secondary:#1E293B; --bg-tertiary:#334155; --text-primary:#F8FAFC; --text-secondary:#CBD5E1; --text-muted:#64748B;
-      --border:#334155; --shadow:rgba(0,0,0,0.5);
-    }
-    body { font-family:'Inter', sans-serif; background:var(--bg-primary); color:var(--text-primary); padding: 1rem; }
-    .container { max-width: 600px; margin: 2rem auto; }
-    .card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; padding:1rem; margin-bottom:1rem; }
-    .btn { padding:.5rem .875rem; border-radius:.5rem; font-weight:600; cursor:pointer; border:none; display:inline-flex; align-items:center; gap:.375rem; font-size:.8125rem; text-decoration:none; }
-    .btn-primary { background:var(--primary); color:#fff; }
-    .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); }
-    h1 { font-size: 1.5rem; margin-bottom: 1rem; }
-    p { margin-bottom: 1rem; color: var(--text-secondary); }
-    #shareFileList .card { padding: .5rem; font-size: .9rem; }
-    #folderTree { height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary); margin-bottom: 1rem; }
-    .folder-tree-item { padding: .25rem .5rem; cursor: pointer; border-radius: .25rem; }
-    .folder-tree-item:hover { background: var(--bg-tertiary); }
-    .folder-tree-item.selected { background: var(--primary); color: white; }
-    .toast-container { position:fixed; top:1rem; right:1rem; z-index:3000; }
-    .toast { background:var(--bg-secondary); border-radius:.5rem; padding:.75rem; margin-bottom:.5rem; }
-    .toast.success { border-left:3px solid var(--success); }
-    .toast.error { border-left:3px solid var(--danger); }
-  </style>
-</head>
-<body>
-  <div class="container" id="mainContainer">
-    <h1>Shared Files</h1>
-    {% if files %}
-      <p>You have shared {{ files|length }} file(s). Select a destination and click Save.</p>
-      <div id="shareFileList">
-        {% for file in files %}
-          <div class="card">{{ file.name }}</div>
-        {% endfor %}
+SHARE_MODAL_HTML = """
+<div class="modal" id="shareModal">
+  <div class="modal-content" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">Complete Your Share</div>
+      <button class="modal-close" onclick="closeModal('shareModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:.5rem;">Saving file: <strong id="shareFileName"></strong></p>
+      <p>Select destination folder:</p>
+      <div id="shareFolderTree" style="height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary);">
+        Loading...
       </div>
-      <p><b>Select destination folder:</b></p>
-      <div id="folderTree">Loading...</div>
-      <button class="btn btn-primary" id="confirmShareBtn" disabled><i class="fas fa-save"></i> Save All Files</button>
-    {% else %}
-      <p>No pending files to share. You can close this page.</p>
-    {% endif %}
-    <a href="{{ url_for('home') }}" class="btn btn-secondary" style="margin-left: .5rem;">Go to App</a>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('shareModal')">Cancel</button>
+      <button class="btn btn-primary" id="confirmShareBtn"><i class="fas fa-save"></i> Save Here</button>
+    </div>
   </div>
-  <div class="toast-container" id="toastContainer"></div>
-
-  <script>
-    // Simplified script for this page
-    let selectedShareDestination = '';
-    const file_ids = {{ files|map(attribute='id')|list|tojson }};
-
-    function showToast(message, type='info'){
-      const container = document.getElementById('toastContainer'); if(!container) return;
-      const toast = document.createElement('div'); toast.className = `toast ${type}`;
-      toast.innerHTML = message;
-      container.appendChild(toast);
-      setTimeout(()=>toast.remove(), 3000);
-    }
-
-    function renderFolderTree(nodes, level = 0) {
-        let html = '';
-        for (const node of nodes) {
-            html += `<div class="folder-tree-item" data-path="${node.path}" style="padding-left: ${level * 20}px;"><i class="fas fa-folder"></i> ${node.name}</div>`;
-            if (node.children && node.children.length > 0) {
-                html += renderFolderTree(node.children, level + 1);
-            }
-        }
-        return html;
-    }
-
-    async function loadFolderTree() {
-        const folderTreeDiv = document.getElementById('folderTree');
-        try {
-            const response = await fetch('/api/folders');
-            const data = await response.json();
-            if (data.ok) {
-                folderTreeDiv.innerHTML = renderFolderTree(data.tree);
-                document.querySelectorAll('#folderTree .folder-tree-item').forEach(item => {
-                    item.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        document.querySelectorAll('#folderTree .folder-tree-item').forEach(i => i.classList.remove('selected'));
-                        item.classList.add('selected');
-                        selectedShareDestination = item.dataset.path;
-                        document.getElementById('confirmShareBtn').disabled = false;
-                    });
-                });
-            } else {
-                folderTreeDiv.innerHTML = `Error: ${data.error || 'Could not load folders.'}`;
-            }
-        } catch (error) {
-            folderTreeDiv.innerHTML = 'Error loading folders.';
-        }
-    }
-
-    async function confirmShare() {
-        if (file_ids.length === 0 || selectedShareDestination === '') {
-            showToast('Please select a destination folder.', 'error');
-            return;
-        }
-        document.getElementById('confirmShareBtn').disabled = true;
-        document.getElementById('confirmShareBtn').innerHTML = 'Saving...';
-
-        try {
-            const r = await fetch('/api/commit_share', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: file_ids, destination: selectedShareDestination })
-            });
-            const j = await r.json();
-            if (j.ok) {
-                document.getElementById('mainContainer').innerHTML = '<h1>Share Complete!</h1><p>' + j.committed.length + ' file(s) saved successfully.</p><a href="/" class="btn btn-primary">Back to App</a>';
-            } else {
-                showToast(j.error || 'Share failed.', 'error');
-                document.getElementById('confirmShareBtn').disabled = false;
-                document.getElementById('confirmShareBtn').innerHTML = '<i class="fas fa-save"></i> Save All Files';
-            }
-        } catch (e) {
-            showToast('An error occurred during the share.', 'error');
-            document.getElementById('confirmShareBtn').disabled = false;
-            document.getElementById('confirmShareBtn').innerHTML = '<i class="fas fa-save"></i> Save All Files';
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        if (file_ids.length > 0) {
-            loadFolderTree();
-            document.getElementById('confirmShareBtn').addEventListener('click', confirmShare);
-        }
-    });
-  </script>
-</body>
-</html>
+</div>
 """
 
-@app.route("/share")
-def share_page():
-    # Re-establish context from device cookie instead of session,
-    # as the session may be lost during the PWA share redirect flow.
+@app.route("/share-receiver", methods=["POST"])
+def share_receiver():
     device_id, folder = get_or_create_device_folder(request)
-
     if not folder:
-        # This should not happen if get_or_create_device_folder works,
-        # but as a fallback, go to login.
-        return redirect(url_for("login"))
+        return Response("Device not recognized. Please log in to the app first.", status=401)
 
-    # Set the session variables to ensure this context is "authed"
-    # for subsequent API calls made from the share page's Javascript.
-    session["authed"] = True
-    session["folder"] = folder
-    session["icon"] = get_user_icon(folder)
+    f = request.files.get("files")
+    if not f or not f.filename:
+        return Response("No file was shared.", status=400)
 
+    pending_dir = safe_path(folder) / ".pending_shares"
+    pending_dir.mkdir(exist_ok=True)
+
+    filename = sanitize_filename(f.filename)
+    # Use a UUID to avoid filename collisions in the pending folder
+    save_name = f"{str(uuid.uuid4())}__{filename}"
+    save_path = pending_dir / save_name
+
+    try:
+        f.save(save_path)
+    except Exception as e:
+        print(f"[share] Save failed: {e}")
+        return Response("Failed to save shared file.", status=500)
+
+    # Let the main app know a share is ready via socket
+    socketio.emit("share_ready", {"folder": folder})
+    return Response(status=204)
+
+@app.route("/api/pending_shares")
+def api_pending_shares():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    folder = session.get("folder")
     pending_dir = safe_path(folder) / ".pending_shares"
     files = []
     if pending_dir.exists():
-        for p in sorted(list(pending_dir.iterdir()), key=os.path.getmtime, reverse=True):
+        for p in pending_dir.iterdir():
             if p.is_file():
                 try:
                     uuid_part, name_part = p.name.split("__", 1)
                     files.append({"id": p.name, "name": name_part})
                 except ValueError:
-                    continue
-
-    return render_template_string(SHARE_PAGE_TEMPLATE, files=files)
-
-@app.route("/share-receiver", methods=["POST"])
-def share_receiver():
-    print("[DEBUG] /share-receiver called")
-    device_id, folder = get_or_create_device_folder(request)
-    print(f"[DEBUG] device_id: {device_id}, folder: {folder}")
-
-    files = request.files.getlist("files")
-    if not files or not any(f.filename for f in files):
-        return redirect(url_for("home"))
-
-    pending_dir = safe_path(folder) / ".pending_shares"
-    pending_dir.mkdir(exist_ok=True)
-
-    saved_count = 0
-    for f in files:
-        if f and f.filename:
-            filename = sanitize_filename(f.filename)
-            save_name = f"{str(uuid.uuid4())}__{filename}"
-            save_path = pending_dir / save_name
-            try:
-                f.save(save_path)
-                saved_count += 1
-            except Exception as e:
-                print(f"[share] Save failed for {filename}: {e}")
-
-    print(f"[DEBUG] Saved {saved_count} files. Redirecting to share_page.")
-    return redirect(url_for("share_page"))
+                    continue # Skip files not in the expected format
+    return jsonify({"ok": True, "files": files})
 
 @app.route("/api/commit_share", methods=["POST"])
 def api_commit_share():
@@ -3913,49 +3873,45 @@ def api_commit_share():
         return jsonify({"ok": False, "error": "not authed"}), 401
 
     data = request.get_json(silent=True) or {}
-    pending_ids = data.get("ids", [])
+    pending_id = data.get("id")
     destination_rel = data.get("destination")
 
-    if not pending_ids or destination_rel is None:
-        return jsonify({"ok": False, "error": "ids and destination required"}), 400
+    if not pending_id or destination_rel is None:
+        return jsonify({"ok": False, "error": "id and destination required"}), 400
 
     base_folder = session.get("folder")
     if first_segment(destination_rel) != base_folder and destination_rel != base_folder:
         return jsonify({"ok": False, "error": "forbidden destination"}), 403
 
     pending_dir = safe_path(base_folder) / ".pending_shares"
-    committed = []
-    errors = []
+    pending_file = pending_dir / pending_id
 
-    for pending_id in pending_ids:
-        pending_file = pending_dir / pending_id
-        if not pending_file.exists() or not pending_file.is_file():
-            errors.append({"id": pending_id, "error": "not found"})
-            continue
+    if not pending_file.exists() or not pending_file.is_file():
+        return jsonify({"ok": False, "error": "pending file not found"}), 404
 
-        try:
-            _, original_filename = pending_id.split("__", 1)
-        except ValueError:
-            original_filename = pending_id
+    try:
+        _, original_filename = pending_id.split("__", 1)
+    except ValueError:
+        original_filename = pending_id # fallback
 
-        dest_dir = safe_path(destination_rel)
-        save_path = dest_dir / original_filename
+    dest_dir = safe_path(destination_rel)
+    save_path = dest_dir / original_filename
 
-        base, ext = os.path.splitext(original_filename)
-        i = 1
-        while save_path.exists():
-            save_path = dest_dir / f"{base} ({i}){ext}"
-            i += 1
+    # Handle name conflicts
+    base, ext = os.path.splitext(original_filename)
+    i = 1
+    while save_path.exists():
+        save_path = dest_dir / f"{base} ({i}){ext}"
+        i += 1
 
-        try:
-            shutil.move(str(pending_file), str(save_path))
-            meta = get_file_meta(save_path)
-            socketio.emit("file_update", {"action":"added", "dir": destination_rel, "meta": meta})
-            committed.append(meta)
-        except Exception as e:
-            errors.append({"id": pending_id, "error": str(e)})
+    try:
+        shutil.move(str(pending_file), str(save_path))
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Failed to move file: {e}"}), 500
 
-    return jsonify({"ok": True, "committed": committed, "errors": errors})
+    meta = get_file_meta(save_path)
+    socketio.emit("file_update", {"action":"added", "dir": destination_rel, "meta": meta})
+    return jsonify({"ok": True, "meta": meta})
 
 
 # Error handlers: redirect to login on not found/forbidden
@@ -3977,37 +3933,9 @@ def handle_403(e):
     return redirect(url_for('home'))
 
 # -----------------------------
-# HTTP to HTTPS Redirector
-# -----------------------------
-def run_redirect_server():
-    redirect_app = Flask('redirect_app')
-
-    @redirect_app.before_request
-    def redirect_to_https():
-        # Construct the new URL, replacing the scheme and pointing to the correct port
-        host_header = request.headers.get('Host', '')
-        hostname = host_header.split(':')[0]
-
-        # Build the new URL with the correct port for HTTPS
-        new_url = f"https://{hostname}:{PORT}{request.full_path}"
-        return redirect(new_url, code=301)
-
-    # Running on a different port, e.g., 80 or a custom one like 5001
-    # Note: Port 80 would require root privileges.
-    redirect_port = 8080
-    print(f"Redirecting HTTP requests from port {redirect_port} to HTTPS on port {PORT}")
-
-    server = make_server("0.0.0.0", redirect_port, redirect_app)
-    server.serve_forever()
-
-# -----------------------------
 # Main
 # -----------------------------
 if __name__ == "__main__":
-    # Start the redirect server in a background thread
-    redirect_thread = threading.Thread(target=run_redirect_server, daemon=True)
-    redirect_thread.start()
-
     ip = get_local_ip()
     print(f"Serving FileVault on http://0.0.0.0:{PORT}  (scan: http://{ip}:{PORT})")
     ngrok_url = get_ngrok_url()
@@ -4016,4 +3944,4 @@ if __name__ == "__main__":
     else:
         print("Ngrok not detected. To enable online access, run: ngrok http 5000")
     print(f"Root directory: {ROOT_DIR}")
-    socketio.run(app, host="0.0.0.0", port=PORT, debug=False, allow_unsafe_werkzeug=True, ssl_context='adhoc')
+    socketio.run(app, host="0.0.0.0", port=PORT, debug=False, allow_unsafe_werkzeug=True)
