@@ -1,0 +1,12 @@
+Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+[assets] Wrote site.webmanifest -> /app/static/site.webmanifest
+Serving FileVault on http://0.0.0.0:5000  (scan: http://192.168.0.2:5000)
+Ngrok not detected. To enable online access, run: ngrok http 5000
+Root directory: /app/shared
+ * Serving Flask app 'app'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on https://127.0.0.1:5000
+ * Running on https://192.168.0.2:5000
+[33mPress CTRL+C to quit[0m
