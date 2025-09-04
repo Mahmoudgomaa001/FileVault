@@ -919,7 +919,8 @@ BASE_HTML = """
     .modal-footer { padding:1rem; border-top:1px solid var(--border); display:flex; gap:.5rem; justify-content:flex-end; }
     .form-input { margin-top: 5px; width: 100%; padding: 0.625rem 0.875rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 0.5rem; color: var(--text-primary); font-size: 0.875rem; }
     .form-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
-    .qr-box { display:flex; align-items:center; justify-content:center; padding:16px; background:#fff; border-radius:12px; }
+    .qr-box { display:flex; align-items:center; justify-content:center; padding:16px; background:#fff; border-radius:12px; max-width: 320px; margin: 0 auto; }
+    .qr-box img { max-width: 100%; height: auto; }
 
     /* Stats */
     .stats-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:.75rem; margin-bottom:1rem; }
