@@ -1975,7 +1975,7 @@ async function changeDhikr() {
 
     async function checkForPendingShares(){
         try {
-            const r = await fetch('/api/pending_shares');
+            const r = await fetch('/api/pending_shares', {cache: 'no-store'});
             const j = await r.json();
             if(j.ok && j.files && j.files.length > 0){
                 if (!document.getElementById('shareModal').classList.contains('active')) {
