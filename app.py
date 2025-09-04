@@ -1187,8 +1187,6 @@ BASE_HTML = """
   </div>
 </div>
 
-{{SHARE_MODAL_HTML|safe}}
-
 </div>
 
   <script src="/static/socket.io.min.js"></script>
@@ -1969,92 +1967,6 @@ async function changeDhikr() {
         }
     }
 
-    // PWA SHARE HANDLING
-    let selectedShareDestination = '';
-    let currentPendingFiles = [];
-
-    async function checkForPendingShares(){
-        try {
-            const r = await fetch('/api/pending_shares', {cache: 'no-store'});
-            const j = await r.json();
-            if(j.ok && j.files && j.files.length > 0){
-                if (!document.getElementById('shareModal').classList.contains('active')) {
-                    currentPendingFiles = j.files;
-                    openShareModal(currentPendingFiles);
-                }
-            }
-        } catch(e) {
-            console.error('Failed to check for pending shares', e);
-        }
-    }
-
-    async function openShareModal(files) {
-        if (!files || files.length === 0) return;
-        document.getElementById('shareFileCount').textContent = files.length;
-        const listEl = document.getElementById('shareFileList');
-        if (listEl) {
-            listEl.innerHTML = files.map(f => `<div class="card" style="padding: .25rem .5rem; margin-bottom:.25rem; font-size: .8rem;">${safeHTML(f.name)}</div>`).join('');
-        }
-
-        const folderTreeDiv = document.getElementById('shareFolderTree');
-        folderTreeDiv.innerHTML = 'Loading...';
-        openModal('shareModal');
-
-        try {
-            const response = await fetch('/api/folders');
-            const data = await response.json();
-            if (data.ok) {
-                folderTreeDiv.innerHTML = renderFolderTree(data.tree);
-                selectedShareDestination = '';
-                const confirmBtn = document.getElementById('confirmShareBtn');
-                if(confirmBtn) confirmBtn.disabled = true;
-
-                document.querySelectorAll('#shareFolderTree .folder-tree-item').forEach(item => {
-                    item.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        document.querySelectorAll('#shareFolderTree .folder-tree-item').forEach(i => i.classList.remove('selected'));
-                        item.classList.add('selected');
-                        selectedShareDestination = item.dataset.path;
-                        if(confirmBtn) confirmBtn.disabled = false;
-                    });
-                });
-            } else {
-                folderTreeDiv.innerHTML = `Error: ${data.error || 'Could not load folders.'}`;
-            }
-        } catch (error) {
-            folderTreeDiv.innerHTML = 'Error loading folders.';
-        }
-    }
-
-    async function confirmShare() {
-        if (currentPendingFiles.length === 0 || selectedShareDestination === '') {
-            showToast('Please select a destination folder.', 'warning');
-            return;
-        }
-
-        const ids = currentPendingFiles.map(f => f.id);
-
-        try {
-            const r = await fetch('/api/commit_share', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: ids, destination: selectedShareDestination })
-            });
-            const j = await r.json();
-            if (j.ok) {
-                showToast(`${j.committed.length} file(s) saved successfully!`, 'success');
-                if (j.errors && j.errors.length > 0) {
-                    showToast(`${j.errors.length} files failed to save.`, 'error');
-                }
-            } else {
-                showToast(j.error || 'Share failed.', 'error');
-            }
-        } catch (e) {
-            showToast('An error occurred during the share.', 'error');
-        }
-        closeModal('shareModal');
-        currentPendingFiles = [];
-    }
 
     async function bulkDownload() {
         if (selectedFiles.size === 0) { return; }
@@ -2814,7 +2726,6 @@ function removeFileCard(rel){
         initBulkActions();
         checkGridEmpty();
         initSocket();
-        checkForPendingShares();
 
         // Bind Create Folder / Paste text buttons
         document.getElementById('mkdirCreateBtn')?.addEventListener('click', createNewFolder);
@@ -2826,7 +2737,6 @@ function removeFileCard(rel){
       }
 
       // Global initializations for all pages
-      document.getElementById('confirmShareBtn')?.addEventListener('click', confirmShare);
       document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
       initPwaInstall();
     });
@@ -3793,84 +3703,194 @@ def api_download_zip():
 # -----------------------------
 # Routes: PWA Share Target
 # -----------------------------
-SHARE_MODAL_HTML = """
-<div class="modal" id="shareModal">
-  <div class="modal-content" style="max-width:520px;">
-    <div class="modal-header">
-      <div class="modal-title">Complete Your Share</div>
-      <button class="modal-close" onclick="closeModal('shareModal')" aria-label="Close"><i class="fas fa-times"></i></button>
-    </div>
-    <div class="modal-body">
-      <p style="margin-bottom:.5rem;">Saving <strong id="shareFileCount"></strong> file(s):</p>
-      <div id="shareFileList" style="max-height: 150px; overflow-y: auto; margin-bottom: .5rem; background: var(--bg-primary); border-radius: .5rem; padding: .5rem;">
-        <!-- File items will be injected here -->
+SHARE_PAGE_TEMPLATE = \"\"\"
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Save Shared Files - FileVault</title>
+  <link rel="stylesheet" href="/static/fonts.css" />
+  <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
+  <link rel="stylesheet" href="/static/vendor/fontawesome/css/fa-shims.css" />
+  <style>
+    /* Re-using some styles from BASE_HTML for consistency */
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+      --primary:#3B82F6; --primary-dark:#2563EB; --secondary:#8B5CF6; --success:#10B981; --danger:#EF4444; --warning:#F59E0B;
+      --bg-primary:#0F172A; --bg-secondary:#1E293B; --bg-tertiary:#334155; --text-primary:#F8FAFC; --text-secondary:#CBD5E1; --text-muted:#64748B;
+      --border:#334155; --shadow:rgba(0,0,0,0.5);
+    }
+    body { font-family:'Inter', sans-serif; background:var(--bg-primary); color:var(--text-primary); padding: 1rem; }
+    .container { max-width: 600px; margin: 2rem auto; }
+    .card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; padding:1rem; margin-bottom:1rem; }
+    .btn { padding:.5rem .875rem; border-radius:.5rem; font-weight:600; cursor:pointer; border:none; display:inline-flex; align-items:center; gap:.375rem; font-size:.8125rem; text-decoration:none; }
+    .btn-primary { background:var(--primary); color:#fff; }
+    .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); }
+    h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+    p { margin-bottom: 1rem; color: var(--text-secondary); }
+    #shareFileList .card { padding: .5rem; font-size: .9rem; }
+    #folderTree { height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary); margin-bottom: 1rem; }
+    .folder-tree-item { padding: .25rem .5rem; cursor: pointer; border-radius: .25rem; }
+    .folder-tree-item:hover { background: var(--bg-tertiary); }
+    .folder-tree-item.selected { background: var(--primary); color: white; }
+    .toast-container { position:fixed; top:1rem; right:1rem; z-index:3000; }
+    .toast { background:var(--bg-secondary); border-radius:.5rem; padding:.75rem; margin-bottom:.5rem; }
+    .toast.success { border-left:3px solid var(--success); }
+    .toast.error { border-left:3px solid var(--danger); }
+  </style>
+</head>
+<body>
+  <div class="container" id="mainContainer">
+    <h1>Shared Files</h1>
+    {% if files %}
+      <p>You have shared {{ files|length }} file(s). Select a destination and click Save.</p>
+      <div id="shareFileList">
+        {% for file in files %}
+          <div class="card">{{ file.name }}</div>
+        {% endfor %}
       </div>
-      <p>Select destination folder:</p>
-      <div id="shareFolderTree" style="height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary);">
-        Loading...
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('shareModal')">Cancel</button>
-      <button class="btn btn-primary" id="confirmShareBtn"><i class="fas fa-save"></i> Save Here</button>
-    </div>
+      <p><b>Select destination folder:</b></p>
+      <div id="folderTree">Loading...</div>
+      <button class="btn btn-primary" id="confirmShareBtn" disabled><i class="fas fa-save"></i> Save All Files</button>
+    {% else %}
+      <p>No pending files to share. You can close this page.</p>
+    {% endif %}
+    <a href="{{ url_for('home') }}" class="btn btn-secondary" style="margin-left: .5rem;">Go to App</a>
   </div>
-</div>
-"""
+  <div class="toast-container" id="toastContainer"></div>
 
-@app.route("/share-receiver", methods=["POST"])
-def share_receiver():
-    device_id, folder = get_or_create_device_folder(request)
-    if not folder:
-        # PWA share target should ideally show something, but without a device/folder context,
-        # it's hard. A redirect to login is a reasonable fallback.
-        return redirect(url_for("login"))
+  <script>
+    // Simplified script for this page
+    let selectedShareDestination = '';
+    const file_ids = {{ files|map(attribute='id')|list|tojson }};
 
-    files = request.files.getlist("files")
-    if not files:
-        return redirect(url_for("home"))
+    function showToast(message, type='info'){
+      const container = document.getElementById('toastContainer'); if(!container) return;
+      const toast = document.createElement('div'); toast.className = `toast ${type}`;
+      toast.innerHTML = message;
+      container.appendChild(toast);
+      setTimeout(()=>toast.remove(), 3000);
+    }
 
-    pending_dir = safe_path(folder) / ".pending_shares"
-    pending_dir.mkdir(exist_ok=True)
+    function renderFolderTree(nodes, level = 0) {
+        let html = '';
+        for (const node of nodes) {
+            html += `<div class="folder-tree-item" data-path="${node.path}" style="padding-left: ${level * 20}px;"><i class="fas fa-folder"></i> ${node.name}</div>`;
+            if (node.children && node.children.length > 0) {
+                html += renderFolderTree(node.children, level + 1);
+            }
+        }
+        return html;
+    }
 
-    saved_count = 0
-    for f in files:
-        if f and f.filename:
-            filename = sanitize_filename(f.filename)
-            # Use a UUID to avoid filename collisions in the pending folder
-            save_name = f"{str(uuid.uuid4())}__{filename}"
-            save_path = pending_dir / save_name
+    async function loadFolderTree() {
+        const folderTreeDiv = document.getElementById('folderTree');
+        try {
+            const response = await fetch('/api/folders');
+            const data = await response.json();
+            if (data.ok) {
+                folderTreeDiv.innerHTML = renderFolderTree(data.tree);
+                document.querySelectorAll('#folderTree .folder-tree-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        document.querySelectorAll('#folderTree .folder-tree-item').forEach(i => i.classList.remove('selected'));
+                        item.classList.add('selected');
+                        selectedShareDestination = item.dataset.path;
+                        document.getElementById('confirmShareBtn').disabled = false;
+                    });
+                });
+            } else {
+                folderTreeDiv.innerHTML = `Error: ${data.error || 'Could not load folders.'}`;
+            }
+        } catch (error) {
+            folderTreeDiv.innerHTML = 'Error loading folders.';
+        }
+    }
 
-            try:
-                f.save(save_path)
-                saved_count += 1
-            except Exception as e:
-                print(f"[share] Save failed for {filename}: {e}")
+    async function confirmShare() {
+        if (file_ids.length === 0 || selectedShareDestination === '') {
+            showToast('Please select a destination folder.', 'error');
+            return;
+        }
+        document.getElementById('confirmShareBtn').disabled = true;
+        document.getElementById('confirmShareBtn').innerHTML = 'Saving...';
 
-    # Let the main app know a share is ready via socket, if we saved anything
-    if saved_count > 0:
-        socketio.emit("share_ready", {"folder": folder})
+        try {
+            const r = await fetch('/api/commit_share', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: file_ids, destination: selectedShareDestination })
+            });
+            const j = await r.json();
+            if (j.ok) {
+                document.getElementById('mainContainer').innerHTML = '<h1>Share Complete!</h1><p>' + j.committed.length + ' file(s) saved successfully.</p><a href="/" class="btn btn-primary">Back to App</a>';
+            } else {
+                showToast(j.error || 'Share failed.', 'error');
+                document.getElementById('confirmShareBtn').disabled = false;
+                document.getElementById('confirmShareBtn').innerHTML = '<i class="fas fa-save"></i> Save All Files';
+            }
+        } catch (e) {
+            showToast('An error occurred during the share.', 'error');
+            document.getElementById('confirmShareBtn').disabled = false;
+            document.getElementById('confirmShareBtn').innerHTML = '<i class="fas fa-save"></i> Save All Files';
+        }
+    }
 
-    # Redirect to the main page, which will then pop the modal to place the files.
-    return redirect(url_for("home"))
+    document.addEventListener('DOMContentLoaded', () => {
+        if (file_ids.length > 0) {
+            loadFolderTree();
+            document.getElementById('confirmShareBtn').addEventListener('click', confirmShare);
+        }
+    });
+  </script>
+</body>
+</html>
+\"\"\"
 
-@app.route("/api/pending_shares")
-def api_pending_shares():
+@app.route("/share")
+def share_page():
     if not is_authed():
-        return jsonify({"ok": False, "error": "not authed"}), 401
+        return redirect(url_for("login"))
 
     folder = session.get("folder")
     pending_dir = safe_path(folder) / ".pending_shares"
     files = []
     if pending_dir.exists():
-        for p in pending_dir.iterdir():
+        for p in sorted(list(pending_dir.iterdir()), key=os.path.getmtime, reverse=True):
             if p.is_file():
                 try:
                     uuid_part, name_part = p.name.split("__", 1)
                     files.append({"id": p.name, "name": name_part})
                 except ValueError:
-                    continue # Skip files not in the expected format
-    return jsonify({"ok": True, "files": files})
+                    continue
+
+    return render_template_string(SHARE_PAGE_TEMPLATE, files=files)
+
+@app.route("/share-receiver", methods=["POST"])
+def share_receiver():
+    device_id, folder = get_or_create_device_folder(request)
+    if not folder:
+        return redirect(url_for("login"))
+
+    files = request.files.getlist("files")
+    if not files or not any(f.filename for f in files):
+        return redirect(url_for("home"))
+
+    pending_dir = safe_path(folder) / ".pending_shares"
+    pending_dir.mkdir(exist_ok=True)
+
+    for f in files:
+        if f and f.filename:
+            filename = sanitize_filename(f.filename)
+            save_name = f"{str(uuid.uuid4())}__{filename}"
+            save_path = pending_dir / save_name
+            try:
+                f.save(save_path)
+            except Exception as e:
+                print(f"[share] Save failed for {filename}: {e}")
+
+    return redirect(url_for("share_page"))
 
 @app.route("/api/commit_share", methods=["POST"])
 def api_commit_share():
@@ -3901,12 +3921,11 @@ def api_commit_share():
         try:
             _, original_filename = pending_id.split("__", 1)
         except ValueError:
-            original_filename = pending_id # fallback
+            original_filename = pending_id
 
         dest_dir = safe_path(destination_rel)
         save_path = dest_dir / original_filename
 
-        # Handle name conflicts
         base, ext = os.path.splitext(original_filename)
         i = 1
         while save_path.exists():
