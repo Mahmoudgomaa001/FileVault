@@ -2825,7 +2825,7 @@ function removeFileCard(rel){
       document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
       document.getElementById('goToLocalBtn')?.addEventListener('click', () => {
         if (window.local_ip) {
-          const localUrl = `http://${window.local_ip}:{{ config.PORT }}`;
+          const localUrl = `http://${window.local_ip}:{{ 5000}}`;
           window.location.href = localUrl;
         } else {
           showToast('Could not determine local IP address.', 'error');
