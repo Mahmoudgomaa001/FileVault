@@ -1971,7 +1971,7 @@ async function changeDhikr() {
 
     // PWA SHARE HANDLING
     let selectedShareDestination = '';
-    let currentPendingFile = null;
+    let currentPendingFiles = [];
 
     async function checkForPendingShares(){
         try {
@@ -1979,8 +1979,8 @@ async function changeDhikr() {
             const j = await r.json();
             if(j.ok && j.files && j.files.length > 0){
                 if (!document.getElementById('shareModal').classList.contains('active')) {
-                    currentPendingFile = j.files[0];
-                    openShareModal(currentPendingFile);
+                    currentPendingFiles = j.files;
+                    openShareModal(currentPendingFiles);
                 }
             }
         } catch(e) {
@@ -1988,9 +1988,13 @@ async function changeDhikr() {
         }
     }
 
-    async function openShareModal(file) {
-        if (!file) return;
-        document.getElementById('shareFileName').textContent = file.name;
+    async function openShareModal(files) {
+        if (!files || files.length === 0) return;
+        document.getElementById('shareFileCount').textContent = files.length;
+        const listEl = document.getElementById('shareFileList');
+        if (listEl) {
+            listEl.innerHTML = files.map(f => `<div class="card" style="padding: .25rem .5rem; margin-bottom:.25rem; font-size: .8rem;">${safeHTML(f.name)}</div>`).join('');
+        }
 
         const folderTreeDiv = document.getElementById('shareFolderTree');
         folderTreeDiv.innerHTML = 'Loading...';
@@ -2023,20 +2027,25 @@ async function changeDhikr() {
     }
 
     async function confirmShare() {
-        if (!currentPendingFile || selectedShareDestination === '') {
+        if (currentPendingFiles.length === 0 || selectedShareDestination === '') {
             showToast('Please select a destination folder.', 'warning');
             return;
         }
+
+        const ids = currentPendingFiles.map(f => f.id);
 
         try {
             const r = await fetch('/api/commit_share', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: currentPendingFile.id, destination: selectedShareDestination })
+                body: JSON.stringify({ ids: ids, destination: selectedShareDestination })
             });
             const j = await r.json();
             if (j.ok) {
-                showToast(`File '${j.meta.name}' saved successfully!`, 'success');
+                showToast(`${j.committed.length} file(s) saved successfully!`, 'success');
+                if (j.errors && j.errors.length > 0) {
+                    showToast(`${j.errors.length} files failed to save.`, 'error');
+                }
             } else {
                 showToast(j.error || 'Share failed.', 'error');
             }
@@ -2044,9 +2053,7 @@ async function changeDhikr() {
             showToast('An error occurred during the share.', 'error');
         }
         closeModal('shareModal');
-        currentPendingFile = null;
-
-        setTimeout(checkForPendingShares, 500);
+        currentPendingFiles = [];
     }
 
     async function bulkDownload() {
@@ -3794,7 +3801,10 @@ SHARE_MODAL_HTML = """
       <button class="modal-close" onclick="closeModal('shareModal')" aria-label="Close"><i class="fas fa-times"></i></button>
     </div>
     <div class="modal-body">
-      <p style="margin-bottom:.5rem;">Saving file: <strong id="shareFileName"></strong></p>
+      <p style="margin-bottom:.5rem;">Saving <strong id="shareFileCount"></strong> file(s):</p>
+      <div id="shareFileList" style="max-height: 150px; overflow-y: auto; margin-bottom: .5rem; background: var(--bg-primary); border-radius: .5rem; padding: .5rem;">
+        <!-- File items will be injected here -->
+      </div>
       <p>Select destination folder:</p>
       <div id="shareFolderTree" style="height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary);">
         Loading...
@@ -3812,29 +3822,37 @@ SHARE_MODAL_HTML = """
 def share_receiver():
     device_id, folder = get_or_create_device_folder(request)
     if not folder:
-        return Response("Device not recognized. Please log in to the app first.", status=401)
+        # PWA share target should ideally show something, but without a device/folder context,
+        # it's hard. A redirect to login is a reasonable fallback.
+        return redirect(url_for("login"))
 
-    f = request.files.get("files")
-    if not f or not f.filename:
-        return Response("No file was shared.", status=400)
+    files = request.files.getlist("files")
+    if not files:
+        return redirect(url_for("home"))
 
     pending_dir = safe_path(folder) / ".pending_shares"
     pending_dir.mkdir(exist_ok=True)
 
-    filename = sanitize_filename(f.filename)
-    # Use a UUID to avoid filename collisions in the pending folder
-    save_name = f"{str(uuid.uuid4())}__{filename}"
-    save_path = pending_dir / save_name
+    saved_count = 0
+    for f in files:
+        if f and f.filename:
+            filename = sanitize_filename(f.filename)
+            # Use a UUID to avoid filename collisions in the pending folder
+            save_name = f"{str(uuid.uuid4())}__{filename}"
+            save_path = pending_dir / save_name
 
-    try:
-        f.save(save_path)
-    except Exception as e:
-        print(f"[share] Save failed: {e}")
-        return Response("Failed to save shared file.", status=500)
+            try:
+                f.save(save_path)
+                saved_count += 1
+            except Exception as e:
+                print(f"[share] Save failed for {filename}: {e}")
 
-    # Let the main app know a share is ready via socket
-    socketio.emit("share_ready", {"folder": folder})
-    return Response(status=204)
+    # Let the main app know a share is ready via socket, if we saved anything
+    if saved_count > 0:
+        socketio.emit("share_ready", {"folder": folder})
+
+    # Redirect to the main page, which will then pop the modal to place the files.
+    return redirect(url_for("home"))
 
 @app.route("/api/pending_shares")
 def api_pending_shares():
@@ -3860,45 +3878,50 @@ def api_commit_share():
         return jsonify({"ok": False, "error": "not authed"}), 401
 
     data = request.get_json(silent=True) or {}
-    pending_id = data.get("id")
+    pending_ids = data.get("ids", [])
     destination_rel = data.get("destination")
 
-    if not pending_id or destination_rel is None:
-        return jsonify({"ok": False, "error": "id and destination required"}), 400
+    if not pending_ids or destination_rel is None:
+        return jsonify({"ok": False, "error": "ids and destination required"}), 400
 
     base_folder = session.get("folder")
     if first_segment(destination_rel) != base_folder and destination_rel != base_folder:
         return jsonify({"ok": False, "error": "forbidden destination"}), 403
 
     pending_dir = safe_path(base_folder) / ".pending_shares"
-    pending_file = pending_dir / pending_id
+    committed = []
+    errors = []
 
-    if not pending_file.exists() or not pending_file.is_file():
-        return jsonify({"ok": False, "error": "pending file not found"}), 404
+    for pending_id in pending_ids:
+        pending_file = pending_dir / pending_id
+        if not pending_file.exists() or not pending_file.is_file():
+            errors.append({"id": pending_id, "error": "not found"})
+            continue
 
-    try:
-        _, original_filename = pending_id.split("__", 1)
-    except ValueError:
-        original_filename = pending_id # fallback
+        try:
+            _, original_filename = pending_id.split("__", 1)
+        except ValueError:
+            original_filename = pending_id # fallback
 
-    dest_dir = safe_path(destination_rel)
-    save_path = dest_dir / original_filename
+        dest_dir = safe_path(destination_rel)
+        save_path = dest_dir / original_filename
 
-    # Handle name conflicts
-    base, ext = os.path.splitext(original_filename)
-    i = 1
-    while save_path.exists():
-        save_path = dest_dir / f"{base} ({i}){ext}"
-        i += 1
+        # Handle name conflicts
+        base, ext = os.path.splitext(original_filename)
+        i = 1
+        while save_path.exists():
+            save_path = dest_dir / f"{base} ({i}){ext}"
+            i += 1
 
-    try:
-        shutil.move(str(pending_file), str(save_path))
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"Failed to move file: {e}"}), 500
+        try:
+            shutil.move(str(pending_file), str(save_path))
+            meta = get_file_meta(save_path)
+            socketio.emit("file_update", {"action":"added", "dir": destination_rel, "meta": meta})
+            committed.append(meta)
+        except Exception as e:
+            errors.append({"id": pending_id, "error": str(e)})
 
-    meta = get_file_meta(save_path)
-    socketio.emit("file_update", {"action":"added", "dir": destination_rel, "meta": meta})
-    return jsonify({"ok": True, "meta": meta})
+    return jsonify({"ok": True, "committed": committed, "errors": errors})
 
 
 # Error handlers: redirect to login on not found/forbidden
