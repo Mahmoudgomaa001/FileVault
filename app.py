@@ -3850,10 +3850,21 @@ SHARE_PAGE_TEMPLATE = """
 
 @app.route("/share")
 def share_page():
-    if not is_authed():
+    # Re-establish context from device cookie instead of session,
+    # as the session may be lost during the PWA share redirect flow.
+    device_id, folder = get_or_create_device_folder(request)
+
+    if not folder:
+        # This should not happen if get_or_create_device_folder works,
+        # but as a fallback, go to login.
         return redirect(url_for("login"))
 
-    folder = session.get("folder")
+    # Set the session variables to ensure this context is "authed"
+    # for subsequent API calls made from the share page's Javascript.
+    session["authed"] = True
+    session["folder"] = folder
+    session["icon"] = get_user_icon(folder)
+
     pending_dir = safe_path(folder) / ".pending_shares"
     files = []
     if pending_dir.exists():
@@ -3869,9 +3880,9 @@ def share_page():
 
 @app.route("/share-receiver", methods=["POST"])
 def share_receiver():
+    print("[DEBUG] /share-receiver called")
     device_id, folder = get_or_create_device_folder(request)
-    if not folder:
-        return redirect(url_for("login"))
+    print(f"[DEBUG] device_id: {device_id}, folder: {folder}")
 
     files = request.files.getlist("files")
     if not files or not any(f.filename for f in files):
@@ -3880,6 +3891,7 @@ def share_receiver():
     pending_dir = safe_path(folder) / ".pending_shares"
     pending_dir.mkdir(exist_ok=True)
 
+    saved_count = 0
     for f in files:
         if f and f.filename:
             filename = sanitize_filename(f.filename)
@@ -3887,9 +3899,11 @@ def share_receiver():
             save_path = pending_dir / save_name
             try:
                 f.save(save_path)
+                saved_count += 1
             except Exception as e:
                 print(f"[share] Save failed for {filename}: {e}")
 
+    print(f"[DEBUG] Saved {saved_count} files. Redirecting to share_page.")
     return redirect(url_for("share_page"))
 
 @app.route("/api/commit_share", methods=["POST"])
