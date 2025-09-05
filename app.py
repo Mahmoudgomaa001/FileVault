@@ -360,7 +360,14 @@ def api_go_online():
     if not device_id:
         device_id, _ = get_or_create_device_folder(request)
 
-    next_path = urlparse(request.referrer).path if request.referrer else url_for('browse')
+    next_path = request.args.get('next')
+    if not next_path and request.referrer:
+        ref = urlparse(request.referrer)
+        next_path = ref.path
+        if ref.query:
+            next_path += '?' + ref.query
+    if not next_path:
+        next_path = url_for('browse')
 
     pc_token = secrets.token_urlsafe(16)
     app.config["LOGIN_TOKENS"][pc_token] = {"folder": folder, "device_id": device_id, "next_url": next_path}
@@ -1057,7 +1064,7 @@ BASE_HTML = """
     @media (min-width: 1024px) { .file-grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); } }
   </style>
 </head>
-<body class="{% if authed and current_rel != 'share' %}with-dhikr{% endif %}">
+<body class="{% if authed and not share_page_active %}with-dhikr{% endif %}">
   <header class="header">
     <div class="header-content">
       <a class="logo" href="{{ url_for('home') }}" title="My Files">
@@ -1110,7 +1117,7 @@ BASE_HTML = """
     </div>
   </header>
 
-  {% if authed and current_rel != 'share' %}
+  {% if authed and not share_page_active %}
   <div class="dhikr-banner" id="dhikrBanner">
     <div class="dhikr-content">
       <span class="dhikr-icon">✨</span>
@@ -2793,7 +2800,7 @@ function removeFileCard(rel){
 
     async function goOffline() {
         try {
-            const r = await fetch('/api/go_offline');
+            const r = await fetch('/api/go_offline?next=' + encodeURIComponent(window.location.pathname + window.location.search));
             const j = await r.json();
             if (j.ok && j.url) {
                 showToast('Switching to local address...', 'info');
@@ -2808,7 +2815,7 @@ function removeFileCard(rel){
 
     async function goOnline() {
         try {
-            const r = await fetch('/api/go_online');
+            const r = await fetch('/api/go_online?next=' + encodeURIComponent(window.location.pathname + window.location.search));
             const j = await r.json();
             if (j.ok && j.url) {
                 showToast('Switching to online address...', 'info');
@@ -3360,7 +3367,7 @@ def check_login(token: str):
         pc_token = info.get("pc_token")
         pc_url = None
         if pc_token and info.get("folder"):
-            app.config["LOGIN_TOKENS"][pc_token] = info["folder"]
+            app.config["LOGIN_TOKENS"][pc_token] = {"folder": info["folder"]}
             pc_url = url_for("pc_login", token=pc_token)
         return jsonify({"authenticated": True, "folder": info.get("folder"), "icon": info.get("icon"), "url": pc_url})
     return jsonify({"authenticated": False})
@@ -3395,11 +3402,23 @@ def pc_login(token):
         abort(403)
 
     folder = token_data.get("folder")
+    if not folder:
+        abort(403)
+
     device_id = token_data.get("device_id")
     next_url = token_data.get("next_url") or url_for("browse")
 
-    if not folder or not device_id:
-        abort(403)
+    # If no device_id was passed (i.e., QR login), get or create one for the current device.
+    if not device_id:
+        device_id = request.cookies.get(DEVICE_COOKIE_NAME)
+        if not device_id:
+            device_id = secrets.token_urlsafe(12)
+
+    # For all login types, ensure this device is mapped to the correct folder.
+    # This correctly handles new device logins and session transfers.
+    app.config["DEVICE_MAP"][device_id] = {"folder": folder, "created": datetime.utcnow().isoformat() + "Z"}
+    save_device_map(app.config["DEVICE_MAP"])
+    (ROOT_DIR / folder).mkdir(parents=True, exist_ok=True)
 
     session["authed"] = True
     session["folder"] = folder
@@ -3479,7 +3498,8 @@ def browse(subpath: Optional[str] = None):
         user_label=session.get("folder",""),
         current_rel=(path_rel(dest) if dest != ROOT_DIR else ""),
         dhikr=dhikr, dhikr_list=dhikr_list,
-        is_admin=is_admin
+        is_admin=is_admin,
+        share_page_active=False
     )
 
 @app.route("/download")
@@ -3759,7 +3779,14 @@ def api_go_offline():
     if not device_id:
         device_id, _ = get_or_create_device_folder(request)
 
-    next_path = urlparse(request.referrer).path if request.referrer else url_for('browse')
+    next_path = request.args.get('next')
+    if not next_path and request.referrer:
+        ref = urlparse(request.referrer)
+        next_path = ref.path
+        if ref.query:
+            next_path += '?' + ref.query
+    if not next_path:
+        next_path = url_for('browse')
 
     pc_token = secrets.token_urlsafe(16)
     app.config["LOGIN_TOKENS"][pc_token] = {"folder": folder, "device_id": device_id, "next_url": next_path}
@@ -4043,7 +4070,8 @@ def share_page():
         user_label=session.get("folder",""),
         current_rel="share",
         dhikr=dhikr, dhikr_list=dhikr_list,
-        is_admin=is_admin
+        is_admin=is_admin,
+        share_page_active=True
     )
 
 @app.route("/share-receiver", methods=["POST"])
