@@ -880,7 +880,7 @@ BASE_HTML = """
     .file-grid.list-view { grid-template-columns: 1fr; gap:.5rem; }
     .file-card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; overflow:hidden; transition:all .2s ease; cursor:pointer; }
     .file-card:active { transform:scale(.98); }
-    .file-card.selected { border: 5px solid var(--primary); }
+    .file-card.selected { border: 5px solid var(--primary); background: color-mix(in srgb, var(--bg-secondary) 80%, var(--primary)); }
     .file-select-checkbox { display: none; position: absolute; top: 8px; left: 8px; z-index: 5; width: 18px; height: 18px; accent-color: var(--primary); }
     .select-mode .file-select-checkbox { display: block; }
     .list-view .file-card { display:flex; align-items:center; padding:.75rem; gap:.75rem; }
