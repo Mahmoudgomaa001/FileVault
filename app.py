@@ -974,6 +974,9 @@ BASE_HTML = """
         <a class="btn btn-secondary" href="{{ url_for('home') }}" title="My Files"><i class="fas fa-home"></i></a>
         <div class="user-badge">{{ icon or "📁" }} {{ user_label }}</div>
 {% if authed %}
+  {% if is_on_ngrok %}
+    <button class="btn btn-secondary" id="goOfflineBtn" title="Switch to Local IP"><i class="fas fa-network-wired"></i> Local</button>
+  {% endif %}
   {% if is_admin %}
     <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
     <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
@@ -2668,6 +2671,21 @@ function removeFileCard(rel){
       }
     }
 
+    async function goOffline() {
+        try {
+            const r = await fetch('/api/go_offline');
+            const j = await r.json();
+            if (j.ok && j.url) {
+                showToast('Switching to local address...', 'info');
+                window.location.href = j.url;
+            } else {
+                showToast(j.error || 'Failed to switch to local mode.', 'error');
+            }
+        } catch (e) {
+            showToast('Error switching to local mode.', 'error');
+        }
+    }
+
     // INIT
     document.addEventListener('DOMContentLoaded', async ()=>{
       window.currentPath = "{{ current_rel|default('', true) }}";
@@ -2699,6 +2717,7 @@ function removeFileCard(rel){
 
       // Global initializations for all pages
       document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
+      document.getElementById('goOfflineBtn')?.addEventListener('click', goOffline);
       initPwaInstall();
     });
 
@@ -2765,8 +2784,8 @@ BROWSE_HTML = """
     <div class="stat-info"><div class="stat-label">Folders</div><div class="stat-value">{{ stats.dirs }}</div></div>
   </div>
   <div class="stat-card">
-    <div class="stat-icon" style="background: rgba(16,185,129,.2); color: var(--success);"><i class="fas fa-calendar"></i></div>
-    <div class="stat-info"><div class="stat-label">Since</div><div class="stat-value">{{ since }}</div></div>
+    <div class="stat-icon" style="background: rgba(16,185,129,.2); color: var(--success);"><i class="fas fa-users"></i></div>
+    <div class="stat-info"><div class="stat-label">Accounts</div><div class="stat-value">{{ accounts_count }}</div></div>
   </div>
 </div>
 
@@ -2954,6 +2973,10 @@ LOGIN_HTML = """
     <img id="qrImage" src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code" style="image-rendering:pixelated; image-rendering:crisp-edges;" />
   </div>
   <p class="muted" style="margin-top:.75rem; color:var(--text-muted);">Or open: <code id="qrUrl">{{ qr_url }}</code></p>
+  <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1rem;">
+    <p style="color:var(--text-secondary); margin-bottom:.75rem;">Or if you're on a new device:</p>
+    <a href="{{ url_for('login_with_default') }}" class="btn btn-secondary">Continue with a new/default account</a>
+  </div>
 </div>
 <script>
   let currentMode = 'local';
@@ -3108,6 +3131,17 @@ def login():
     # On login page, no dhikr banner
     return render_template_string(BASE_HTML, body=body, authed=is_authed(), icon=None, user_label="", current_rel="", dhikr="", dhikr_list=[], is_admin=False)
 
+@app.route("/login_with_default")
+def login_with_default():
+    device_id, folder = get_or_create_device_folder(request)
+    icon = get_user_icon(folder)
+    session["authed"] = True
+    session["folder"] = folder
+    session["icon"] = icon
+    resp = make_response(redirect(url_for("browse", subpath=folder)))
+    resp.set_cookie(DEVICE_COOKIE_NAME, device_id, max_age=60*60*24*730, samesite="Lax")
+    return resp
+
 @app.route("/api/login_qr")
 def api_login_qr():
     token = request.args.get("token")
@@ -3251,7 +3285,16 @@ def browse(subpath: Optional[str] = None):
     cfg = get_user_cfg(session.get("folder",""))
     is_admin = bool(device_id and device_id == cfg.get("admin_device"))
 
-    body = render_template_string(BROWSE_HTML, entries=items, stats=stats, since=since)
+    accounts_count = 0
+    if is_admin:
+        users = app.config.setdefault("USERS", load_users())
+        accounts_count = sum(1 for f, c in users.items() if c.get("admin_device") == device_id)
+
+    body = render_template_string(BROWSE_HTML, entries=items, stats=stats, since=since, accounts_count=accounts_count)
+
+    ngrok_url = get_ngrok_url()
+    is_on_ngrok = bool(ngrok_url and ngrok_url in request.host_url)
+
     return render_template_string(
         BASE_HTML,
         body=body,
@@ -3260,7 +3303,8 @@ def browse(subpath: Optional[str] = None):
         user_label=session.get("folder",""),
         current_rel=(path_rel(dest) if dest != ROOT_DIR else ""),
         dhikr=dhikr, dhikr_list=dhikr_list,
-        is_admin=is_admin
+        is_admin=is_admin,
+        is_on_ngrok=is_on_ngrok
     )
 
 @app.route("/download")
@@ -3526,6 +3570,23 @@ def api_cliptext():
     parent_rel = path_rel(dest_dir) if dest_dir != ROOT_DIR else ""
     socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
     return jsonify({"ok": True, "meta": meta})
+
+@app.route("/api/go_offline")
+def api_go_offline():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    folder = session.get("folder")
+    if not folder:
+        return jsonify({"ok": False, "error": "no folder in session"}), 400
+
+    pc_token = secrets.token_urlsafe(16)
+    app.config["LOGIN_TOKENS"][pc_token] = folder
+
+    local_ip = get_local_ip()
+    local_url = f"http://{local_ip}:{PORT}{url_for('pc_login', token=pc_token)}"
+
+    return jsonify({"ok": True, "url": local_url})
 
 @app.route("/api/folders")
 def api_folders():
