@@ -973,7 +973,7 @@ BASE_HTML = """
     <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
     <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
   {% endif %}
-  <button class="btn btn-secondary btn-icon" id="installBtn" title="Install App" style="display: none;"><i class="fas fa-arrow-down-to-bracket"></i></button>
+  <button class="btn btn-secondary btn-icon" id="installBtn" title="Install App" style="display: none;"><i class="fas fa-mobile-screen-button"></i></button>
   <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
   <button id="themeBtn" class="btn btn-secondary btn-icon" title="Toggle theme"><i class="fas fa-moon"></i></button>
   <a href="{{ url_for('logout') }}" class="btn btn-danger btn-icon" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
@@ -1123,7 +1123,7 @@ BASE_HTML = """
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('moveModal')">Cancel</button>
-      <button class="btn btn-primary" id="confirmMoveBtn"><i class="fas fa-people-carry"></i> Move Here</button>
+      <button class="btn btn-primary" id="confirmMoveBtn"><i class="fas fa-folder-tree"></i> Move Here</button>
     </div>
   </div>
 </div>
@@ -2000,6 +2000,7 @@ async function changeDhikr() {
     }
 
     function initBulkActions(){
+        document.getElementById('selectModeBtn')?.addEventListener('click', () => toggleSelectMode(true));
         document.getElementById('bulkMoveBtn')?.addEventListener('click', openMoveModal);
         document.getElementById('confirmMoveBtn')?.addEventListener('click', confirmMove);
         document.getElementById('bulkDeleteBtn')?.addEventListener('click', confirmBulkDelete);
@@ -2011,62 +2012,14 @@ async function changeDhikr() {
         const grid = document.getElementById('fileGrid');
         if (!grid) return;
 
-        let pressTimer = null;
-        let startX, startY;
-        let isLongPress = false;
-
-        grid.addEventListener('pointerdown', (e) => {
-            if (e.button !== 0) return;
+        grid.addEventListener('click', (e) => {
+            // We are using a simple click handler now.
+            // The logic to differentiate between selection and opening is inside handleCardOpenEvent.
             const card = e.target.closest('.file-card');
-            if (!card || e.target.closest('.file-actions')) return;
-
-            startX = e.clientX;
-            startY = e.clientY;
-            isLongPress = false;
-
-            pressTimer = setTimeout(() => {
-                isLongPress = true;
-                pressTimer = null;
-
-                toggleSelectMode(true);
-                const checkbox = card.querySelector('.file-select-checkbox');
-                if (checkbox) {
-                    checkbox.checked = true;
-                    handleSelectionChange();
-                }
-                if (navigator.vibrate) navigator.vibrate(50);
-
-            }, 500);
-        });
-
-        grid.addEventListener('pointermove', (e) => {
-            if (!pressTimer) return;
-            if (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10) {
-                clearTimeout(pressTimer);
-                pressTimer = null;
-            }
-        });
-
-        grid.addEventListener('pointerup', (e) => {
-            if (pressTimer) {
-                clearTimeout(pressTimer);
-                pressTimer = null;
-            }
-
-            if (isLongPress) {
-                // If it was a long press, we've already handled the selection.
-                // We just need to prevent the browser from firing a 'click' event,
-                // which would toggle the selection off again.
-                e.preventDefault();
-            } else {
-                // Otherwise, it's a normal click/tap, so open the file or select it.
+            if (card) {
                 handleCardOpenEvent(e);
             }
         });
-
-        if (!window.PointerEvent) {
-            grid.addEventListener('click', handleCardOpenEvent);
-        }
 
         document.getElementById('pvPrevBtn')?.addEventListener('click', () => navigateToFile('prev'));
         document.getElementById('pvNextBtn')?.addEventListener('click', () => navigateToFile('next'));
@@ -2815,7 +2768,7 @@ BROWSE_HTML = """
   <div class="toolbar-row" style="justify-content:space-between;">
     <div style="font-weight:700;" id="selectionCount"></div>
     <div style="display:flex; gap:.5rem;">
-      <button class="btn btn-primary btn-icon" id="bulkMoveBtn" title="Move selected"><i class="fas fa-people-carry"></i></button>
+      <button class="btn btn-primary btn-icon" id="bulkMoveBtn" title="Move selected"><i class="fas fa-folder-tree"></i></button>
       <button class="btn btn-danger btn-icon" id="bulkDeleteBtn" title="Delete selected"><i class="fas fa-trash"></i></button>
       <button class="btn btn-success btn-icon" id="bulkDownloadBtn" title="Download selected"><i class="fas fa-download"></i></button>
       <button class="btn btn-secondary" id="deselectAllBtn">Cancel</button>
@@ -2834,6 +2787,7 @@ BROWSE_HTML = """
       <button class="view-btn" data-view="grid" onclick="setView('grid')"><i class="fas fa-th"></i><span>Grid</span></button>
       <button class="view-btn" data-view="list" onclick="setView('list')"><i class="fas fa-list"></i><span>List</span></button>
     </div>
+    <button id="selectModeBtn" class="btn btn-secondary" title="Select Files"><i class="fas fa-tasks"></i> Select</button>
     <!-- Sorting controls -->
     <div class="view-controls" style="gap:.5rem;">
       <select id="sortBy" class="btn btn-secondary" title="Sort by">
