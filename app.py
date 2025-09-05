@@ -96,6 +96,7 @@ app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.secret_key = APP_SECRET
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 app.config["SESSION_COOKIE_NAME"] = SESSION_COOKIE_NAME
+app.config["JSONIFY_MIMETYPE"] = "application/json; charset=utf-8"
 app.config["LOGIN_TOKENS"] = {}  # pc_token -> folder
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
@@ -818,7 +819,7 @@ BASE_HTML = """
 
     body.with-dhikr .container { padding-top: calc(var(--header-height) + 60px + var(--mobile-padding)); }
 
-    .header { background:rgba(30,41,59,.98); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border-bottom:1px solid var(--border); position:fixed; top:0; left:0; right:0; z-index:1000; height:var(--header-height); }
+    .header { background:rgba(30,41,59,.98); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); border-bottom:1px solid var(--border); position:fixed; top:0; left:0; right:0; z-index:1000; height:var(--header-height); }
     :root.light .header { background:rgba(255,255,255,.98); }
     .header-content { max-width:1400px; margin:0 auto; padding:0 var(--mobile-padding); height:100%; display:flex; justify-content:space-between; align-items:center; gap:.5rem; }
     .logo { display:flex; align-items:center; gap:.5rem; font-size:1.125rem; font-weight:700; background:linear-gradient(135deg,var(--primary),var(--secondary)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; white-space:nowrap; text-decoration:none; }
@@ -850,7 +851,7 @@ BASE_HTML = """
     .toggle-switch.active { background:var(--primary); border-color:var(--primary); }
     .toggle-switch .slider { position:absolute; top:2px; left:2px; width:20px; height:20px; background:white; border-radius:50%; transition:all .3s; }
     .toggle-switch.active .slider { transform:translateX(28px); }
-    .toggle-label { font-size:.875rem; font-weight:600; user-select:none; cursor:pointer; }
+    .toggle-label { font-size:.875rem; font-weight:600; -webkit-user-select:none; user-select:none; cursor:pointer; }
 
     /* Upload */
     .upload-section { margin-bottom:1.5rem; }
@@ -906,7 +907,7 @@ BASE_HTML = """
     @keyframes toastIn { from{opacity:0; transform:translateX(100%);} to{opacity:1; transform:translateX(0);} }
 
     /* Modal */
-    .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); z-index:2000; padding:1rem; overflow-y:auto; }
+    .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); z-index:2000; padding:1rem; overflow-y:auto; }
     .modal.active { display:flex; align-items:center; justify-content:center; }
     .modal-content { background:var(--bg-secondary); border-radius:1rem; max-width:900px; width:100%; max-height:90vh; overflow:hidden; display:flex; flex-direction:column; animation:modalSlide .25s ease; }
     @keyframes modalSlide { from{opacity:0; transform:translateY(20px);} to{opacity:1; transform:translateY(0);} }
@@ -918,7 +919,7 @@ BASE_HTML = """
     .preview-holder { display:flex; align-items:center; justify-content:center; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:.5rem; min-height:240px; }
     .preview-holder img, .preview-holder video, .preview-holder audio, .preview-holder embed, .preview-holder iframe { max-width:100%; max-height:65vh; }
     .modal-footer { padding:1rem; border-top:1px solid var(--border); display:flex; gap:.5rem; justify-content:flex-end; }
-    #folderTree .folder-tree-item { padding:.375rem .75rem; border-radius:.375rem; cursor:pointer; user-select:none; }
+    #folderTree .folder-tree-item { padding:.375rem .75rem; border-radius:.375rem; cursor:pointer; -webkit-user-select:none; user-select:none; }
     #folderTree .folder-tree-item:hover { background:var(--bg-tertiary); }
     #folderTree .folder-tree-item.selected { background:var(--primary); color:white; font-weight:600; }
     .form-input { margin-top: 5px; width: 100%; padding: 0.625rem 0.875rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 0.5rem; color: var(--text-primary); font-size: 0.875rem; }
@@ -1015,8 +1016,8 @@ BASE_HTML = """
       <div class="modal-body">
         <div class="preview-container" style="position:relative;">
           <div class="preview-holder" id="pvMedia">Loading…</div>
-          <button class="nav-arrow nav-prev" id="pvPrevBtn" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i class="fas fa-chevron-left"></i></button>
-          <button class="nav-arrow nav-next" id="pvNextBtn" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i class="fas fa-chevron-right"></i></button>
+          <button class="nav-arrow nav-prev" id="pvPrevBtn" aria-label="Previous file" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i class="fas fa-chevron-left"></i></button>
+          <button class="nav-arrow nav-next" id="pvNextBtn" aria-label="Next file" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i class="fas fa-chevron-right"></i></button>
         </div>
         <div class="row" style="gap:.5rem; align-items:center; margin-top:10px;">
           <button class="btn btn-primary" id="pvOpenBtn"><i class="fas fa-up-right-from-square"></i> Open</button>
@@ -1044,8 +1045,8 @@ BASE_HTML = """
           <span class="toggle-label">Private</span>
         </div>
         <div style="margin-top:.75rem;">
-          <label class="form-label">Password (set/change when switching to Private)</label>
-          <input type="password" id="privacyPassword" class="form-input" placeholder="New password">
+          <label class="form-label" for="privacyPassword">Password (set/change when switching to Private)</label>
+          <input type="password" id="privacyPassword" name="privacyPassword" class="form-input" placeholder="New password">
         </div>
         <div class="toggle-container" style="margin-top: 1rem;">
           <span class="toggle-label" title="If enabled, anyone with access can delete files.">Anyone can delete</span>
@@ -1054,9 +1055,9 @@ BASE_HTML = """
           </div>
         </div>
         <div style="margin-top:1.5rem;">
-          <label class="form-label">API Token</label>
+          <label class="form-label" for="apiTokenInput">API Token</label>
           <div class="row" style="gap:.5rem; margin-top:.5rem;">
-            <input type="text" id="apiTokenInput" class="form-input" placeholder="Token will appear here" readonly style="flex:1;">
+            <input type="text" id="apiTokenInput" name="apiTokenInput" class="form-input" placeholder="Token will appear here" readonly style="flex:1;">
             <button class="btn btn-primary" id="generateTokenBtn"><i class="fas fa-key"></i> Generate Token</button>
             <button class="btn btn-secondary" id="shareTokenBtn" style="display:none;"><i class="fas fa-share"></i> Share</button>
           </div>
@@ -1141,7 +1142,8 @@ BASE_HTML = """
     </div>
     <div class="modal-body" id="accountsBody">Loading…</div>
     <div class="modal-footer" style="flex-wrap:wrap; gap:.5rem;">
-      <input type="text" id="accCreateNameInput" class="form-input" placeholder="Custom name (optional) e.g. lucky-duck-042" style="flex:1; min-width:220px;">
+      <label for="accCreateNameInput" style="position:absolute;width:1px;height:1px;overflow:hidden;">Custom account name</label>
+      <input type="text" id="accCreateNameInput" name="accCreateNameInput" class="form-input" placeholder="Custom name (optional) e.g. lucky-duck-042" style="flex:1; min-width:220px;">
       <button class="btn btn-primary" id="accCreateBtn"><i class="fas fa-user-plus"></i> Create & Switch</button>
     </div>
   </div>
@@ -1175,13 +1177,13 @@ BASE_HTML = """
   <div class="modal-content" style="max-width:520px;">
     <div class="modal-header">
       <h3 class="modal-title">Rename Account</h3>
-      <button class="modal-close" onclick="closeModal('renameAccountModal')"><i class="fas fa-times"></i></button>
+      <button class="modal-close" onclick="closeModal('renameAccountModal')" aria-label="Close"><i class="fas fa-times"></i></button>
     </div>
     <div class="modal-body">
       <p>Renaming account: <strong id="renameAccountOldName"></strong></p>
       <div class="form-group">
-        <label class="form-label">New Account Name</label>
-        <input type="text" id="renameAccountInput" class="form-input" placeholder="Enter new name" autocomplete="off">
+        <label class="form-label" for="renameAccountInput">New Account Name</label>
+        <input type="text" id="renameAccountInput" name="renameAccountInput" class="form-input" placeholder="Enter new name" autocomplete="off">
         <input type="hidden" id="renameAccountHiddenOldName">
       </div>
     </div>
@@ -2882,12 +2884,12 @@ BROWSE_HTML = """
   <div class="modal-content">
     <div class="modal-header">
       <h3 class="modal-title">Create New Folder</h3>
-      <button class="modal-close" onclick="closeModal('newFolderModal')"><i class="fas fa-times"></i></button>
+      <button class="modal-close" onclick="closeModal('newFolderModal')" aria-label="Close"><i class="fas fa-times"></i></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label class="form-label">Folder Name</label>
-        <input type="text" id="folderNameInput" class="form-input" placeholder="Enter folder name" autocomplete="off">
+        <label class="form-label" for="folderNameInput">Folder Name</label>
+        <input type="text" id="folderNameInput" name="folderNameInput" class="form-input" placeholder="Enter folder name" autocomplete="off">
       </div>
     </div>
     <div class="modal-footer">
@@ -2902,13 +2904,13 @@ BROWSE_HTML = """
   <div class="modal-content">
     <div class="modal-header">
       <h3 class="modal-title">Paste Text</h3>
-      <button class="modal-close" onclick="closeModal('clipModal')"><i class="fas fa-times"></i></button>
+      <button class="modal-close" onclick="closeModal('clipModal')" aria-label="Close"><i class="fas fa-times"></i></button>
     </div>
     <div class="modal-body">
-      <label class="form-label">File name (optional)</label>
-      <input type="text" id="clipNameInput" class="form-input" placeholder="E.g. note.txt (default auto)">
-      <label class="form-label" style="margin-top:.75rem;">Text</label>
-      <textarea id="clipTextInput" class="form-input" rows="10" placeholder="Paste here"></textarea>
+      <label class="form-label" for="clipNameInput">File name (optional)</label>
+      <input type="text" id="clipNameInput" name="clipNameInput" class="form-input" placeholder="E.g. note.txt (default auto)">
+      <label class="form-label" for="clipTextInput" style="margin-top:.75rem;">Text</label>
+      <textarea id="clipTextInput" name="clipTextInput" class="form-input" rows="10" placeholder="Paste here"></textarea>
     </div>
     <div class="modal-footer">
       <button class="btn btn-primary" id="clipSaveBtn"><i class="fas fa-save"></i> Save</button>
@@ -2923,7 +2925,7 @@ BROWSE_HTML = """
     <button class="fab-menu-item" onclick="document.getElementById('uploadInput').click()"><i class="fas fa-file-upload"></i> Upload Files</button>
     <button class="fab-menu-item" onclick="openClipModal()"><i class="fas fa-clipboard"></i> Paste Text</button>
   </div>
-  <button class="fab" onclick="toggleFabMenu()"><i class="fas fa-plus"></i></button>
+  <button class="fab" onclick="toggleFabMenu()" aria-label="Open actions menu"><i class="fas fa-plus"></i></button>
 </div>
 """
 
@@ -3917,6 +3919,15 @@ def api_commit_share():
 
 # Error handlers: redirect to login on not found/forbidden
 # -----------------------------
+@app.after_request
+def add_security_headers(response):
+    if 'Cache-Control' not in response.headers:
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
+
 @app.errorhandler(404)
 def handle_404(e):
     if request.path.startswith("/static") or request.path.startswith("/socket.io"):
