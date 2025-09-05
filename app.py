@@ -358,12 +358,12 @@ def api_go_online():
 
     device_id = request.cookies.get(DEVICE_COOKIE_NAME)
     if not device_id:
-        # This case might happen if cookies are cleared, but they are still logged in.
-        # Fallback to creating a new device ID.
         device_id, _ = get_or_create_device_folder(request)
 
+    next_path = urlparse(request.referrer).path if request.referrer else url_for('browse')
+
     pc_token = secrets.token_urlsafe(16)
-    app.config["LOGIN_TOKENS"][pc_token] = {"folder": folder, "device_id": device_id}
+    app.config["LOGIN_TOKENS"][pc_token] = {"folder": folder, "device_id": device_id, "next_url": next_path}
 
     ngrok_url = get_ngrok_url()
     if not ngrok_url:
@@ -1057,7 +1057,7 @@ BASE_HTML = """
     @media (min-width: 1024px) { .file-grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); } }
   </style>
 </head>
-<body class="{% if authed %}with-dhikr{% endif %}">
+<body class="{% if authed and current_rel != 'share' %}with-dhikr{% endif %}">
   <header class="header">
     <div class="header-content">
       <a class="logo" href="{{ url_for('home') }}" title="My Files">
@@ -1110,7 +1110,7 @@ BASE_HTML = """
     </div>
   </header>
 
-  {% if authed %}
+  {% if authed and current_rel != 'share' %}
   <div class="dhikr-banner" id="dhikrBanner">
     <div class="dhikr-content">
       <span class="dhikr-icon">✨</span>
@@ -3396,6 +3396,7 @@ def pc_login(token):
 
     folder = token_data.get("folder")
     device_id = token_data.get("device_id")
+    next_url = token_data.get("next_url") or url_for("browse")
 
     if not folder or not device_id:
         abort(403)
@@ -3404,7 +3405,7 @@ def pc_login(token):
     session["folder"] = folder
     session["icon"] = get_user_icon(folder)
 
-    resp = make_response(redirect(url_for("browse")))
+    resp = make_response(redirect(next_url))
     resp.set_cookie(DEVICE_COOKIE_NAME, device_id, max_age=60*60*24*730, samesite="Lax")
     return resp
 
@@ -3758,8 +3759,10 @@ def api_go_offline():
     if not device_id:
         device_id, _ = get_or_create_device_folder(request)
 
+    next_path = urlparse(request.referrer).path if request.referrer else url_for('browse')
+
     pc_token = secrets.token_urlsafe(16)
-    app.config["LOGIN_TOKENS"][pc_token] = {"folder": folder, "device_id": device_id}
+    app.config["LOGIN_TOKENS"][pc_token] = {"folder": folder, "device_id": device_id, "next_url": next_path}
 
     local_ip = get_local_ip()
     local_url = f"http://{local_ip}:{PORT}{url_for('pc_login', token=pc_token)}"
