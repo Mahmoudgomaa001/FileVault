@@ -12,6 +12,7 @@ import requests
 import shutil
 import hashlib
 import zipfile
+from urllib.parse import urlparse
 from io import BytesIO
 from pathlib import Path
 from datetime import datetime
@@ -324,6 +325,17 @@ def is_admin_device_of(folder: str) -> bool:
     cfg = get_user_cfg(folder)
     did = request.cookies.get(DEVICE_COOKIE_NAME)
     return bool(did and did == cfg.get("admin_device"))
+
+@app.context_processor
+def inject_ngrok_status():
+    ngrok_url_str = get_ngrok_url()
+    is_on_ngrok = False
+    if ngrok_url_str:
+        ngrok_host = urlparse(ngrok_url_str).hostname
+        request_host = request.host.split(':')[0]
+        if ngrok_host and ngrok_host == request_host:
+            is_on_ngrok = True
+    return dict(is_on_ngrok=is_on_ngrok)
 
 @app.route("/api/accounts", methods=["GET"])
 def api_accounts_list():
@@ -3292,9 +3304,6 @@ def browse(subpath: Optional[str] = None):
 
     body = render_template_string(BROWSE_HTML, entries=items, stats=stats, since=since, accounts_count=accounts_count)
 
-    ngrok_url = get_ngrok_url()
-    is_on_ngrok = bool(ngrok_url and ngrok_url in request.host_url)
-
     return render_template_string(
         BASE_HTML,
         body=body,
@@ -3303,8 +3312,7 @@ def browse(subpath: Optional[str] = None):
         user_label=session.get("folder",""),
         current_rel=(path_rel(dest) if dest != ROOT_DIR else ""),
         dhikr=dhikr, dhikr_list=dhikr_list,
-        is_admin=is_admin,
-        is_on_ngrok=is_on_ngrok
+        is_admin=is_admin
     )
 
 @app.route("/download")
