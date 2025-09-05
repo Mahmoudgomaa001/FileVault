@@ -330,12 +330,42 @@ def is_admin_device_of(folder: str) -> bool:
 def inject_ngrok_status():
     ngrok_url_str = get_ngrok_url()
     is_on_ngrok = False
+    is_on_local = False
+
     if ngrok_url_str:
         ngrok_host = urlparse(ngrok_url_str).hostname
         request_host = request.host.split(':')[0]
         if ngrok_host and ngrok_host == request_host:
             is_on_ngrok = True
-    return dict(is_on_ngrok=is_on_ngrok)
+        else:
+            local_ip = get_local_ip()
+            if request_host == local_ip or request_host in ['127.0.0.1', 'localhost']:
+                is_on_local = True
+
+    return dict(
+        is_on_ngrok=is_on_ngrok,
+        is_on_local_with_ngrok_available=(is_on_local and bool(ngrok_url_str))
+    )
+
+@app.route("/api/go_online")
+def api_go_online():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    folder = session.get("folder")
+    if not folder:
+        return jsonify({"ok": False, "error": "no folder in session"}), 400
+
+    pc_token = secrets.token_urlsafe(16)
+    app.config["LOGIN_TOKENS"][pc_token] = folder
+
+    ngrok_url = get_ngrok_url()
+    if not ngrok_url:
+        return jsonify({"ok": False, "error": "ngrok not available"}), 400
+
+    online_url = f"{ngrok_url.rstrip('/')}{url_for('pc_login', token=pc_token)}"
+
+    return jsonify({"ok": True, "url": online_url})
 
 @app.route("/api/accounts", methods=["GET"])
 def api_accounts_list():
@@ -955,6 +985,11 @@ BASE_HTML = """
     .fab-menu.active { display:block; animation:fadeIn .2s ease; }
     .fab-menu-item { padding:.625rem .875rem; border-radius:.5rem; cursor:pointer; display:flex; align-items:center; gap:.75rem; font-size:.875rem; color:var(--text-primary); border:none; background:transparent; width:100%; text-align:left; }
     .account-actions { display: flex; gap: .5rem; flex-shrink: 0; }
+    .btn-text { margin-left: .375rem; }
+
+    @media (max-width: 768px) {
+      .nav-menu .btn-text { display: none; }
+    }
 
     @media (max-width: 640px) {
       .accounts-card { flex-direction: column; align-items: stretch; }
@@ -987,7 +1022,9 @@ BASE_HTML = """
         <div class="user-badge">{{ icon or "📁" }} {{ user_label }}</div>
 {% if authed %}
   {% if is_on_ngrok %}
-    <button class="btn btn-secondary" id="goOfflineBtn" title="Switch to Local IP"><i class="fas fa-network-wired"></i> Local</button>
+    <button class="btn btn-primary" id="goOfflineBtn" title="Switch to Local IP"><i class="fas fa-network-wired"></i><span class="btn-text"> Local</span></button>
+  {% elif is_on_local_with_ngrok_available %}
+    <button class="btn btn-secondary" id="goOnlineBtn" title="Switch to Online URL"><i class="fas fa-wifi"></i><span class="btn-text"> Online</span></button>
   {% endif %}
   {% if is_admin %}
     <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
@@ -2698,6 +2735,21 @@ function removeFileCard(rel){
         }
     }
 
+    async function goOnline() {
+        try {
+            const r = await fetch('/api/go_online');
+            const j = await r.json();
+            if (j.ok && j.url) {
+                showToast('Switching to online address...', 'info');
+                window.location.href = j.url;
+            } else {
+                showToast(j.error || 'Failed to switch to online mode.', 'error');
+            }
+        } catch (e) {
+            showToast('Error switching to online mode.', 'error');
+        }
+    }
+
     // INIT
     document.addEventListener('DOMContentLoaded', async ()=>{
       window.currentPath = "{{ current_rel|default('', true) }}";
@@ -2730,6 +2782,7 @@ function removeFileCard(rel){
       // Global initializations for all pages
       document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
       document.getElementById('goOfflineBtn')?.addEventListener('click', goOffline);
+      document.getElementById('goOnlineBtn')?.addEventListener('click', goOnline);
       initPwaInstall();
     });
 
