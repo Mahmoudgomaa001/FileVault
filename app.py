@@ -12,7 +12,6 @@ import requests
 import shutil
 import hashlib
 import zipfile
-from urllib.parse import urlparse
 from io import BytesIO
 from pathlib import Path
 from datetime import datetime
@@ -379,6 +378,37 @@ def api_go_online():
     online_url = f"{ngrok_url.rstrip('/')}{url_for('pc_login', token=pc_token)}"
 
     return jsonify({"ok": True, "url": online_url})
+
+
+@app.route("/api/go_offline")
+def api_go_offline():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    folder = session.get("folder")
+    if not folder:
+        return jsonify({"ok": False, "error": "no folder in session"}), 400
+
+    device_id = request.cookies.get(DEVICE_COOKIE_NAME)
+    if not device_id:
+        device_id, _ = get_or_create_device_folder(request)
+
+    next_path = request.args.get('next')
+    if not next_path and request.referrer:
+        ref = urlparse(request.referrer)
+        next_path = ref.path
+        if ref.query:
+            next_path += '?' + ref.query
+    if not next_path:
+        next_path = url_for('browse')
+
+    pc_token = secrets.token_urlsafe(16)
+    app.config["LOGIN_TOKENS"][pc_token] = {"folder": folder, "device_id": device_id, "next_url": next_path}
+
+    local_ip = get_local_ip()
+    local_url = f"http://{local_ip}:{PORT}{url_for('pc_login', token=pc_token)}"
+
+    return jsonify({"ok": True, "url": local_url})
 
 @app.route("/api/accounts", methods=["GET"])
 def api_accounts_list():
@@ -998,51 +1028,6 @@ BASE_HTML = """
     .fab-menu.active { display:block; animation:fadeIn .2s ease; }
     .fab-menu-item { padding:.625rem .875rem; border-radius:.5rem; cursor:pointer; display:flex; align-items:center; gap:.75rem; font-size:.875rem; color:var(--text-primary); border:none; background:transparent; width:100%; text-align:left; }
     .account-actions { display: flex; gap: .5rem; flex-shrink: 0; }
-    .btn-text { margin-left: .375rem; }
-
-    /* Header Dropdown */
-    .nav-menu-mobile { display: none; position: relative; }
-    .dropdown-menu {
-      display: none;
-      position: absolute;
-      top: calc(100% + .5rem);
-      right: 0;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: .75rem;
-      padding: .5rem;
-      box-shadow: 0 4px 12px var(--shadow);
-      min-width: 220px;
-      z-index: 1100;
-    }
-    .dropdown-menu.active { display: block; animation: fadeIn .2s ease; }
-    .dropdown-item {
-      display: flex;
-      align-items: center;
-      gap: .75rem;
-      padding: .625rem .875rem;
-      border-radius: .5rem;
-      cursor: pointer;
-      font-size: .875rem;
-      color: var(--text-primary);
-      background: transparent;
-      width: 100%;
-      text-align: left;
-      border: none;
-      text-decoration: none;
-    }
-    .dropdown-item:hover { background: var(--bg-tertiary); }
-    .dropdown-item-danger:hover { background: var(--danger); color: white; }
-    .dropdown-divider {
-      height: 1px;
-      background: var(--border);
-      margin: .5rem 0;
-    }
-
-    @media (max-width: 768px) {
-      .nav-items-desktop { display: none; }
-      .nav-menu-mobile { display: block; }
-    }
 
     @media (max-width: 640px) {
       .accounts-card { flex-direction: column; align-items: stretch; }
@@ -1073,7 +1058,7 @@ BASE_HTML = """
       <nav class="nav-menu">
         <a class="btn btn-secondary" href="{{ url_for('home') }}" title="My Files"><i class="fas fa-home"></i></a>
         <div class="user-badge">{{ icon or "📁" }} {{ user_label }}</div>
-        {% if authed %}
+{% if authed %}
           <!-- Desktop-only buttons -->
           <div class="nav-items-desktop">
               {% if is_on_ngrok %}
@@ -2798,67 +2783,6 @@ function removeFileCard(rel){
       }
     }
 
-    async function goOffline() {
-        try {
-            const r = await fetch('/api/go_offline?next=' + encodeURIComponent(window.location.pathname + window.location.search));
-            const j = await r.json();
-            if (j.ok && j.url) {
-                showToast('Switching to local address...', 'info');
-                window.location.href = j.url;
-            } else {
-                showToast(j.error || 'Failed to switch to local mode.', 'error');
-            }
-        } catch (e) {
-            showToast('Error switching to local mode.', 'error');
-        }
-    }
-
-    async function goOnline() {
-        try {
-            const r = await fetch('/api/go_online?next=' + encodeURIComponent(window.location.pathname + window.location.search));
-            const j = await r.json();
-            if (j.ok && j.url) {
-                showToast('Switching to online address...', 'info');
-                window.location.href = j.url;
-            } else {
-                showToast(j.error || 'Failed to switch to online mode.', 'error');
-            }
-        } catch (e) {
-            showToast('Error switching to online mode.', 'error');
-        }
-    }
-
-    // Mobile Menu
-    function initMobileMenu() {
-      const menuBtn = document.getElementById('mobileMenuBtn');
-      const dropdown = document.getElementById('mobileDropdown');
-      const installBtn = document.getElementById('installBtn');
-      const installBtnMobile = document.getElementById('installBtnMobile');
-
-      if (menuBtn && dropdown) {
-        menuBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          dropdown.classList.toggle('active');
-        });
-
-        document.addEventListener('click', (e) => {
-          if (!dropdown.contains(e.target) && dropdown.classList.contains('active')) {
-            dropdown.classList.remove('active');
-          }
-        });
-      }
-
-      // Sync visibility of mobile install button with desktop one
-      if (installBtn && installBtnMobile) {
-          const observer = new MutationObserver(() => {
-              installBtnMobile.style.display = installBtn.style.display === 'none' ? 'none' : 'flex';
-          });
-          observer.observe(installBtn, { attributes: true, attributeFilter: ['style'] });
-          // Initial sync
-          installBtnMobile.style.display = installBtn.style.display === 'none' ? 'none' : 'flex';
-      }
-    }
-
     // INIT
     document.addEventListener('DOMContentLoaded', async ()=>{
       window.currentPath = "{{ current_rel|default('', true) }}";
@@ -2933,6 +2857,67 @@ function removeFileCard(rel){
         installBtn.style.display = 'none';
         deferredPrompt = null;
       });
+    }
+
+    // Mobile Menu
+    function initMobileMenu() {
+      const menuBtn = document.getElementById('mobileMenuBtn');
+      const dropdown = document.getElementById('mobileDropdown');
+      const installBtn = document.getElementById('installBtn');
+      const installBtnMobile = document.getElementById('installBtnMobile');
+
+      if (menuBtn && dropdown) {
+        menuBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          dropdown.classList.toggle('active');
+        });
+
+        document.addEventListener('click', (e) => {
+          if (!dropdown.contains(e.target) && dropdown.classList.contains('active')) {
+            dropdown.classList.remove('active');
+          }
+        });
+      }
+
+      // Sync visibility of mobile install button with desktop one
+      if (installBtn && installBtnMobile) {
+          const observer = new MutationObserver(() => {
+              installBtnMobile.style.display = installBtn.style.display === 'none' ? 'none' : 'flex';
+          });
+          observer.observe(installBtn, { attributes: true, attributeFilter: ['style'] });
+          // Initial sync
+          installBtnMobile.style.display = installBtn.style.display === 'none' ? 'none' : 'flex';
+      }
+    }
+
+    async function goOffline() {
+        try {
+            const r = await fetch('/api/go_offline?next=' + encodeURIComponent(window.location.pathname + window.location.search));
+            const j = await r.json();
+            if (j.ok && j.url) {
+                showToast('Switching to local address...', 'info');
+                window.location.href = j.url;
+            } else {
+                showToast(j.error || 'Failed to switch to local mode.', 'error');
+            }
+        } catch (e) {
+            showToast('Error switching to local mode.', 'error');
+        }
+    }
+
+    async function goOnline() {
+        try {
+            const r = await fetch('/api/go_online?next=' + encodeURIComponent(window.location.pathname + window.location.search));
+            const j = await r.json();
+            if (j.ok && j.url) {
+                showToast('Switching to online address...', 'info');
+                window.location.href = j.url;
+            } else {
+                showToast(j.error || 'Failed to switch to online mode.', 'error');
+            }
+        } catch (e) {
+            showToast('Error switching to online mode.', 'error');
+        }
     }
 
     // FAB
@@ -3367,7 +3352,7 @@ def check_login(token: str):
         pc_token = info.get("pc_token")
         pc_url = None
         if pc_token and info.get("folder"):
-            app.config["LOGIN_TOKENS"][pc_token] = {"folder": info["folder"]}
+            app.config["LOGIN_TOKENS"][pc_token] = info["folder"]
             pc_url = url_for("pc_login", token=pc_token)
         return jsonify({"authenticated": True, "folder": info.get("folder"), "icon": info.get("icon"), "url": pc_url})
     return jsonify({"authenticated": False})
@@ -3403,7 +3388,8 @@ def pc_login(token):
 
     folder = token_data.get("folder")
     if not folder:
-        abort(403)
+        # Backwards compatibility for old QR-based tokens
+        folder = token_data
 
     device_id = token_data.get("device_id")
     next_url = token_data.get("next_url") or url_for("browse")
@@ -3467,14 +3453,6 @@ def browse(subpath: Optional[str] = None):
 
     root_for_stats = ROOT_DIR / session.get("folder", "")
     stats = get_stats(root_for_stats if root_for_stats.exists() else ROOT_DIR)
-    device_map = app.config["DEVICE_MAP"]
-    since_iso = None
-    for did, info in device_map.items():
-        if info.get("folder") == session.get("folder"):
-            since_iso = info.get("created")
-            break
-    since_txt = datetime.fromisoformat(since_iso.replace("Z","")) if since_iso else datetime.utcnow()
-    since = since_txt.strftime("%b %Y")
 
     dhikr = get_random_dhikr()
     dhikr_list = [{"dhikr": d} for d in ISLAMIC_DHIKR]
@@ -3488,8 +3466,7 @@ def browse(subpath: Optional[str] = None):
         users = app.config.setdefault("USERS", load_users())
         accounts_count = sum(1 for f, c in users.items() if c.get("admin_device") == device_id)
 
-    body = render_template_string(BROWSE_HTML, entries=items, stats=stats, since=since, accounts_count=accounts_count)
-
+    body = render_template_string(BROWSE_HTML, entries=items, stats=stats, accounts_count=accounts_count)
     return render_template_string(
         BASE_HTML,
         body=body,
@@ -3766,36 +3743,6 @@ def api_cliptext():
     socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
     return jsonify({"ok": True, "meta": meta})
 
-@app.route("/api/go_offline")
-def api_go_offline():
-    if not is_authed():
-        return jsonify({"ok": False, "error": "not authed"}), 401
-
-    folder = session.get("folder")
-    if not folder:
-        return jsonify({"ok": False, "error": "no folder in session"}), 400
-
-    device_id = request.cookies.get(DEVICE_COOKIE_NAME)
-    if not device_id:
-        device_id, _ = get_or_create_device_folder(request)
-
-    next_path = request.args.get('next')
-    if not next_path and request.referrer:
-        ref = urlparse(request.referrer)
-        next_path = ref.path
-        if ref.query:
-            next_path += '?' + ref.query
-    if not next_path:
-        next_path = url_for('browse')
-
-    pc_token = secrets.token_urlsafe(16)
-    app.config["LOGIN_TOKENS"][pc_token] = {"folder": folder, "device_id": device_id, "next_url": next_path}
-
-    local_ip = get_local_ip()
-    local_url = f"http://{local_ip}:{PORT}{url_for('pc_login', token=pc_token)}"
-
-    return jsonify({"ok": True, "url": local_url})
-
 @app.route("/api/folders")
 def api_folders():
     if not is_authed():
@@ -3933,97 +3880,148 @@ def api_download_zip():
 # Routes: PWA Share Target
 # -----------------------------
 SHARE_BODY_HTML = """
-<div class="card" id="mainContainer">
-  <h1>Shared Files</h1>
-  {% if files %}
-    <p>You have shared {{ files|length }} file(s). Select a destination and click Save.</p>
-    <div id="shareFileList">
-      {% for file in files %}
-        <div class="card">{{ file.name }}</div>
-      {% endfor %}
-    </div>
-    <p><b>Select destination folder:</b></p>
-    <div id="folderTree" style="height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary); margin-bottom: 1rem;">Loading...</div>
-    <button class="btn btn-primary" id="confirmShareBtn" disabled><i class="fas fa-save"></i> Save All Files</button>
-  {% else %}
-    <p>No pending files to share. You can close this page.</p>
-  {% endif %}
-</div>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Save Shared Files - FileVault</title>
+  <link rel="stylesheet" href="/static/fonts.css" />
+  <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
+  <link rel="stylesheet" href="/static/vendor/fontawesome/css/fa-shims.css" />
+  <style>
+    /* Re-using some styles from BASE_HTML for consistency */
+    * { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+      --primary:#3B82F6; --primary-dark:#2563EB; --secondary:#8B5CF6; --success:#10B981; --danger:#EF4444; --warning:#F59E0B;
+      --bg-primary:#0F172A; --bg-secondary:#1E293B; --bg-tertiary:#334155; --text-primary:#F8FAFC; --text-secondary:#CBD5E1; --text-muted:#64748B;
+      --border:#334155; --shadow:rgba(0,0,0,0.5);
+    }
+    body { font-family:'Inter', sans-serif; background:var(--bg-primary); color:var(--text-primary); padding: 1rem; }
+    .container { max-width: 600px; margin: 2rem auto; }
+    .card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; padding:1rem; margin-bottom:1rem; }
+    .btn { padding:.5rem .875rem; border-radius:.5rem; font-weight:600; cursor:pointer; border:none; display:inline-flex; align-items:center; gap:.375rem; font-size:.8125rem; text-decoration:none; }
+    .btn-primary { background:var(--primary); color:#fff; }
+    .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); }
+    h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+    p { margin-bottom: 1rem; color: var(--text-secondary); }
+    #shareFileList .card { padding: .5rem; font-size: .9rem; }
+    #folderTree { height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary); margin-bottom: 1rem; }
+    .folder-tree-item { padding: .25rem .5rem; cursor: pointer; border-radius: .25rem; }
+    .folder-tree-item:hover { background: var(--bg-tertiary); }
+    .folder-tree-item.selected { background: var(--primary); color: white; }
+    .toast-container { position:fixed; top:1rem; right:1rem; z-index:3000; }
+    .toast { background:var(--bg-secondary); border-radius:.5rem; padding:.75rem; margin-bottom:.5rem; }
+    .toast.success { border-left:3px solid var(--success); }
+    .toast.error { border-left:3px solid var(--danger); }
+  </style>
+</head>
+<body>
+  <div class="container" id="mainContainer">
+    <h1>Shared Files</h1>
+    {% if files %}
+      <p>You have shared {{ files|length }} file(s). Select a destination and click Save.</p>
+      <div id="shareFileList">
+        {% for file in files %}
+          <div class="card">{{ file.name }}</div>
+        {% endfor %}
+      </div>
+      <p><b>Select destination folder:</b></p>
+      <div id="folderTree">Loading...</div>
+      <button class="btn btn-primary" id="confirmShareBtn" disabled><i class="fas fa-save"></i> Save All Files</button>
+    {% else %}
+      <p>No pending files to share. You can close this page.</p>
+    {% endif %}
+    <a href="{{ url_for('home') }}" class="btn btn-secondary" style="margin-left: .5rem;">Go to App</a>
+  </div>
+  <div class="toast-container" id="toastContainer"></div>
 
-<script>
-  // Simplified script for this page
-  let selectedShareDestination = '';
-  const file_ids = {{ files|map(attribute='id')|list|tojson }};
+  <script>
+    // Simplified script for this page
+    let selectedShareDestination = '';
+    const file_ids = {{ files|map(attribute='id')|list|tojson }};
 
-  function renderFolderTree(nodes, level = 0) {
-      let html = '';
-      for (const node of nodes) {
-          html += `<div class="folder-tree-item" data-path="${node.path}" style="padding-left: ${level * 20}px;"><i class="fas fa-folder"></i> ${node.name}</div>`;
-          if (node.children && node.children.length > 0) {
-              html += renderFolderTree(node.children, level + 1);
-          }
-      }
-      return html;
-  }
+    function showToast(message, type='info'){
+      const container = document.getElementById('toastContainer'); if(!container) return;
+      const toast = document.createElement('div'); toast.className = `toast ${type}`;
+      toast.innerHTML = message;
+      container.appendChild(toast);
+      setTimeout(()=>toast.remove(), 3000);
+    }
 
-  async function loadFolderTree() {
-      const folderTreeDiv = document.getElementById('folderTree');
-      try {
-          const response = await fetch('/api/folders');
-          const data = await response.json();
-          if (data.ok) {
-              folderTreeDiv.innerHTML = renderFolderTree(data.tree);
-              document.querySelectorAll('#folderTree .folder-tree-item').forEach(item => {
-                  item.addEventListener('click', (e) => {
-                      e.stopPropagation();
-                      document.querySelectorAll('#folderTree .folder-tree-item').forEach(i => i.classList.remove('selected'));
-                      item.classList.add('selected');
-                      selectedShareDestination = item.dataset.path;
-                      document.getElementById('confirmShareBtn').disabled = false;
-                  });
-              });
-          } else {
-              folderTreeDiv.innerHTML = `Error: ${data.error || 'Could not load folders.'}`;
-          }
-      } catch (error) {
-          folderTreeDiv.innerHTML = 'Error loading folders.';
-      }
-  }
+    function renderFolderTree(nodes, level = 0) {
+        let html = '';
+        for (const node of nodes) {
+            html += `<div class="folder-tree-item" data-path="${node.path}" style="padding-left: ${level * 20}px;"><i class="fas fa-folder"></i> ${node.name}</div>`;
+            if (node.children && node.children.length > 0) {
+                html += renderFolderTree(node.children, level + 1);
+            }
+        }
+        return html;
+    }
 
-  async function confirmShare() {
-      if (file_ids.length === 0 || selectedShareDestination === '') {
-          showToast('Please select a destination folder.', 'error');
-          return;
-      }
-      document.getElementById('confirmShareBtn').disabled = true;
-      document.getElementById('confirmShareBtn').innerHTML = 'Saving...';
+    async function loadFolderTree() {
+        const folderTreeDiv = document.getElementById('folderTree');
+        try {
+            const response = await fetch('/api/folders');
+            const data = await response.json();
+            if (data.ok) {
+                folderTreeDiv.innerHTML = renderFolderTree(data.tree);
+                document.querySelectorAll('#folderTree .folder-tree-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        document.querySelectorAll('#folderTree .folder-tree-item').forEach(i => i.classList.remove('selected'));
+                        item.classList.add('selected');
+                        selectedShareDestination = item.dataset.path;
+                        document.getElementById('confirmShareBtn').disabled = false;
+                    });
+                });
+            } else {
+                folderTreeDiv.innerHTML = `Error: ${data.error || 'Could not load folders.'}`;
+            }
+        } catch (error) {
+            folderTreeDiv.innerHTML = 'Error loading folders.';
+        }
+    }
 
-      try {
-          const r = await fetch('/api/commit_share', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ids: file_ids, destination: selectedShareDestination })
-          });
-          const j = await r.json();
-          if (j.ok) {
-              document.getElementById('mainContainer').innerHTML = '<h1>Share Complete!</h1><p>' + j.committed.length + ' file(s) saved successfully.</p><a href="/" class="btn btn-primary">Back to App</a>';
-          } else {
-              showToast(j.error || 'Share failed.', 'error');
-              document.getElementById('confirmShareBtn').disabled = false;
-              document.getElementById('confirmShareBtn').innerHTML = '<i class="fas fa-save"></i> Save All Files';
-          }
-      } catch (e) {
-          showToast('An error occurred during the share.', 'error');
-          document.getElementById('confirmShareBtn').disabled = false;
-          document.getElementById('confirmShareBtn').innerHTML = '<i class="fas fa-save"></i> Save All Files';
-      }
-  }
+    async function confirmShare() {
+        if (file_ids.length === 0 || selectedShareDestination === '') {
+            showToast('Please select a destination folder.', 'error');
+            return;
+        }
+        document.getElementById('confirmShareBtn').disabled = true;
+        document.getElementById('confirmShareBtn').innerHTML = 'Saving...';
 
-  if (file_ids.length > 0) {
-      loadFolderTree();
-      document.getElementById('confirmShareBtn').addEventListener('click', confirmShare);
-  }
-</script>
+        try {
+            const r = await fetch('/api/commit_share', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: file_ids, destination: selectedShareDestination })
+            });
+            const j = await r.json();
+            if (j.ok) {
+                document.getElementById('mainContainer').innerHTML = '<h1>Share Complete!</h1><p>' + j.committed.length + ' file(s) saved successfully.</p><a href="/" class="btn btn-primary">Back to App</a>';
+            } else {
+                showToast(j.error || 'Share failed.', 'error');
+                document.getElementById('confirmShareBtn').disabled = false;
+                document.getElementById('confirmShareBtn').innerHTML = '<i class="fas fa-save"></i> Save All Files';
+            }
+        } catch (e) {
+            showToast('An error occurred during the share.', 'error');
+            document.getElementById('confirmShareBtn').disabled = false;
+            document.getElementById('confirmShareBtn').innerHTML = '<i class="fas fa-save"></i> Save All Files';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        if (file_ids.length > 0) {
+            loadFolderTree();
+            document.getElementById('confirmShareBtn').addEventListener('click', confirmShare);
+        }
+    });
+  </script>
+</body>
+</html>
 """
 
 @app.route("/share")
