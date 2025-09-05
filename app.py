@@ -987,8 +987,48 @@ BASE_HTML = """
     .account-actions { display: flex; gap: .5rem; flex-shrink: 0; }
     .btn-text { margin-left: .375rem; }
 
+    /* Header Dropdown */
+    .nav-menu-mobile { display: none; position: relative; }
+    .dropdown-menu {
+      display: none;
+      position: absolute;
+      top: calc(100% + .5rem);
+      right: 0;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: .75rem;
+      padding: .5rem;
+      box-shadow: 0 4px 12px var(--shadow);
+      min-width: 220px;
+      z-index: 1100;
+    }
+    .dropdown-menu.active { display: block; animation: fadeIn .2s ease; }
+    .dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      padding: .625rem .875rem;
+      border-radius: .5rem;
+      cursor: pointer;
+      font-size: .875rem;
+      color: var(--text-primary);
+      background: transparent;
+      width: 100%;
+      text-align: left;
+      border: none;
+      text-decoration: none;
+    }
+    .dropdown-item:hover { background: var(--bg-tertiary); }
+    .dropdown-item-danger:hover { background: var(--danger); color: white; }
+    .dropdown-divider {
+      height: 1px;
+      background: var(--border);
+      margin: .5rem 0;
+    }
+
     @media (max-width: 768px) {
-      .nav-menu .btn-text { display: none; }
+      .nav-items-desktop { display: none; }
+      .nav-menu-mobile { display: block; }
     }
 
     @media (max-width: 640px) {
@@ -1020,21 +1060,46 @@ BASE_HTML = """
       <nav class="nav-menu">
         <a class="btn btn-secondary" href="{{ url_for('home') }}" title="My Files"><i class="fas fa-home"></i></a>
         <div class="user-badge">{{ icon or "📁" }} {{ user_label }}</div>
-{% if authed %}
-  {% if is_on_ngrok %}
-    <button class="btn btn-primary" id="goOfflineBtn" title="Switch to Local IP"><i class="fas fa-network-wired"></i><span class="btn-text"> Local</span></button>
-  {% elif is_on_local_with_ngrok_available %}
-    <button class="btn btn-secondary" id="goOnlineBtn" title="Switch to Online URL"><i class="fas fa-wifi"></i><span class="btn-text"> Online</span></button>
-  {% endif %}
-  {% if is_admin %}
-    <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
-    <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
-  {% endif %}
-  <button class="btn btn-secondary btn-icon" id="installBtn" title="Install App" style="display: none;"><i class="fas fa-mobile-screen-button"></i></button>
-  <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
-  <button id="themeBtn" class="btn btn-secondary btn-icon" title="Toggle theme"><i class="fas fa-moon"></i></button>
-  <a href="{{ url_for('logout') }}" class="btn btn-danger btn-icon" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
-{% endif %}
+        {% if authed %}
+          <!-- Desktop-only buttons -->
+          <div class="nav-items-desktop">
+              {% if is_on_ngrok %}
+                <button class="btn btn-primary" id="goOfflineBtn" title="Switch to Local IP"><i class="fas fa-network-wired"></i><span class="btn-text"> Local</span></button>
+              {% elif is_on_local_with_ngrok_available %}
+                <button class="btn btn-secondary" id="goOnlineBtn" title="Switch to Online URL"><i class="fas fa-wifi"></i><span class="btn-text"> Online</span></button>
+              {% endif %}
+              <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
+              {% if is_admin %}
+              <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
+              <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
+              {% endif %}
+              <button class="btn btn-secondary btn-icon" id="installBtn" title="Install App" style="display: none;"><i class="fas fa-mobile-screen-button"></i></button>
+              <button id="themeBtn" class="btn btn-secondary btn-icon" title="Toggle theme"><i class="fas fa-moon"></i></button>
+              <a href="{{ url_for('logout') }}" class="btn btn-danger btn-icon" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
+          </div>
+
+          <!-- Mobile-only dropdown menu -->
+          <div class="nav-menu-mobile">
+              <button class="btn btn-secondary btn-icon" id="mobileMenuBtn" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
+              <div class="dropdown-menu" id="mobileDropdown">
+                  {% if is_on_ngrok %}
+                  <button class="dropdown-item" onclick="document.getElementById('goOfflineBtn').click()"><i class="fas fa-network-wired"></i><span>Switch to Local</span></button>
+                  {% elif is_on_local_with_ngrok_available %}
+                  <button class="dropdown-item" onclick="document.getElementById('goOnlineBtn').click()"><i class="fas fa-wifi"></i><span>Switch to Online</span></button>
+                  {% endif %}
+                  <button class="dropdown-item" onclick="document.getElementById('myQRBtn').click()"><i class="fas fa-qrcode"></i><span>My QR</span></button>
+                  <hr class="dropdown-divider">
+                  {% if is_admin %}
+                  <button class="dropdown-item" onclick="document.getElementById('accountsBtn').click()"><i class="fas fa-user-gear"></i><span>Accounts</span></button>
+                  <button class="dropdown-item" onclick="document.getElementById('settingsBtn').click()"><i class="fas fa-gear"></i><span>Settings</span></button>
+                  {% endif %}
+                  <button class="dropdown-item" id="installBtnMobile" onclick="document.getElementById('installBtn').click()" style="display:none;"><i class="fas fa-mobile-screen-button"></i><span>Install App</span></button>
+                  <button class="dropdown-item" onclick="document.getElementById('themeBtn').click()"><i class="fas fa-moon"></i><span>Toggle Theme</span></button>
+                  <hr class="dropdown-divider">
+                  <a href="{{ url_for('logout') }}" class="dropdown-item dropdown-item-danger"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+              </div>
+          </div>
+        {% endif %}
       </nav>
     </div>
   </header>
@@ -2750,6 +2815,37 @@ function removeFileCard(rel){
         }
     }
 
+    // Mobile Menu
+    function initMobileMenu() {
+      const menuBtn = document.getElementById('mobileMenuBtn');
+      const dropdown = document.getElementById('mobileDropdown');
+      const installBtn = document.getElementById('installBtn');
+      const installBtnMobile = document.getElementById('installBtnMobile');
+
+      if (menuBtn && dropdown) {
+        menuBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          dropdown.classList.toggle('active');
+        });
+
+        document.addEventListener('click', (e) => {
+          if (!dropdown.contains(e.target) && dropdown.classList.contains('active')) {
+            dropdown.classList.remove('active');
+          }
+        });
+      }
+
+      // Sync visibility of mobile install button with desktop one
+      if (installBtn && installBtnMobile) {
+          const observer = new MutationObserver(() => {
+              installBtnMobile.style.display = installBtn.style.display === 'none' ? 'none' : 'flex';
+          });
+          observer.observe(installBtn, { attributes: true, attributeFilter: ['style'] });
+          // Initial sync
+          installBtnMobile.style.display = installBtn.style.display === 'none' ? 'none' : 'flex';
+      }
+    }
+
     // INIT
     document.addEventListener('DOMContentLoaded', async ()=>{
       window.currentPath = "{{ current_rel|default('', true) }}";
@@ -2784,6 +2880,7 @@ function removeFileCard(rel){
       document.getElementById('goOfflineBtn')?.addEventListener('click', goOffline);
       document.getElementById('goOnlineBtn')?.addEventListener('click', goOnline);
       initPwaInstall();
+      initMobileMenu();
     });
 
     // PWA INSTALL
