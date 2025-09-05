@@ -972,7 +972,7 @@ BASE_HTML = """
     <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
     <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
   {% endif %}
-  <button class="btn btn-secondary" id="installBtn" title="App cannot be installed yet" disabled><i class="fas fa-download"></i> Install</button>
+  <button class="btn btn-secondary" id="installBtn" title="App cannot be installed yet" disabled><i class="fas fa-mobile-screen-button"></i> Install</button>
   <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
   <button class="btn btn-secondary btn-icon" id="goToLocalBtn" title="Go to Local Network"><i class="fas fa-house-signal"></i></button>
   <button id="themeBtn" class="btn btn-secondary btn-icon" title="Toggle theme"><i class="fas fa-moon"></i></button>
@@ -2091,62 +2091,8 @@ async function changeDhikr() {
         const grid = document.getElementById('fileGrid');
         if (!grid) return;
 
-        let pressTimer = null;
-        let startX, startY;
-        let isLongPress = false;
-
-        grid.addEventListener('pointerdown', (e) => {
-            if (e.button !== 0) return;
-            const card = e.target.closest('.file-card');
-            if (!card || e.target.closest('.file-actions')) return;
-
-            startX = e.clientX;
-            startY = e.clientY;
-            isLongPress = false;
-
-            pressTimer = setTimeout(() => {
-                isLongPress = true;
-                pressTimer = null;
-
-                toggleSelectMode(true);
-                const checkbox = card.querySelector('.file-select-checkbox');
-                if (checkbox) {
-                    checkbox.checked = true;
-                    handleSelectionChange();
-                }
-                if (navigator.vibrate) navigator.vibrate(50);
-
-            }, 750);
-        });
-
-        grid.addEventListener('pointermove', (e) => {
-            if (!pressTimer) return;
-            if (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10) {
-                clearTimeout(pressTimer);
-                pressTimer = null;
-            }
-        });
-
-        grid.addEventListener('pointerup', (e) => {
-            if (pressTimer) {
-                clearTimeout(pressTimer);
-                pressTimer = null;
-            }
-
-            if (isLongPress) {
-                // If it was a long press, we've already handled the selection.
-                // We just need to prevent the browser from firing a 'click' event,
-                // which would toggle the selection off again.
-                e.preventDefault();
-            } else {
-                // Otherwise, it's a normal click/tap, so open the file or select it.
-                handleCardOpenEvent(e);
-            }
-        });
-
-        if (!window.PointerEvent) {
-            grid.addEventListener('click', handleCardOpenEvent);
-        }
+        // Simplified click/tap handler
+        grid.addEventListener('click', handleCardOpenEvent);
 
         document.getElementById('pvPrevBtn')?.addEventListener('click', () => navigateToFile('prev'));
         document.getElementById('pvNextBtn')?.addEventListener('click', () => navigateToFile('next'));
@@ -2907,7 +2853,7 @@ BROWSE_HTML = """
   <div class="toolbar-row" style="justify-content:space-between;">
     <div style="font-weight:700;" id="selectionCount"></div>
     <div style="display:flex; gap:.5rem;">
-      <button class="btn btn-primary btn-icon" id="bulkMoveBtn" title="Move selected"><i class="fas fa-people-carry"></i></button>
+      <button class="btn btn-primary btn-icon" id="bulkMoveBtn" title="Move selected"><i class="fas fa-folder-tree"></i></button>
       <button class="btn btn-danger btn-icon" id="bulkDeleteBtn" title="Delete selected"><i class="fas fa-trash"></i></button>
       <button class="btn btn-success btn-icon" id="bulkDownloadBtn" title="Download selected"><i class="fas fa-download"></i></button>
       <button class="btn btn-secondary" id="deselectAllBtn">Cancel</button>
@@ -2926,6 +2872,7 @@ BROWSE_HTML = """
       <button class="view-btn" data-view="grid" onclick="setView('grid')"><i class="fas fa-th"></i><span>Grid</span></button>
       <button class="view-btn" data-view="list" onclick="setView('list')"><i class="fas fa-list"></i><span>List</span></button>
     </div>
+    <button class="btn btn-secondary btn-icon" id="selectModeBtn" title="Select" onclick="toggleSelectMode(true)"><i class="fas fa-tasks"></i></button>
     <!-- Sorting controls -->
     <div class="view-controls" style="gap:.5rem;">
       <select id="sortBy" class="btn btn-secondary" title="Sort by">
