@@ -356,8 +356,14 @@ def api_go_online():
     if not folder:
         return jsonify({"ok": False, "error": "no folder in session"}), 400
 
+    device_id = request.cookies.get(DEVICE_COOKIE_NAME)
+    if not device_id:
+        # This case might happen if cookies are cleared, but they are still logged in.
+        # Fallback to creating a new device ID.
+        device_id, _ = get_or_create_device_folder(request)
+
     pc_token = secrets.token_urlsafe(16)
-    app.config["LOGIN_TOKENS"][pc_token] = folder
+    app.config["LOGIN_TOKENS"][pc_token] = {"folder": folder, "device_id": device_id}
 
     ngrok_url = get_ngrok_url()
     if not ngrok_url:
@@ -1080,13 +1086,13 @@ BASE_HTML = """
 
           <!-- Mobile-only dropdown menu -->
           <div class="nav-menu-mobile">
+              {% if is_on_ngrok %}
+                <button class="btn btn-primary btn-icon" id="goOfflineBtnMobile" onclick="document.getElementById('goOfflineBtn').click()" title="Switch to Local IP"><i class="fas fa-network-wired"></i></button>
+              {% elif is_on_local_with_ngrok_available %}
+                <button class="btn btn-secondary btn-icon" id="goOnlineBtnMobile" onclick="document.getElementById('goOnlineBtn').click()" title="Switch to Online URL"><i class="fas fa-wifi"></i></button>
+              {% endif %}
               <button class="btn btn-secondary btn-icon" id="mobileMenuBtn" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
               <div class="dropdown-menu" id="mobileDropdown">
-                  {% if is_on_ngrok %}
-                  <button class="dropdown-item" onclick="document.getElementById('goOfflineBtn').click()"><i class="fas fa-network-wired"></i><span>Switch to Local</span></button>
-                  {% elif is_on_local_with_ngrok_available %}
-                  <button class="dropdown-item" onclick="document.getElementById('goOnlineBtn').click()"><i class="fas fa-wifi"></i><span>Switch to Online</span></button>
-                  {% endif %}
                   <button class="dropdown-item" onclick="document.getElementById('myQRBtn').click()"><i class="fas fa-qrcode"></i><span>My QR</span></button>
                   <hr class="dropdown-divider">
                   {% if is_admin %}
@@ -3384,13 +3390,23 @@ def scan(token: str):
 
 @app.route("/pc_login/<token>")
 def pc_login(token):
-    folder = app.config["LOGIN_TOKENS"].pop(token, None)
-    if not folder:
+    token_data = app.config["LOGIN_TOKENS"].pop(token, None)
+    if not token_data:
         abort(403)
+
+    folder = token_data.get("folder")
+    device_id = token_data.get("device_id")
+
+    if not folder or not device_id:
+        abort(403)
+
     session["authed"] = True
     session["folder"] = folder
     session["icon"] = get_user_icon(folder)
-    return redirect(url_for("browse"))
+
+    resp = make_response(redirect(url_for("browse")))
+    resp.set_cookie(DEVICE_COOKIE_NAME, device_id, max_age=60*60*24*730, samesite="Lax")
+    return resp
 
 @app.route("/logout")
 def logout():
@@ -3738,8 +3754,12 @@ def api_go_offline():
     if not folder:
         return jsonify({"ok": False, "error": "no folder in session"}), 400
 
+    device_id = request.cookies.get(DEVICE_COOKIE_NAME)
+    if not device_id:
+        device_id, _ = get_or_create_device_folder(request)
+
     pc_token = secrets.token_urlsafe(16)
-    app.config["LOGIN_TOKENS"][pc_token] = folder
+    app.config["LOGIN_TOKENS"][pc_token] = {"folder": folder, "device_id": device_id}
 
     local_ip = get_local_ip()
     local_url = f"http://{local_ip}:{PORT}{url_for('pc_login', token=pc_token)}"
