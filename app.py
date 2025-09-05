@@ -840,6 +840,7 @@ BASE_HTML = """
     .btn:active { transform:scale(.97); }
     .btn-primary { background:var(--primary); color:#fff; }
     .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); }
+    .btn.active { background:var(--primary); color:white; }
     .btn-danger { background:var(--danger); color:#fff; }
     .btn-success { background:var(--success); color:#fff; }
 
@@ -917,6 +918,9 @@ BASE_HTML = """
     .preview-holder { display:flex; align-items:center; justify-content:center; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:.5rem; min-height:240px; }
     .preview-holder img, .preview-holder video, .preview-holder audio, .preview-holder embed, .preview-holder iframe { max-width:100%; max-height:65vh; }
     .modal-footer { padding:1rem; border-top:1px solid var(--border); display:flex; gap:.5rem; justify-content:flex-end; }
+    #folderTree .folder-tree-item { padding:.375rem .75rem; border-radius:.375rem; cursor:pointer; user-select:none; }
+    #folderTree .folder-tree-item:hover { background:var(--bg-tertiary); }
+    #folderTree .folder-tree-item.selected { background:var(--primary); color:white; font-weight:600; }
     .form-input { margin-top: 5px; width: 100%; padding: 0.625rem 0.875rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 0.5rem; color: var(--text-primary); font-size: 0.875rem; }
     .form-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
     .qr-box { display:flex; align-items:center; justify-content:center; padding:16px; background:#fff; border-radius:12px; max-width: 320px; margin: 0 auto; }
@@ -1061,7 +1065,7 @@ BASE_HTML = """
         <div style="margin-top:.75rem; color:var(--text-muted); font-size:.85rem;">Only the first device (admin) can change privacy.</div>
       </div>
       <div class="modal-footer" style="justify-content: space-between; align-items: center;">
-        <span style="font-size: 0.75rem; color: var(--text-muted);">Version 1.1.0</span>
+        <span style="font-size: 0.75rem; color: var(--text-muted);">Version 1.2.0</span>
         <div>
           <button class="btn btn-secondary" onclick="closeModal('settingsModal')">Close</button>
           <button class="btn btn-primary" id="saveSettingsBtn"><i class="fas fa-save"></i> Save</button>
@@ -1390,6 +1394,7 @@ BASE_HTML = """
     function toggleSelectMode(forceState) {
         selectModeActive = (forceState === undefined) ? !selectModeActive : forceState;
         document.body.classList.toggle('select-mode', selectModeActive);
+        document.getElementById('selectModeBtn')?.classList.toggle('active', selectModeActive);
 
         if (!selectModeActive) {
             // Clear selection when exiting mode
@@ -2000,7 +2005,7 @@ async function changeDhikr() {
     }
 
     function initBulkActions(){
-        document.getElementById('selectModeBtn')?.addEventListener('click', () => toggleSelectMode(true));
+        document.getElementById('selectModeBtn')?.addEventListener('click', toggleSelectMode);
         document.getElementById('bulkMoveBtn')?.addEventListener('click', openMoveModal);
         document.getElementById('confirmMoveBtn')?.addEventListener('click', confirmMove);
         document.getElementById('bulkDeleteBtn')?.addEventListener('click', confirmBulkDelete);

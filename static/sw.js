@@ -1,4 +1,5 @@
-const CACHE_NAME = 'filevault-cache-v6';
+const VERSION = 'v7';
+const CACHE_NAME = `filevault-cache-${VERSION}`;
 const OFFLINE_URL = 'static/offline.html';
 const APP_SHELL_URLS = [
   // The root '/' is intentionally omitted. It's cached on first visit via the 'navigate' fetch handler.
