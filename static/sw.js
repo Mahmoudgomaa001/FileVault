@@ -1,12 +1,14 @@
-const VERSION = 'v11';
+const VERSION = 'v12';
 const CACHE_NAME = `filevault-cache-${VERSION}`;
 const OFFLINE_URL = 'static/offline.html';
 const APP_SHELL_URLS = [
-  '/',
+  // '/' and '/static/socket.io.min.js' were removed.
+  // '/' redirects and fails `addAll`, and socket.io.min.js does not exist at this path.
+  // The PWA will still work offline as navigation requests for '/' and other pages are cached on visit,
+  // and the full sync caches all pages from the API.
   '/static/fonts.css',
   '/static/vendor/fontawesome/css/all.min.css',
   '/static/vendor/fontawesome/css/fa-shims.css',
-  '/static/socket.io.min.js',
   '/static/site.webmanifest',
   '/static/favicon.svg',
   '/static/adhkar.json',
