@@ -2499,10 +2499,13 @@ function processFileUpdates() {
     }
 
     if (notificationTitle && Notification.permission === 'granted') {
-        new Notification(notificationTitle, {
-            body: notificationBody,
-            icon: '/static/favicon.svg'
-        });
+        if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({
+                type: 'SHOW_NOTIFICATION',
+                title: notificationTitle,
+                body: notificationBody
+            });
+        }
     }
 
     if (addedCount > 0 || deletedCount > 0 || movedCount > 0) {

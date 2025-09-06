@@ -124,3 +124,24 @@ self.addEventListener('fetch', event => {
     );
   }
 });
+
+self.addEventListener('notificationclick', event => {
+    console.log('[ServiceWorker] Notification click Received.');
+    event.notification.close();
+    event.waitUntil(
+        clients.openWindow('/')
+    );
+});
+
+self.addEventListener('message', event => {
+    if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+        const { title, body } = event.data;
+        event.waitUntil(
+            self.registration.showNotification(title, {
+                body: body,
+                icon: '/static/favicon.svg',
+                badge: '/static/favicon.svg'
+            })
+        );
+    }
+});
