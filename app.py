@@ -3886,6 +3886,29 @@ def api_move():
 
     return jsonify({"ok": len(moved_files) > 0, "moved": moved_files, "errors": errors})
 
+@app.route("/api/all_files")
+def api_all_files():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    base_folder = session.get("folder")
+    if not base_folder:
+        return jsonify({"ok": False, "error": "no folder in session"}), 400
+
+    user_folder_path = safe_path(base_folder)
+
+    all_file_paths = []
+    for p in user_folder_path.rglob("*"):
+        try:
+            if p.is_file():
+                # We only want to cache user files, not hidden config files
+                if not p.name.startswith('.'):
+                    all_file_paths.append(path_rel(p))
+        except Exception:
+            pass
+
+    return jsonify({"ok": True, "files": all_file_paths})
+
 @app.route("/api/download_zip", methods=["POST"])
 def api_download_zip():
     if not is_authed():
