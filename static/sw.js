@@ -1,4 +1,4 @@
-const VERSION = 'v9';
+const VERSION = 'v10';
 const CACHE_NAME = `filevault-cache-${VERSION}`;
 const OFFLINE_URL = 'static/offline.html';
 const APP_SHELL_URLS = [
@@ -19,31 +19,52 @@ const APP_SHELL_URLS = [
   OFFLINE_URL
 ];
 
-async function cacheAllUserData() {
-    console.log('[ServiceWorker] Starting to cache all user data.');
+// A single function to fetch all dynamic content (pages and files) for offline use.
+async function syncAllDataForOffline() {
+    console.log('[ServiceWorker] Starting full offline sync.');
+    const cache = await caches.open(CACHE_NAME);
+
+    // 1. Cache all pages
     try {
-        const response = await fetch('/api/all_files');
-        if (!response.ok) {
-            console.error('[ServiceWorker] Failed to fetch file list for caching.');
-            return;
+        const pagesResponse = await fetch('/api/all_pages');
+        if (pagesResponse.ok) {
+            const data = await pagesResponse.json();
+            if (data.ok && data.pages) {
+                console.log(`[ServiceWorker] Caching ${data.pages.length} pages.`);
+                await cache.addAll(data.pages);
+            }
         }
-        const data = await response.json();
-        if (data.ok && data.files) {
-            const cache = await caches.open(CACHE_NAME);
-            const urlsToCache = data.files.map(relPath => `/raw?path=${encodeURIComponent(relPath)}`);
-            console.log(`[ServiceWorker] Caching ${urlsToCache.length} user files.`);
-            // Use a loop with try-catch to not fail the whole batch if one file fails
-            for (const url of urlsToCache) {
-                try {
-                    await cache.add(url);
-                } catch (e) {
-                    console.error(`[ServiceWorker] Failed to cache individual file: ${url}`, e);
+    } catch (error) {
+        console.error('[ServiceWorker] Failed to cache pages:', error);
+    }
+
+    // 2. Cache all user files
+    try {
+        const filesResponse = await fetch('/api/all_files');
+        if (filesResponse.ok) {
+            const data = await filesResponse.json();
+            if (data.ok && data.files) {
+                const urlsToCache = data.files.map(relPath => `/raw?path=${encodeURIComponent(relPath)}`);
+                console.log(`[ServiceWorker] Caching ${urlsToCache.length} user files.`);
+                // Don't use addAll for files as a single large file failing could stop everything.
+                // Instead, iterate and cache one by one.
+                for (const url of urlsToCache) {
+                    try {
+                        // Check if the request is already in the cache. If not, fetch and cache it.
+                        const cachedResponse = await cache.match(url);
+                        if (!cachedResponse) {
+                            await cache.add(url);
+                        }
+                    } catch (e) {
+                        console.error(`[ServiceWorker] Failed to cache individual file: ${url}`, e);
+                    }
                 }
             }
         }
     } catch (error) {
-        console.error('[ServiceWorker] Error caching all user data:', error);
+        console.error('[ServiceWorker] Failed to cache user files:', error);
     }
+    console.log('[ServiceWorker] Full offline sync finished.');
 }
 
 self.addEventListener('install', event => {
@@ -51,7 +72,7 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('[ServiceWorker] Caching app shell and offline page');
+        console.log('[ServiceWorker] Caching app shell');
         return cache.addAll(APP_SHELL_URLS).catch(error => {
           console.error('[ServiceWorker] Failed to cache app shell:', error);
         });
@@ -77,8 +98,9 @@ self.addEventListener('activate', event => {
     }).then(() => {
       return self.clients.claim();
     }).then(() => {
-        // After activation, immediately start caching user data.
-        return cacheAllUserData();
+        // After activation, immediately start the full offline sync.
+        console.log('[ServiceWorker] Activating and triggering full sync.');
+        return syncAllDataForOffline();
     })
   );
 });
@@ -96,12 +118,12 @@ self.addEventListener('fetch', event => {
             cache.put(event.request, networkResponse.clone());
             // If main page is loaded successfully online, trigger a background sync
             if (url.pathname === '/' || url.pathname.startsWith('/b/')) {
-                event.waitUntil(cacheAllUserData());
+                event.waitUntil(syncAllDataForOffline());
             }
           }
           return networkResponse;
         } catch (error) {
-          console.log('[ServiceWorker] Fetch failed; returning offline page or cached page.', error);
+          console.log('[ServiceWorker] Fetch failed for navigation; returning from cache.', error);
           const cache = await caches.open(CACHE_NAME);
           const cachedResponse = await cache.match(event.request);
           if (cachedResponse) {
@@ -112,21 +134,21 @@ self.addEventListener('fetch', event => {
       })()
     );
   } else if (url.pathname.startsWith('/api/')) {
+    // For API requests, always go to the network.
+    // The app's frontend should handle offline errors.
     event.respondWith(
         fetch(event.request).catch(() => {
-            return new Response(JSON.stringify({ ok: false, error: 'offline' }), {
+            return new Response(JSON.stringify({ ok: false, error: 'offline', message: 'The server is unreachable.' }), {
                 headers: { 'Content-Type': 'application/json' }
             });
         })
     );
   } else {
+    // For all other assets, use a cache-first strategy.
     event.respondWith(
       caches.open(CACHE_NAME).then(cache => {
         return cache.match(event.request).then(cachedResponse => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          return fetch(event.request).then(networkResponse => {
+          return cachedResponse || fetch(event.request).then(networkResponse => {
             if (networkResponse.ok) {
               cache.put(event.request, networkResponse.clone());
             }

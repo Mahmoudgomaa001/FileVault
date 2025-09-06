@@ -3909,6 +3909,28 @@ def api_all_files():
 
     return jsonify({"ok": True, "files": all_file_paths})
 
+@app.route("/api/all_pages")
+def api_all_pages():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    base_folder = session.get("folder")
+    if not base_folder:
+        return jsonify({"ok": False, "error": "no folder in session"}), 400
+
+    user_folder_path = safe_path(base_folder)
+
+    page_urls = ["/", "/share", url_for('browse', subpath=base_folder)]
+
+    for p in user_folder_path.rglob("*"):
+        try:
+            if p.is_dir():
+                page_urls.append(url_for('browse', subpath=path_rel(p)))
+        except Exception:
+            pass
+
+    return jsonify({"ok": True, "pages": list(set(page_urls))})
+
 @app.route("/api/download_zip", methods=["POST"])
 def api_download_zip():
     if not is_authed():
