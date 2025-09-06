@@ -2445,32 +2445,84 @@ async function changeDhikr() {
     }
 
 // SOCKET (live update without reload)
+let fileUpdateQueue = [];
+let fileUpdateTimer = null;
+
+function processFileUpdates() {
+    if (fileUpdateQueue.length === 0) return;
+
+    const updates = [...fileUpdateQueue];
+    fileUpdateQueue = [];
+
+    let addedCount = 0;
+    let deletedCount = 0;
+    let movedCount = 0;
+
+    updates.forEach(msg => {
+        switch (msg.action) {
+            case 'added':
+                upsertFileCard(msg.meta);
+                addedCount++;
+                break;
+            case 'deleted':
+                removeFileCard(msg.rel);
+                deletedCount++;
+                break;
+            case 'moved':
+                msg.items.forEach(item => {
+                    removeFileCard(item.from_rel);
+                    upsertFileCard(item.meta);
+                    movedCount++;
+                });
+                break;
+        }
+    });
+
+    if (movedCount > 0) {
+        showToast(`${movedCount} item${movedCount > 1 ? 's' : ''} moved`, 'success');
+    } else if (addedCount > 0) {
+        showToast(`${addedCount} file${addedCount > 1 ? 's' : ''} uploaded`, 'success');
+    }
+
+    if (addedCount > 0 || deletedCount > 0 || movedCount > 0) {
+        try { changeDhikr(); } catch (e) {}
+    }
+}
+
 function initSocket(){
   try {
     const socket = io({reconnection:true, reconnectionAttempts:5, reconnectionDelay:1000});
 
     socket.on('file_update', (msg)=> {
-      // Server emits:
-      //  - on add: {action:'added', dir:'<parent_rel>', meta:{...}}
-      //  - on delete: {action:'deleted', dir:'<parent_rel>', rel:'<path>'}
-      const cur = window.currentPath || '';
       if (!msg || typeof msg !== 'object') return;
+      const cur = window.currentPath || '';
 
+      let isRelevant = false;
+      // msg.dir is the parent/destination directory of the event
       if (msg.dir === cur) {
-        if (msg.action === 'added' && msg.meta) {
-          upsertFileCard(msg.meta);
-          showToast(`Added: ${msg.meta.name}`, 'success');
-        } else if (msg.action === 'deleted' && msg.rel) {
-          removeFileCard(msg.rel);
-          showToast('Deleted', 'warning');
-        }
-      } else {
-        // Optional: notify if update happened in another folder
-        // showToast(`Update in ${msg.dir || 'root'}`, 'info');
+        isRelevant = true;
       }
 
-      // Keep your dhikr shuffle if you like
-      try { changeDhikr(); } catch(e){}
+      // If a file is moved *from* the current directory, it's also relevant
+      if (!isRelevant && msg.action === 'moved') {
+        for (const item of msg.items) {
+          const pathParts = item.from_rel.split('/');
+          pathParts.pop();
+          const parentPath = pathParts.join('/');
+          if (parentPath === cur) {
+            isRelevant = true;
+            break;
+          }
+        }
+      }
+
+      if (isRelevant) {
+        fileUpdateQueue.push(msg);
+        clearTimeout(fileUpdateTimer);
+        fileUpdateTimer = setTimeout(processFileUpdates, 500);
+      } else {
+         // Optional: notify if update happened in another folder, but for now we ignore it.
+      }
     });
 
     socket.on('share_ready', (msg)=> {
@@ -3846,7 +3898,8 @@ def api_move():
     if not dest_dir.exists() or not dest_dir.is_dir():
         return jsonify({"ok": False, "error": "bad destination"}), 400
 
-    moved_files = []
+    moved_items_for_socket = []
+    moved_files_for_response = []
     errors = []
 
     for rel_path in sources:
@@ -3875,16 +3928,23 @@ def api_move():
 
         try:
             shutil.move(str(source_path), str(target_path))
-            # Emit socket events for UI update
-            old_parent = str(Path(rel_path).parent)
-            if old_parent == '.': old_parent = ''
-            socketio.emit("file_update", {"action": "deleted", "dir": old_parent, "rel": rel_path})
-            socketio.emit("file_update", {"action": "added", "dir": destination, "meta": get_file_meta(target_path)})
-            moved_files.append({"from": rel_path, "to": path_rel(target_path)})
+            new_meta = get_file_meta(target_path)
+            moved_items_for_socket.append({
+                "from_rel": rel_path,
+                "meta": new_meta
+            })
+            moved_files_for_response.append({"from": rel_path, "to": path_rel(target_path)})
         except Exception as e:
             errors.append({"path": rel_path, "error": str(e)})
 
-    return jsonify({"ok": len(moved_files) > 0, "moved": moved_files, "errors": errors})
+    if moved_items_for_socket:
+        socketio.emit("file_update", {
+            "action": "moved",
+            "items": moved_items_for_socket,
+            "dir": destination
+        })
+
+    return jsonify({"ok": len(moved_files_for_response) > 0, "moved": moved_files_for_response, "errors": errors})
 
 @app.route("/api/download_zip", methods=["POST"])
 def api_download_zip():
