@@ -1,8 +1,0 @@
-Flask
-Flask-SocketIO
-requests
-qrcode
-pywebpush
-gunicorn
-Werkzeug
-ecdsa

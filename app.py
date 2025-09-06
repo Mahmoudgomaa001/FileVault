@@ -25,7 +25,6 @@ from flask import (
 from flask_socketio import SocketIO
 import qrcode
 from qrcode.constants import ERROR_CORRECT_H
-from pywebpush import webpush, WebPushException
 
 # -----------------------------
 # Islamic Dhikr (Remembrance)
@@ -61,14 +60,6 @@ ROOT_DIR = Path(os.environ.get("ROOT_DIR", "./shared")).resolve()
 ALLOWED_UPLOAD_EXT = None  # e.g. {"txt","png","jpg","pdf"}
 MAX_CONTENT_LENGTH = 10 * 1024 * 1024 * 1024  # 10GB
 SESSION_COOKIE_NAME = "qrfiles_sess"
-
-# VAPID keys for push notifications
-# In a real app, these should be loaded from environment variables or a secure vault
-VAPID_PRIVATE_KEY = "maqwKM7fMJx7o4phlymehFVjB6lhCr_1pAVchncttmY"
-VAPID_PUBLIC_KEY = "BGBFPpxQHhtu4Y2ebGrH_14EN4dc_l2HV9yOxl6aT00UUTYN91Oo1F3oSwa6haxq1KV5m0SbvnY2Tmp5nK_GXyE"
-VAPID_CLAIMS = {
-    "sub": "mailto:admin@example.com"
-}
 
 # Pending admin-claim tokens (QR-based transfer)
 admin_claim_tokens: dict[str, dict] = {}
@@ -2492,23 +2483,26 @@ function processFileUpdates() {
         }
     });
 
-    let notificationPayload = null;
+    let notificationTitle = '';
+    let notificationBody = '';
+
     if (movedCount > 0) {
         const message = `${movedCount} item${movedCount > 1 ? 's' : ''} moved`;
         showToast(message, 'success');
-        notificationPayload = { title: 'Items Moved', body: message };
+        notificationTitle = 'Items Moved';
+        notificationBody = message;
     } else if (addedCount > 0) {
         const message = `${addedCount} file${addedCount > 1 ? 's' : ''} uploaded`;
         showToast(message, 'success');
-        notificationPayload = { title: 'Files Uploaded', body: message };
+        notificationTitle = 'Files Uploaded';
+        notificationBody = message;
     }
 
-    if (notificationPayload) {
-        fetch('/api/push/notify', {
-            method: 'POST',
-            body: JSON.stringify(notificationPayload),
-            headers: { 'Content-Type': 'application/json' }
-        }).catch(err => console.error('Error sending push notification trigger:', err));
+    if (notificationTitle && Notification.permission === 'granted') {
+        new Notification(notificationTitle, {
+            body: notificationBody,
+            icon: '/static/favicon.svg'
+        });
     }
 
     if (addedCount > 0 || deletedCount > 0 || movedCount > 0) {
@@ -2938,100 +2932,57 @@ function removeFileCard(rel){
       }
     }
 
-    // PUSH NOTIFICATIONS
-    function urlB64ToUint8Array(base64String) {
-        const padding = '='.repeat((4 - base64String.length % 4) % 4);
-        const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-        const rawData = window.atob(base64);
-        const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i);
-        }
-        return outputArray;
-    }
-
-    async function subscribeToPushNotifications() {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-            showToast('Push Notifications not supported by this browser.', 'error');
+    // PUSH NOTIFICATIONS (Local)
+    async function requestNotificationPermission() {
+        if (!('Notification' in window)) {
+            showToast('This browser does not support desktop notification', 'error');
             return;
         }
-
         const subscribeBtn = document.getElementById('subscribeBtn');
         const pushStatus = document.getElementById('pushStatus');
         subscribeBtn.disabled = true;
 
         try {
-            const registration = await navigator.serviceWorker.ready;
-            let subscription = await registration.pushManager.getSubscription();
-
-            if (subscription) {
-                showToast('Already subscribed to notifications.', 'info');
-                pushStatus.textContent = 'You are already subscribed on this device.';
-                return;
-            }
-
             const permission = await Notification.requestPermission();
-            if (permission !== 'granted') {
-                showToast('Notification permission denied.', 'warning');
+            if (permission === 'granted') {
+                showToast('Notifications enabled!', 'success');
+                pushStatus.textContent = 'Notifications are enabled for this site.';
+            } else {
+                showToast('Notification permission was not granted.', 'warning');
+                pushStatus.textContent = 'Notifications have been disabled.';
                 subscribeBtn.disabled = false;
-                return;
             }
-
-            const applicationServerKey = urlB64ToUint8Array(window.VAPID_PUBLIC_KEY);
-            subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey
-            });
-
-            const r = await fetch('/api/push/subscribe', {
-                method: 'POST',
-                body: JSON.stringify(subscription),
-                headers: { 'Content-Type': 'application/json' }
-            });
-
-            if (!r.ok) {
-                const j = await r.json().catch(()=>({}));
-                throw new Error(j.error || 'Server error');
-            }
-
-            showToast('Subscribed to notifications!', 'success');
-            pushStatus.textContent = 'You are subscribed to notifications on this device.';
-
         } catch (e) {
-            console.error('Push subscription failed:', e);
-            showToast('Failed to subscribe: ' + e.message, 'error');
+            console.error('Notification permission request failed:', e);
+            showToast('Failed to enable notifications.', 'error');
             subscribeBtn.disabled = false;
-            // Optional: attempt to unsubscribe if something failed mid-way
-            const registration = await navigator.serviceWorker.ready;
-            const sub = await registration.pushManager.getSubscription();
-            if(sub) sub.unsubscribe();
         }
     }
 
-    function initPushSubscriptionState() {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    function initNotificationState() {
+        if (!('Notification' in window)) {
+            document.getElementById('subscribeBtn').style.display = 'none';
             return;
         }
         const subscribeBtn = document.getElementById('subscribeBtn');
         const pushStatus = document.getElementById('pushStatus');
         if (!subscribeBtn || !pushStatus) return;
 
-        navigator.serviceWorker.ready.then(reg => {
-            reg.pushManager.getSubscription().then(sub => {
-                if (sub) {
-                    subscribeBtn.disabled = true;
-                    pushStatus.textContent = 'You are subscribed on this device.';
-                } else {
-                    subscribeBtn.disabled = false;
-                    pushStatus.textContent = 'Enable push notifications to be alerted of new files.';
-                }
-            });
-        });
+        if(Notification.permission === 'granted') {
+            subscribeBtn.disabled = true;
+            pushStatus.textContent = 'Notifications are enabled on this device.';
+        } else if (Notification.permission === 'denied') {
+            subscribeBtn.disabled = true;
+            pushStatus.textContent = 'Notifications have been disabled in your browser settings.';
+        }
+        else {
+            subscribeBtn.disabled = false;
+            pushStatus.textContent = 'Enable notifications to be alerted of new files.';
+        }
     }
 
     // INIT
     document.addEventListener('DOMContentLoaded', async ()=>{
-      window.VAPID_PUBLIC_KEY = "{{ VAPID_PUBLIC_KEY|default('', true) }}";
       window.currentPath = "{{ current_rel|default('', true) }}";
       try {
         const r = await fetch('/api/prefs'); const j = await r.json();
@@ -3063,10 +3014,10 @@ function removeFileCard(rel){
       document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
       document.getElementById('goOfflineBtn')?.addEventListener('click', goOffline);
       document.getElementById('goOnlineBtn')?.addEventListener('click', goOnline);
-      document.getElementById('subscribeBtn')?.addEventListener('click', subscribeToPushNotifications);
+      document.getElementById('subscribeBtn')?.addEventListener('click', requestNotificationPermission);
       initPwaInstall();
       initMobileMenu();
-      initPushSubscriptionState();
+      initNotificationState();
     });
 
     // PWA INSTALL
@@ -3672,8 +3623,7 @@ def browse(subpath: Optional[str] = None):
         current_rel=(path_rel(dest) if dest != ROOT_DIR else ""),
         dhikr=dhikr, dhikr_list=dhikr_list,
         is_admin=is_admin,
-        share_page_active=False,
-        VAPID_PUBLIC_KEY=VAPID_PUBLIC_KEY
+        share_page_active=False
     )
 
 @app.route("/download")
@@ -3939,84 +3889,6 @@ def api_cliptext():
     parent_rel = path_rel(dest_dir) if dest_dir != ROOT_DIR else ""
     socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
     return jsonify({"ok": True, "meta": meta})
-
-@app.route("/api/push/subscribe", methods=["POST"])
-def api_push_subscribe():
-    if not is_authed():
-        return jsonify({"ok": False, "error": "not authed"}), 401
-
-    subscription_data = request.get_json(silent=True)
-    if not subscription_data or "endpoint" not in subscription_data:
-        return jsonify({"ok": False, "error": "invalid subscription data"}), 400
-
-    folder = session.get("folder")
-    if not folder:
-        return jsonify({"ok": False, "error": "no folder in session"}), 400
-
-    users = app.config.setdefault("USERS", load_users())
-    user_cfg = users.get(folder)
-    if not user_cfg:
-         return jsonify({"ok": False, "error": "user config not found"}), 500
-
-    subscriptions = user_cfg.setdefault("push_subscriptions", [])
-
-    # Avoid duplicate subscriptions
-    endpoint = subscription_data["endpoint"]
-    if not any(s["endpoint"] == endpoint for s in subscriptions):
-        subscriptions.append(subscription_data)
-        save_users(users)
-
-    return jsonify({"ok": True})
-
-@app.route("/api/push/notify", methods=["POST"])
-def api_push_notify():
-    if not is_authed():
-        return jsonify({"ok": False, "error": "not authed"}), 401
-
-    data = request.get_json(silent=True)
-    if not data or "title" not in data or "body" not in data:
-        return jsonify({"ok": False, "error": "invalid notification payload"}), 400
-
-    folder = session.get("folder")
-    if not folder:
-        return jsonify({"ok": False, "error": "no folder in session"}), 400
-
-    users = app.config.setdefault("USERS", load_users())
-    user_cfg = users.get(folder)
-    if not user_cfg:
-        return jsonify({"ok": False, "error": "user config not found"}), 500
-
-    subscriptions = user_cfg.get("push_subscriptions", [])
-    if not subscriptions:
-        return jsonify({"ok": True, "message": "no subscriptions to notify"}), 200
-
-    notification_payload = json.dumps({
-        "title": data["title"],
-        "body": data["body"],
-        "icon": "/static/favicon.svg"
-    })
-
-    expired_subscriptions = []
-    for sub in subscriptions:
-        try:
-            webpush(
-                subscription_info=sub,
-                data=notification_payload,
-                vapid_private_key=VAPID_PRIVATE_KEY,
-                vapid_claims=VAPID_CLAIMS.copy()
-            )
-        except WebPushException as ex:
-            print(f"Push failed: {ex}")
-            # If the subscription is gone, mark it for removal
-            if ex.response and ex.response.status_code == 410:
-                expired_subscriptions.append(sub)
-
-    # Clean up expired subscriptions
-    if expired_subscriptions:
-        user_cfg["push_subscriptions"] = [s for s in subscriptions if s not in expired_subscriptions]
-        save_users(users)
-
-    return jsonify({"ok": True, "notified": len(subscriptions) - len(expired_subscriptions)})
 
 @app.route("/api/go_offline")
 def api_go_offline():

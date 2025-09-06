@@ -124,33 +124,3 @@ self.addEventListener('fetch', event => {
     );
   }
 });
-
-self.addEventListener('push', event => {
-    console.log('[ServiceWorker] Push Received.');
-    let data = {};
-    if (event.data) {
-        try {
-            data = event.data.json();
-        } catch (e) {
-            console.error('Push event data is not valid JSON', e);
-            data = { title: 'New Update', body: event.data.text() };
-        }
-    }
-
-    const title = data.title || 'FileVault';
-    const options = {
-        body: data.body || 'You have new updates.',
-        icon: data.icon || '/static/favicon.svg',
-        badge: '/static/favicon.svg'
-    };
-
-    event.waitUntil(self.registration.showNotification(title, options));
-});
-
-self.addEventListener('notificationclick', event => {
-    console.log('[ServiceWorker] Notification click Received.');
-    event.notification.close();
-    event.waitUntil(
-        clients.openWindow('/')
-    );
-});
