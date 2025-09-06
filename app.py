@@ -3920,11 +3920,14 @@ def api_all_pages():
 
     user_folder_path = safe_path(base_folder)
 
-    page_urls = ["/", "/share", url_for('browse', subpath=base_folder)]
+    # Start with the main user folder page and the share page.
+    # The root "/" will be cached via the shell, and it often redirects, which can cause issues with cache.addAll.
+    page_urls = ["/share", url_for('browse', subpath=base_folder)]
 
     for p in user_folder_path.rglob("*"):
         try:
-            if p.is_dir():
+            # Add subdirectories, but ignore hidden ones like .pending_shares
+            if p.is_dir() and not p.name.startswith('.'):
                 page_urls.append(url_for('browse', subpath=path_rel(p)))
         except Exception:
             pass

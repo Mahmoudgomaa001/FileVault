@@ -1,4 +1,4 @@
-const VERSION = 'v10';
+const VERSION = 'v11';
 const CACHE_NAME = `filevault-cache-${VERSION}`;
 const OFFLINE_URL = 'static/offline.html';
 const APP_SHELL_URLS = [
@@ -25,17 +25,26 @@ async function syncAllDataForOffline() {
     const cache = await caches.open(CACHE_NAME);
 
     // 1. Cache all pages
+    // 1. Cache all pages
     try {
         const pagesResponse = await fetch('/api/all_pages');
         if (pagesResponse.ok) {
             const data = await pagesResponse.json();
             if (data.ok && data.pages) {
                 console.log(`[ServiceWorker] Caching ${data.pages.length} pages.`);
-                await cache.addAll(data.pages);
+                for (const pageUrl of data.pages) {
+                    try {
+                        // A page might not be in the cache, or it might be stale.
+                        // We will always re-fetch it to ensure it's up-to-date.
+                        await cache.add(pageUrl);
+                    } catch (e) {
+                        console.error(`[ServiceWorker] Failed to cache individual page: ${pageUrl}`, e);
+                    }
+                }
             }
         }
     } catch (error) {
-        console.error('[ServiceWorker] Failed to cache pages:', error);
+        console.error('[ServiceWorker] Failed to fetch page list:', error);
     }
 
     // 2. Cache all user files
