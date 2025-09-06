@@ -1,15 +1,21 @@
-const VERSION = 'v7';
+const VERSION = 'v8';
 const CACHE_NAME = `filevault-cache-${VERSION}`;
 const OFFLINE_URL = 'static/offline.html';
 const APP_SHELL_URLS = [
-  // The root '/' is intentionally omitted. It's cached on first visit via the 'navigate' fetch handler.
-  // Precaching it can fail if the user is not logged in, as it would redirect.
+  '/',
   '/static/fonts.css',
   '/static/vendor/fontawesome/css/all.min.css',
   '/static/vendor/fontawesome/css/fa-shims.css',
   '/static/socket.io.min.js',
   '/static/site.webmanifest',
   '/static/favicon.svg',
+  '/static/adhkar.json',
+  '/static/vendor/fontawesome/webfonts/fa-brands-400.ttf',
+  '/static/vendor/fontawesome/webfonts/fa-brands-400.woff2',
+  '/static/vendor/fontawesome/webfonts/fa-regular-400.ttf',
+  '/static/vendor/fontawesome/webfonts/fa-regular-400.woff2',
+  '/static/vendor/fontawesome/webfonts/fa-solid-900.ttf',
+  '/static/vendor/fontawesome/webfonts/fa-solid-900.woff2',
   OFFLINE_URL
 ];
 
@@ -19,7 +25,10 @@ self.addEventListener('install', event => {
     caches.open(CACHE_NAME)
       .then(cache => {
         console.log('[ServiceWorker] Caching app shell and offline page');
-        return cache.addAll(APP_SHELL_URLS);
+        // Use addAll with a catch to prevent a single failed asset from breaking the entire cache
+        return cache.addAll(APP_SHELL_URLS).catch(error => {
+          console.error('[ServiceWorker] Failed to cache app shell:', error);
+        });
       })
       .then(() => {
         // Force the waiting service worker to become the active service worker.
@@ -49,16 +58,23 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // We only want to handle navigation requests for the offline fallback.
+  const url = new URL(event.request.url);
+
+  // For navigation requests, use a network-first strategy.
   if (event.request.mode === 'navigate') {
     event.respondWith(
       (async () => {
         try {
           // Try the network first.
           const networkResponse = await fetch(event.request);
+
           // If successful, cache the response for future offline use.
           const cache = await caches.open(CACHE_NAME);
-          cache.put(event.request, networkResponse.clone());
+          // Do not cache error pages
+          if(networkResponse.ok) {
+            cache.put(event.request, networkResponse.clone());
+          }
+
           return networkResponse;
         } catch (error) {
           // The network failed.
@@ -75,16 +91,35 @@ self.addEventListener('fetch', event => {
         }
       })()
     );
-  } else {
-    // For all other requests (CSS, JS, images, etc.), use a Cache First strategy.
+  }
+  // For API calls, use a network-first strategy as well, but don't fall back to offline page.
+  else if (url.pathname.startsWith('/api/')) {
     event.respondWith(
-      caches.match(event.request).then(cachedResponse => {
-        // If we have a cached response, return it.
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-        // Otherwise, fetch from the network.
-        return fetch(event.request);
+        fetch(event.request).catch(() => {
+            return new Response(JSON.stringify({ ok: false, error: 'offline' }), {
+                headers: { 'Content-Type': 'application/json' }
+            });
+        })
+    );
+  }
+  // For all other requests (CSS, JS, images, fonts), use a cache-first strategy.
+  else {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(cache => {
+        return cache.match(event.request).then(cachedResponse => {
+          // If we have a cached response, return it.
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+
+          // Otherwise, fetch from the network, cache it, and then return it.
+          return fetch(event.request).then(networkResponse => {
+            if (networkResponse.ok) {
+              cache.put(event.request, networkResponse.clone());
+            }
+            return networkResponse;
+          });
+        });
       })
     );
   }

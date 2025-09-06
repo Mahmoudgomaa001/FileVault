@@ -3936,7 +3936,7 @@ SHARE_BODY_HTML = """
 <div class="card" id="mainContainer">
   <h1>Shared Files</h1>
   {% if files %}
-    <p>You have shared {{ files|length }} file(s). Select a destination and click Save.</p>
+    <p>You have shared {{ files|length }} file(s). Select a destination and click Save, or clear the list.</p>
     <div id="shareFileList">
       {% for file in files %}
         <div class="card">{{ file.name }}</div>
@@ -3944,7 +3944,10 @@ SHARE_BODY_HTML = """
     </div>
     <p><b>Select destination folder:</b></p>
     <div id="folderTree" style="height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary); margin-bottom: 1rem;">Loading...</div>
-    <button class="btn btn-primary" id="confirmShareBtn" disabled><i class="fas fa-save"></i> Save All Files</button>
+    <div style="display: flex; gap: 0.5rem;">
+        <button class="btn btn-primary" id="confirmShareBtn" disabled><i class="fas fa-save"></i> Save All Files</button>
+        <button class="btn btn-danger" id="clearShareBtn"><i class="fas fa-trash"></i> Clear All</button>
+    </div>
   {% else %}
     <p>No pending files to share. You can close this page.</p>
   {% endif %}
@@ -4019,9 +4022,31 @@ SHARE_BODY_HTML = """
       }
   }
 
+  async function clearShareList() {
+      if (!confirm('Are you sure you want to clear all shared files? This cannot be undone.')) {
+        return;
+      }
+
+      try {
+          const r = await fetch('/api/clear_shares', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+          });
+          const j = await r.json();
+          if (j.ok) {
+              document.getElementById('mainContainer').innerHTML = '<h1>List Cleared</h1><p>' + j.deleted_count + ' file(s) have been removed.</p><a href="/" class="btn btn-primary">Back to App</a>';
+          } else {
+              showToast(j.error || 'Failed to clear list.', 'error');
+          }
+      } catch (e) {
+          showToast('An error occurred while clearing the list.', 'error');
+      }
+  }
+
   if (file_ids.length > 0) {
       loadFolderTree();
       document.getElementById('confirmShareBtn').addEventListener('click', confirmShare);
+      document.getElementById('clearShareBtn').addEventListener('click', clearShareList);
   }
 </script>
 """
@@ -4151,6 +4176,40 @@ def api_commit_share():
             errors.append({"id": pending_id, "error": str(e)})
 
     return jsonify({"ok": True, "committed": committed, "errors": errors})
+
+@app.route("/api/clear_shares", methods=["POST"])
+def api_clear_shares():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    base_folder = session.get("folder")
+    pending_dir = safe_path(base_folder) / ".pending_shares"
+
+    if not pending_dir.exists():
+        return jsonify({"ok": True, "deleted_count": 0})
+
+    deleted_count = 0
+    errors = []
+    for item in pending_dir.iterdir():
+        try:
+            if item.is_file():
+                item.unlink()
+                deleted_count += 1
+            elif item.is_dir():
+                shutil.rmtree(item)
+                deleted_count += 1
+        except Exception as e:
+            errors.append({"name": item.name, "error": str(e)})
+            print(f"Error deleting {item.name}: {e}")
+
+    if not errors:
+        try:
+            pending_dir.rmdir()
+        except Exception as e:
+            print(f"Error deleting .pending_shares directory: {e}")
+
+
+    return jsonify({"ok": True, "deleted_count": deleted_count, "errors": errors})
 
 
 # Error handlers: redirect to login on not found/forbidden
