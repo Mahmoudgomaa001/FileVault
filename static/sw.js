@@ -1,25 +1,24 @@
-const VERSION = 'v9';
+const VERSION = 'v12';
 const CACHE_NAME = `filevault-cache-${VERSION}`;
-const OFFLINE_URL = 'static/offline.html';
+const OFFLINE_URL = '/static/offline.html';
 const APP_SHELL_URLS = [
   '/',
   '/login',
   '/share',
-  '/static/app.js',
+  '/static/offline.html',
+  '/static/adhkar.json',
+  '/static/favicon.svg',
   '/static/fonts.css',
+  '/static/site.webmanifest',
+  '/static/socket.io.min.js',
   '/static/vendor/fontawesome/css/all.min.css',
   '/static/vendor/fontawesome/css/fa-shims.css',
-  '/static/socket.io.min.js',
-  '/static/site.webmanifest',
-  '/static/favicon.svg',
-  '/static/adhkar.json',
   '/static/vendor/fontawesome/webfonts/fa-brands-400.ttf',
   '/static/vendor/fontawesome/webfonts/fa-brands-400.woff2',
   '/static/vendor/fontawesome/webfonts/fa-regular-400.ttf',
   '/static/vendor/fontawesome/webfonts/fa-regular-400.woff2',
   '/static/vendor/fontawesome/webfonts/fa-solid-900.ttf',
-  '/static/vendor/fontawesome/webfonts/fa-solid-900.woff2',
-  OFFLINE_URL
+  '/static/vendor/fontawesome/webfonts/fa-solid-900.woff2'
 ];
 
 self.addEventListener('install', event => {
