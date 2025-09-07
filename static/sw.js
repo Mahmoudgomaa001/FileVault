@@ -1,11 +1,11 @@
-const VERSION = 'v12';
+const VERSION = 'v13';
 const CACHE_NAME = `filevault-cache-${VERSION}`;
-const OFFLINE_URL = '/static/offline.html';
+
+// The app shell includes all the minimal resources required to render the initial UI.
 const APP_SHELL_URLS = [
   '/',
-  '/login',
-  '/share',
-  '/static/offline.html',
+  '/static/index.html', // Explicitly cache the app shell
+  '/static/app.js',     // Cache the main JS file
   '/static/adhkar.json',
   '/static/favicon.svg',
   '/static/fonts.css',
@@ -21,126 +21,122 @@ const APP_SHELL_URLS = [
   '/static/vendor/fontawesome/webfonts/fa-solid-900.woff2'
 ];
 
+// Pre-cache the app shell on install.
 self.addEventListener('install', event => {
   console.log('[ServiceWorker] Install event fired');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('[ServiceWorker] Caching app shell and offline page');
-        // Use addAll with a catch to prevent a single failed asset from breaking the entire cache
+        console.log('[ServiceWorker] Caching app shell');
         return cache.addAll(APP_SHELL_URLS).catch(error => {
           console.error('[ServiceWorker] Failed to cache app shell:', error);
         });
       })
-      .then(() => {
-        // Force the waiting service worker to become the active service worker.
-        return self.skipWaiting();
-      })
+      .then(() => self.skipWaiting()) // Activate new service worker immediately
   );
 });
 
+// Clean up old caches on activation.
 self.addEventListener('activate', event => {
   console.log('[ServiceWorker] Activate event fired');
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          // Delete old caches
           if (cacheName !== CACHE_NAME) {
             console.log('[ServiceWorker] Clearing old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => {
-      // Tell the active service worker to take control of the page immediately.
-      return self.clients.claim();
-    })
+    }).then(() => self.clients.claim()) // Take control of all clients
   );
 });
 
+// Handle fetch events.
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Handle Web Share Target POST requests
-  if (event.request.method === 'POST' && url.pathname === '/share-receiver') {
-    event.respondWith(Response.redirect('/share'));
-    event.waitUntil(
-      (async function () {
-        const formData = await event.request.formData();
-        const client = await self.clients.get(event.resultingClientId);
-        const files = formData.get('files');
-        client.postMessage({ files });
+  // Ignore non-HTTP/HTTPS requests
+  if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // Ignore requests to other origins, except for Socket.IO which might be on a different path
+  if (event.request.url.includes('/socket.io/')) {
+    return;
+  }
+
+  // API requests: Network-first, then cache for GET requests.
+  if (url.pathname.startsWith('/api/')) {
+    if (event.request.method === 'GET') {
+      event.respondWith(
+        caches.open(CACHE_NAME).then(async (cache) => {
+          try {
+            const networkResponse = await fetch(event.request);
+            if (networkResponse.ok) {
+              cache.put(event.request, networkResponse.clone());
+            }
+            return networkResponse;
+          } catch (error) {
+            const cachedResponse = await cache.match(event.request);
+            if (cachedResponse) {
+              return cachedResponse;
+            }
+            return new Response(JSON.stringify({ ok: false, error: 'offline', from: 'service-worker' }), {
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+        })
+      );
+    }
+    // For non-GET API requests, do not cache. Only try the network.
+    return;
+  }
+
+  // Navigation requests: Try network first, but fall back to the app shell for offline.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      (async () => {
+        try {
+          const networkResponse = await fetch(event.request);
+          return networkResponse;
+        } catch (error) {
+          console.log('[ServiceWorker] Navigation fetch failed, returning app shell.', error);
+          const cache = await caches.open(CACHE_NAME);
+          // The root '/' is our app shell.
+          return await cache.match('/');
+        }
       })()
     );
     return;
   }
 
-  // For navigation requests, use a network-first strategy.
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      (async () => {
-        try {
-          // Try the network first.
-          const networkResponse = await fetch(event.request);
+  // For all other requests (static assets), use a cache-first strategy.
+  event.respondWith(
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const cachedResponse = await cache.match(event.request);
+      if (cachedResponse) {
+        return cachedResponse;
+      }
 
-          // If successful, cache the response for future offline use.
-          const cache = await caches.open(CACHE_NAME);
-          // Do not cache error pages
-          if(networkResponse.ok) {
-            cache.put(event.request, networkResponse.clone());
-          }
-
-          return networkResponse;
-        } catch (error) {
-          // The network failed.
-          console.log('[ServiceWorker] Fetch failed; returning offline page or cached page.', error);
-
-          const cache = await caches.open(CACHE_NAME);
-          // Try to serve the page from the cache.
-          const cachedResponse = await cache.match(event.request);
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          // If the page is not in the cache, serve the master offline page.
-          return await cache.match(OFFLINE_URL);
+      // If not in cache, fetch from network, cache it, and return.
+      try {
+        const networkResponse = await fetch(event.request);
+        if (networkResponse.ok) {
+          await cache.put(event.request, networkResponse.clone());
         }
-      })()
-    );
-  }
-  // For API calls, use a network-first strategy as well, but don't fall back to offline page.
-  else if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-        fetch(event.request).catch(() => {
-            return new Response(JSON.stringify({ ok: false, error: 'offline' }), {
-                headers: { 'Content-Type': 'application/json' }
-            });
-        })
-    );
-  }
-  // For all other requests (CSS, JS, images, fonts), use a cache-first strategy.
-  else {
-    event.respondWith(
-      caches.open(CACHE_NAME).then(cache => {
-        return cache.match(event.request).then(cachedResponse => {
-          // If we have a cached response, return it.
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-
-          // Otherwise, fetch from the network, cache it, and then return it.
-          return fetch(event.request).then(networkResponse => {
-            if (networkResponse.ok) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          });
-        });
-      })
-    );
-  }
+        return networkResponse;
+      } catch (error) {
+        console.error('[ServiceWorker] Fetch failed for a static asset:', event.request.url, error);
+        // We don't have a generic fallback for assets, so we let the error propagate.
+        throw error;
+      }
+    })
+  );
 });
 
+// Handle notification clicks.
 self.addEventListener('notificationclick', event => {
     console.log('[ServiceWorker] Notification click Received.');
     event.notification.close();
@@ -149,6 +145,7 @@ self.addEventListener('notificationclick', event => {
     );
 });
 
+// Handle push notifications.
 self.addEventListener('message', event => {
     if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
         const { title, body } = event.data;

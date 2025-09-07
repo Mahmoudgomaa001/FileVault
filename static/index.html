@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <title>FileVault</title>
+
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="/static/site.webmanifest" />
+  <meta name="theme-color" content="#0F172A" id="themeColorMeta" />
+  <link rel="stylesheet" href="/static/fonts.css" />
+  <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
+  <link rel="stylesheet" href="/static/vendor/fontawesome/css/fa-shims.css" />
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/static/sw.js').then(registration => {
+          console.log('ServiceWorker registration successful with scope: ', registration.scope);
+        }, err => {
+          console.log('ServiceWorker registration failed: ', err);
+        });
+      });
+    }
+  </script>
+
+  <style>
+    /* Keeping the styles here for now, to be moved to a separate CSS file later if needed */
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    :root {
+      --primary:#3B82F6; --primary-dark:#2563EB; --secondary:#8B5CF6; --success:#10B981; --danger:#EF4444; --warning:#F59E0B;
+      --bg-primary:#0F172A; --bg-secondary:#1E293B; --bg-tertiary:#334155; --text-primary:#F8FAFC; --text-secondary:#CBD5E1; --text-muted:#64748B;
+      --border:#334155; --shadow:rgba(0,0,0,0.5); --header-height:60px; --mobile-padding:.75rem; --desktop-padding:1.5rem;
+      --dhikr-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    :root.light {
+      --bg-primary:#f7fafc; --bg-secondary:#ffffff; --bg-tertiary:#e5e7eb; --text-primary:#0f172a; --text-secondary:#334155; --text-muted:#64748b;
+      --border:#e5e7eb; --shadow:rgba(0,0,0,0.12);
+      --dhikr-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    :root.barbie {
+      --primary:#ff4fa3;
+      --primary-dark:#f12783;
+      --secondary:#ff7ac8;
+      --success:#ff9ad5;
+      --danger:#ff497a;
+      --warning:#ffb6e1;
+      --bg-primary:#ffe6f2;
+      --bg-secondary:#fff0f7;
+      --bg-tertiary:#ffd6ea;
+      --text-primary:#5b0440;
+      --text-secondary:#8a2664;
+      --text-muted:#a34a7c;
+      --border:#ffc0dd;
+      --shadow:rgba(255, 116, 183, 0.25);
+      --dhikr-bg: linear-gradient(135deg, #ff8ccf 0%, #ff4fa3 100%);
+    }
+    html, body, a, button, .file-card { touch-action: manipulation; }
+    body { font-family:'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background:var(--bg-primary); color:var(--text-primary); min-height:100vh; position:relative; overflow-x:hidden; }
+
+    /* From old template */
+    .dhikr-banner {
+      background: var(--dhikr-bg); padding: 1rem; text-align: center; position: fixed; top: var(--header-height); left: 0; right: 0; z-index: 900; box-shadow: 0 2px 10px rgba(0,0,0,0.2); animation: slideDown 0.5s ease; cursor: pointer; transition: all 0.3s ease;
+    }
+    @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .dhikr-banner:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.3); transform: scale(1.01); }
+    .dhikr-content { display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; }
+    .dhikr-arabic { font-family: 'Amiri', serif; font-size: 1.5rem; font-weight: 700; color: #ffffff; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { transform: scale(1);} 50% { transform: scale(1.05);} }
+    .dhikr-translation { font-size: 0.9rem; color: rgba(255,255,255,0.9); font-style: italic; }
+    .dhikr-icon { font-size: 1.2rem; color: rgba(255,255,255,0.8); animation: rotate 4s linear infinite; }
+    @keyframes rotate { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
+    .dhikr-refresh { position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.2); border: none; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s ease; color: white; }
+    .dhikr-refresh:hover { background: rgba(255,255,255,0.3); transform: translateY(-50%) rotate(180deg); }
+    body.with-dhikr .container { padding-top: calc(var(--header-height) + 60px + var(--mobile-padding)); }
+    .header { background:rgba(30,41,59,.98); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); border-bottom:1px solid var(--border); position:fixed; top:0; left:0; right:0; z-index:1000; height:var(--header-height); }
+    :root.light .header { background:rgba(255,255,255,.98); }
+    .header-content { max-width:1400px; margin:0 auto; padding:0 var(--mobile-padding); height:100%; display:flex; justify-content:space-between; align-items:center; gap:.5rem; }
+    .logo { display:flex; align-items:center; gap:.5rem; font-size:1.125rem; font-weight:700; background:linear-gradient(135deg,var(--primary),var(--secondary)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; white-space:nowrap; text-decoration:none; }
+    .nav-menu { display:flex; gap:.5rem; align-items:center; }
+    .user-badge { display:none; padding:.375rem .75rem; background:var(--bg-tertiary); border-radius:2rem; font-size:.75rem; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .container { max-width:1400px; margin:0 auto; padding:calc(var(--header-height) + var(--mobile-padding)) var(--mobile-padding) var(--mobile-padding); min-height:100vh; }
+    .card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; padding:var(--mobile-padding); margin-bottom:var(--mobile-padding); animation:fadeIn .3s ease; }
+    @keyframes fadeIn { from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+    .toolbar { display:flex; flex-direction:column; gap:.75rem; margin-bottom:1rem; background:var(--bg-secondary); padding:var(--mobile-padding); border-radius:.75rem; border:1px solid var(--border); }
+    .toolbar-row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+    .search-box { flex:1; min-width:150px; position:relative; }
+    .search-input { width:100%; padding:.625rem 2.5rem .625rem .875rem; background:var(--bg-primary); border:1px solid var(--border); border-radius:.5rem; color:var(--text-primary); font-size:.875rem; }
+    .search-input:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(59,130,246,.1); }
+    .search-icon { position:absolute; right:.875rem; top:50%; transform:translateY(-50%); color:var(--text-muted); pointer-events:none; }
+    .view-controls { display:flex; gap:.25rem; padding:.25rem; background:var(--bg-primary); border-radius:.5rem; }
+    .view-btn { flex:1; padding:.5rem; background:transparent; border:none; color:var(--text-muted); cursor:pointer; border-radius:.375rem; font-size:.875rem; transition:all .2s; display:flex; align-items:center; justify-content:center; gap:.25rem; }
+    .view-btn.active { background:var(--primary); color:white; }
+    .btn { padding:.5rem .875rem; border-radius:.5rem; font-weight:600; cursor:pointer; transition:all .2s; border:none; display:inline-flex; align-items:center; justify-content:center; gap:.375rem; font-size:.8125rem; white-space:nowrap; text-decoration:none; color:inherit; }
+    .btn:active { transform:scale(.97); }
+    .btn-primary { background:var(--primary); color:#fff; }
+    .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); }
+    .btn.active { background:var(--primary); color:white; }
+    .btn-danger { background:var(--danger); color:#fff; }
+    .btn-success { background:var(--success); color:#fff; }
+    .toast-container { position:fixed; top:calc(var(--header-height) + 1rem); right:.5rem; z-index:3000; max-width:calc(100vw - 1rem); }
+    .toast { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.5rem; padding:.75rem; margin-bottom:.5rem; display:flex; align-items:center; gap:.75rem; min-width:250px; max-width:350px; box-shadow:0 4px 12px var(--shadow); animation:toastIn .3s ease; }
+    .toast.success { border-left:3px solid var(--success); }
+    .toast.error { border-left:3px solid var(--danger); }
+    .toast.warning { border-left:3px solid var(--warning); }
+    .toast.info { border-left:3px solid var(--primary); }
+    @keyframes toastIn { from{opacity:0; transform:translateX(100%);} to{opacity:1; transform:translateX(0);} }
+    .form-input { width: 100%; padding: 0.625rem 0.875rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 0.5rem; color: var(--text-primary); font-size: 0.875rem; }
+    .form-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    @media (min-width: 768px) {
+        .user-badge { display:block; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- App will be rendered here by JavaScript -->
+    <div style="padding: 2rem; text-align: center;">
+        <h1>Loading FileVault...</h1>
+        <p>If you see this for more than a few seconds, JavaScript may be disabled.</p>
+    </div>
+  </div>
+  <script src="/static/socket.io.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
