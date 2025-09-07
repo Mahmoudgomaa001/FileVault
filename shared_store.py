@@ -18,7 +18,6 @@ class SharedStore:
                 with self.file_path.open('r', encoding='utf-8') as f:
                     return json.load(f)
         except (IOError, json.JSONDecodeError):
-            # If file is corrupted or empty, start fresh
             pass
         return {}
 
@@ -33,6 +32,8 @@ class SharedStore:
 
     def cleanup(self):
         now = time.time()
+        # A key is expired if it has an 'expires_at' and it's in the past.
+        # We need to handle nested dictionaries (like session data) and direct code mappings.
         expired_keys = [
             key for key, item in self._data.items()
             if isinstance(item, dict) and item.get("expires_at") and item["expires_at"] < now
