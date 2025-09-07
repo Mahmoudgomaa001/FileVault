@@ -1094,6 +1094,7 @@ BASE_HTML = """
                 <button class="btn btn-secondary" id="goOnlineBtn" title="Switch to Online URL"><i class="fas fa-wifi"></i><span class="btn-text"> Online</span></button>
               {% endif %}
               <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
+              <a href="{{ url_for('approve_device') }}" class="btn btn-secondary" title="Approve a Device"><i class="fas fa-check-square"></i><span class="btn-text"> Approve</span></a>
               {% if is_admin %}
               <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
               <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
@@ -1113,6 +1114,7 @@ BASE_HTML = """
               <button class="btn btn-secondary btn-icon" id="mobileMenuBtn" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
               <div class="dropdown-menu" id="mobileDropdown">
                   <button class="dropdown-item" onclick="document.getElementById('myQRBtn').click()"><i class="fas fa-qrcode"></i><span>My QR</span></button>
+                  <a href="{{ url_for('approve_device') }}" class="dropdown-item"><i class="fas fa-check-square"></i><span>Approve Device</span></a>
                   <hr class="dropdown-divider">
                   {% if is_admin %}
                   <button class="dropdown-item" onclick="document.getElementById('accountsBtn').click()"><i class="fas fa-user-gear"></i><span>Accounts</span></button>
@@ -3293,7 +3295,11 @@ LOGIN_HTML = """
         <div class="qr-box">
           <img id="qrImage" src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code" style="image-rendering:pixelated; image-rendering:crisp-edges;" />
         </div>
-        <p class="muted" style="margin-top:.75rem; color:var(--text-muted); word-break:break-all;">This QR code is for a new device session and will expire in 10 minutes. Have an existing device scan this to approve the session.</p>
+        <p class="muted" style="margin-top:.75rem; color:var(--text-muted); text-align:center;">This session will expire in 10 minutes.</p>
+        <div style="font-size: 2rem; font-weight: bold; letter-spacing: 0.2em; color: var(--primary); margin: 1rem 0; background: var(--bg-primary); padding: 1rem; border-radius: .5rem; text-align:center;">
+          {{ login_code }}
+        </div>
+        <p class="muted" style="margin-top:.75rem; color:var(--text-muted);">From an existing device, scan the QR code or enter the 6-digit code to approve this login.</p>
     </div>
 
     <!-- Code Section -->
@@ -3636,6 +3642,77 @@ def pc_login(token):
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+APPROVE_DEVICE_HTML = """
+<div class="card" style="max-width:520px; margin:0 auto;">
+  <h2 style="margin-bottom:.5rem;">Approve New Device</h2>
+  <p style="color:var(--text-secondary); margin-bottom:.75rem;">Enter the 6-digit code displayed on the new device's screen to approve it.</p>
+  {% if error %}
+    <div style="background:rgba(239,68,68,.12); color:#fecaca; border:1px solid rgba(239,68,68,.4); border-radius:.5rem; padding:.5rem .75rem; margin-bottom:.5rem;">
+      <i class="fas fa-exclamation-triangle"></i> {{ error }}
+    </div>
+  {% endif %}
+  <form method="POST" action="{{ url_for('submit_approval') }}">
+    <input type="text" name="code" class="form-input" placeholder="6-digit code" required pattern="\\d{6}" maxlength="6" inputmode="numeric" style="font-size: 1.5rem; text-align: center; letter-spacing: 0.5em; margin-bottom: .5rem;">
+    <button class="btn btn-primary" type="submit" style="width: 100%;">Approve Device</button>
+  </form>
+</div>
+"""
+
+@app.route("/approve_device")
+def approve_device():
+    if not is_authed():
+        return redirect(url_for("login"))
+    error = request.args.get("error")
+    body = render_template_string(APPROVE_DEVICE_HTML, error=error)
+    return render_template_string(
+        BASE_HTML,
+        body=body,
+        authed=True,
+        icon=session.get("icon"),
+        user_label=session.get("folder",""),
+        current_rel="",
+        dhikr=get_random_dhikr(),
+        dhikr_list=[{"dhikr": d} for d in ISLAMIC_DHIKR],
+        is_admin=is_admin_device_of(session.get("folder","")),
+        share_page_active=False
+    )
+
+@app.route("/submit_approval", methods=["POST"])
+def submit_approval():
+    if not is_authed():
+        return redirect(url_for("login"))
+
+    code = request.form.get("code", "").strip()
+    if not code:
+        return redirect(url_for("approve_device", error="Code is required."))
+
+    # Find the session token associated with this 6-digit code
+    code_data = code_store.get(code)
+    if not code_data or code_data.get("type") != "login_session":
+        return redirect(url_for("approve_device", error="Invalid or expired code."))
+
+    session_token = code_data.get("token")
+    if not session_token:
+        return redirect(url_for("approve_device", error="Code is not valid for a session."))
+
+    # Get the pending session's data
+    session_data = code_store.get(session_token)
+    if not session_data:
+        return redirect(url_for("approve_device", error="The login session has expired."))
+
+    # Approve the session using the current user's folder
+    session_data["authenticated"] = True
+    session_data["folder"] = session.get("folder")
+    session_data["icon"] = session.get("icon")
+
+    # Save the updated session data back to the store
+    code_store.set(session_token, session_data, expires_in_seconds=60)
+
+    # The code has been used, so remove it
+    code_store.pop(code)
+
+    return redirect(url_for("browse"))
 
 # -----------------------------
 # Routes: Files
