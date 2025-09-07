@@ -1,6 +1,29 @@
 const VERSION = 'v8';
 const CACHE_NAME = `filevault-cache-${VERSION}`;
 const OFFLINE_URL = 'static/offline.html';
+let serverBaseUrl = null;
+
+self.addEventListener('message', event => {
+    if (event.data && event.data.type === 'SET_SERVER_BASE_URL') {
+        serverBaseUrl = event.data.url;
+        console.log(`[ServiceWorker] Server base URL set to: ${serverBaseUrl}`);
+        // Send confirmation back to the client that sent the message
+        if (event.ports[0]) {
+            event.ports[0].postMessage({ type: 'URL_SET_CONFIRMED' });
+        }
+    }
+    if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+        const { title, body } = event.data;
+        event.waitUntil(
+            self.registration.showNotification(title, {
+                body: body,
+                icon: '/static/favicon.svg',
+                badge: '/static/favicon.svg'
+            })
+        );
+    }
+});
+
 const APP_SHELL_URLS = [
   '/',
   '/static/fonts.css',
@@ -58,6 +81,46 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  // If a dynamic base URL is set, rewrite the request if necessary
+  if (serverBaseUrl) {
+    const url = new URL(event.request.url);
+    // Only rewrite requests that are to the original origin of the PWA
+    if (url.origin === self.location.origin) {
+      const pathsToRewrite = [
+        '/api/', '/download', '/raw', '/socket.io/', '/login', '/logout',
+        '/scan/', '/check/', '/pc_login/', '/login_with_code', '/login_with_default',
+        '/share', '/share-receiver'
+      ];
+      if (pathsToRewrite.some(path => url.pathname.startsWith(path))) {
+        try {
+          const newUrl = new URL(url.pathname + url.search, serverBaseUrl);
+          console.log(`[ServiceWorker] Rewriting URL from ${url} to ${newUrl}`);
+
+          // For POST requests, we need to handle the body correctly.
+          const newRequestInit = {
+            method: event.request.method,
+            headers: event.request.headers,
+            mode: 'cors',
+            credentials: 'omit', // We are not forwarding cookies from the SW.
+            redirect: event.request.redirect,
+            cache: 'no-store' // Always go to the network for rewritten requests
+          };
+          if (event.request.method === 'POST') {
+            newRequestInit.body = event.request.body;
+          }
+
+          const newRequest = new Request(newUrl.toString(), newRequestInit);
+
+          event.respondWith(fetch(newRequest));
+          return; // Exit here, bypassing all other fetch logic
+        } catch (e) {
+          console.error('[ServiceWorker] URL rewrite failed:', e);
+          // Fall through to default behavior if rewrite fails
+        }
+      }
+    }
+  }
+
   const url = new URL(event.request.url);
 
   // Handle Web Share Target POST requests
