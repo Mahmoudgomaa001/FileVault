@@ -100,7 +100,7 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 app.config["SESSION_COOKIE_NAME"] = SESSION_COOKIE_NAME
 app.config["JSONIFY_MIMETYPE"] = "application/json; charset=utf-8"
 app.config["LOGIN_TOKENS"] = {}  # pc_token -> folder
-app.config["LOGIN_CODES"] = {}  # code -> token
+app.config["PAIRING_CODES"] = {}  # code -> {folder, created_at}
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
@@ -1084,7 +1084,7 @@ BASE_HTML = """
                 <button class="btn btn-secondary" id="goOnlineBtn" title="Switch to Online URL"><i class="fas fa-wifi"></i><span class="btn-text"> Online</span></button>
               {% endif %}
               <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
-              <a href="{{ url_for('code_login') }}" class="btn btn-secondary" title="Login via Code"><i class="fas fa-keyboard"></i><span class="btn-text"> Enter Code</span></a>
+              <button class="btn btn-secondary" id="getPairingCodeBtn" title="Get Login Code"><i class="fas fa-keyboard"></i><span class="btn-text"> Get Code</span></button>
               {% if is_admin %}
               <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
               <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
@@ -1104,7 +1104,7 @@ BASE_HTML = """
               <button class="btn btn-secondary btn-icon" id="mobileMenuBtn" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
               <div class="dropdown-menu" id="mobileDropdown">
                   <button class="dropdown-item" onclick="document.getElementById('myQRBtn').click()"><i class="fas fa-qrcode"></i><span>My QR</span></button>
-                  <a href="{{ url_for('code_login') }}" class="dropdown-item"><i class="fas fa-keyboard"></i><span>Enter Code</span></a>
+                  <button class="dropdown-item" onclick="document.getElementById('getPairingCodeBtn').click()"><i class="fas fa-keyboard"></i><span>Get Code</span></button>
                   <hr class="dropdown-divider">
                   {% if is_admin %}
                   <button class="dropdown-item" onclick="document.getElementById('accountsBtn').click()"><i class="fas fa-user-gear"></i><span>Accounts</span></button>
@@ -1250,6 +1250,23 @@ BASE_HTML = """
       </div>
     </div>
   </div>
+
+<!-- Pairing Code Modal -->
+<div class="modal" id="pairingCodeModal">
+  <div class="modal-content" style="max-width:400px;">
+    <div class="modal-header">
+      <div class="modal-title">Login Code</div>
+      <button class="modal-close" onclick="closeModal('pairingCodeModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="pairingCodeBody" style="text-align:center;">
+      <p>Enter this code on the new device to log in.</p>
+      <div style="font-size: 3rem; font-weight: bold; letter-spacing: 0.2em; color: var(--primary); margin: 1rem 0; background: var(--bg-primary); padding: 1rem; border-radius: .5rem;" id="pairingCodeDisplay">
+        - - - - -
+      </div>
+      <p id="pairingCodeTimer" style="color:var(--text-muted);">Expires in 5:00</p>
+    </div>
+  </div>
+</div>
 
 <!-- Move Modal -->
 <div class="modal" id="moveModal">
@@ -2701,6 +2718,38 @@ function removeFileCard(rel){
     }
     document.getElementById('myQRBtn')?.addEventListener('click', showMyQR);
 
+    let pairingCodeInterval;
+    async function showPairingCode(){
+      try {
+        const r = await fetch('{{ url_for("api_generate_pairing_code") }}');
+        const j = await r.json();
+        if(j.ok){
+          document.getElementById('pairingCodeDisplay').textContent = j.code;
+          openModal('pairingCodeModal');
+
+          let expires = j.expires_in;
+          clearInterval(pairingCodeInterval);
+          document.getElementById('pairingCodeTimer').textContent = `Expires in 5:00`;
+          pairingCodeInterval = setInterval(()=>{
+            expires--;
+            const min = Math.floor(expires/60);
+            const sec = expires % 60;
+            document.getElementById('pairingCodeTimer').textContent = `Expires in ${min}:${String(sec).padStart(2,'0')}`;
+            if(expires <= 0){
+              clearInterval(pairingCodeInterval);
+              document.getElementById('pairingCodeDisplay').textContent = '- - - - -';
+              document.getElementById('pairingCodeTimer').textContent = 'Expired';
+            }
+          }, 1000);
+
+        } else {
+          showToast(j.error || 'Failed to get code', 'error');
+        }
+      } catch(e) {
+        showToast('Failed to get code', 'error');
+      }
+    }
+
     // Settings (only for admin; button is hidden for non-admin)
     async function openSettings(){
       try {
@@ -3018,6 +3067,7 @@ function removeFileCard(rel){
 
       // Global initializations for all pages
       document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
+      document.getElementById('getPairingCodeBtn')?.addEventListener('click', showPairingCode);
       document.getElementById('goOfflineBtn')?.addEventListener('click', goOffline);
       document.getElementById('goOnlineBtn')?.addEventListener('click', goOnline);
       document.getElementById('subscribeBtn')?.addEventListener('click', requestNotificationPermission);
@@ -3279,14 +3329,18 @@ LOGIN_HTML = """
   </div>
   <p class="muted" style="margin-top:.75rem; color:var(--text-muted);">Or open: <code id="qrUrl">{{ qr_url }}</code></p>
 
-  {% if code %}
   <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1rem;">
-    <p style="color:var(--text-secondary); margin-bottom:.75rem;">Or enter this code on your other device:</p>
-    <div style="font-size: 2.5rem; font-weight: bold; letter-spacing: 0.2em; color: var(--primary); margin-bottom: 1rem; background: var(--bg-primary); padding: .5rem; border-radius: .5rem; max-width: 250px; margin: auto;">
-        {{ code }}
-    </div>
+    <p style="color:var(--text-secondary); margin-bottom:.75rem;">Or, enter a code from another device:</p>
+    <form method="POST" action="{{ url_for('login_with_code') }}" style="max-width: 320px; margin: auto;">
+        <input type="text" name="code" class="form-input" placeholder="5-digit code" required pattern="\\d{5}" maxlength="5" inputmode="numeric" style="font-size: 1.5rem; text-align: center; letter-spacing: 0.5em; margin-bottom: .5rem;">
+        <button class="btn btn-primary" type="submit" style="width: 100%;">Login with Code</button>
+    </form>
+    {% if error %}
+      <div style="background:rgba(239,68,68,.12); color:#fecaca; border:1px solid rgba(239,68,68,.4); border-radius:.5rem; padding:.5rem .75rem; margin-top:.75rem;">
+        <i class="fas fa-exclamation-triangle"></i> {{ error }}
+      </div>
+    {% endif %}
   </div>
-  {% endif %}
 
   <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1rem;">
     <p style="color:var(--text-secondary); margin-bottom:.75rem;">Or if you're on a new device:</p>
@@ -3344,71 +3398,9 @@ UNLOCK_HTML = """
 </div>
 """
 
-CODE_LOGIN_HTML = """
-<div class="card" style="max-width:520px; margin:0 auto;">
-  <h2 style="margin-bottom:.5rem;">Enter Code</h2>
-  <p style="color:var(--text-secondary); margin-bottom:.75rem;">Enter the 5-digit code from the other device to log it in.</p>
-  {% if error %}
-    <div style="background:rgba(239,68,68,.12); color:#fecaca; border:1px solid rgba(239,68,68,.4); border-radius:.5rem; padding:.5rem .75rem; margin-bottom:.5rem;">
-      <i class="fas fa-exclamation-triangle"></i> {{ error }}
-    </div>
-  {% endif %}
-  <form method="POST" action="{{ url_for('submit_code') }}">
-    <input type="text" name="code" class="form-input" placeholder="5-digit code" required pattern="\\d{5}" maxlength="5" inputmode="numeric" style="font-size: 2rem; text-align: center; letter-spacing: 0.5em;">
-    <div class="modal-footer" style="padding:0; margin-top:.75rem;">
-      <button class="btn btn-primary" type="submit"><i class="fas fa-check"></i> Submit</button>
-    </div>
-  </form>
-</div>
-"""
-
 # -----------------------------
 # Routes: Auth with persistent device folders + Privacy
 # -----------------------------
-@app.route("/code_login", methods=["GET"])
-def code_login():
-    if not is_authed():
-        return redirect(url_for("login"))
-    error = request.args.get("error")
-    body = render_template_string(CODE_LOGIN_HTML, error=error)
-    return render_template_string(
-        BASE_HTML,
-        body=body,
-        authed=True,
-        icon=session.get("icon"),
-        user_label=session.get("folder",""),
-        current_rel="",
-        dhikr=get_random_dhikr(),
-        dhikr_list=[{"dhikr": d} for d in ISLAMIC_DHIKR],
-        is_admin=is_admin_device_of(session.get("folder","")),
-        share_page_active=False
-    )
-
-@app.route("/submit_code", methods=["POST"])
-def submit_code():
-    if not is_authed():
-        return redirect(url_for("login"))
-
-    code = request.form.get("code", "").strip()
-    token = app.config["LOGIN_CODES"].pop(code, None)
-
-    if not token or token not in pending_sessions:
-        return redirect(url_for("code_login", error="Invalid or expired code."))
-
-    info = pending_sessions.get(token)
-    if not info:
-        return redirect(url_for("code_login", error="Session not found for this code."))
-
-    device_id, folder = get_or_create_device_folder(request)
-    icon = get_user_icon(folder)
-
-    info["authenticated"] = True
-    info["folder"] = folder
-    info["icon"] = icon
-
-    return redirect(url_for("browse"))
-
-
 @app.route("/api/accounts/transfer_admin_start", methods=["POST"])
 def api_accounts_transfer_admin_start():
     if not is_authed():
@@ -3479,14 +3471,7 @@ def login():
     # Normal login flow if no token or invalid token
     token = str(uuid.uuid4())
     pc_token = secrets.token_urlsafe(16)
-
-    # Generate a unique 5-digit code
-    code = f"{random.randint(0, 99999):05d}"
-    while code in app.config.get("LOGIN_CODES", {}):
-        code = f"{random.randint(0, 99999):05d}"
-
-    app.config["LOGIN_CODES"][code] = token
-    pending_sessions[token] = {"authenticated": False, "folder": None, "icon": None, "pc_token": pc_token, "code": code}
+    pending_sessions[token] = {"authenticated": False, "folder": None, "icon": None, "pc_token": pc_token}
     session["login_token"] = token
 
     ngrok_url = get_ngrok_url()
@@ -3510,11 +3495,46 @@ def login():
                                    qr_b64=qr_b64,
                                    qr_url=qr_url,
                                    token=token,
-                                   code=pending_sessions[token].get("code"),
                                    ngrok_available=ngrok_available,
                                    message=message)
     # On login page, no dhikr banner
-    return render_template_string(BASE_HTML, body=body, authed=is_authed(), icon=None, user_label="", current_rel="", dhikr="", dhikr_list=[], is_admin=False)
+    return render_template_string(BASE_HTML, body=body, authed=is_authed(), icon=None, user_label="", current_rel="", dhikr="", dhikr_list=[], is_admin=False, error=request.args.get("error"))
+
+@app.route("/login_with_code", methods=["POST"])
+def login_with_code():
+    code = request.form.get("code", "").strip()
+
+    # Clean up expired codes first
+    now = datetime.utcnow()
+    expired_codes = [
+        c for c, data in app.config["PAIRING_CODES"].items()
+        if (now - data["created_at"]).total_seconds() > 300
+    ]
+    for c in expired_codes:
+        app.config["PAIRING_CODES"].pop(c, None)
+
+    # Check if the submitted code is valid
+    code_info = app.config["PAIRING_CODES"].pop(code, None)
+    if not code_info:
+        return redirect(url_for("login", error="Invalid or expired code."))
+
+    folder = code_info.get("folder")
+    if not folder:
+        return redirect(url_for("login", error="Code is not associated with a folder."))
+
+    # Log the user in
+    session["authed"] = True
+    session["folder"] = folder
+    session["icon"] = get_user_icon(folder)
+
+    # Associate this device with the folder
+    device_id, _ = get_or_create_device_folder(request)
+    app.config["DEVICE_MAP"][device_id]["folder"] = folder
+    save_device_map(app.config["DEVICE_MAP"])
+
+    resp = make_response(redirect(url_for("browse", subpath=folder)))
+    resp.set_cookie(DEVICE_COOKIE_NAME, device_id, max_age=60*60*24*730, samesite="Lax")
+    return resp
 
 @app.route("/login_with_default")
 def login_with_default():
@@ -3891,6 +3911,33 @@ def api_mkdir():
     meta = get_file_meta(new_dir)
     socketio.emit("file_update", {"action":"added","dir": dest_rel, "meta": meta})
     return jsonify({"ok": True, "meta": meta})
+
+@app.route("/api/generate_pairing_code")
+def api_generate_pairing_code():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    folder = session.get("folder")
+    if not folder:
+        return jsonify({"ok": False, "error": "no folder in session"}), 400
+
+    # Clean up expired codes
+    now = datetime.utcnow()
+    expired_codes = [
+        code for code, data in app.config["PAIRING_CODES"].items()
+        if (now - data["created_at"]).total_seconds() > 300  # 5 minutes
+    ]
+    for code in expired_codes:
+        app.config["PAIRING_CODES"].pop(code, None)
+
+    # Generate a new unique code
+    code = f"{random.randint(0, 99999):05d}"
+    while code in app.config["PAIRING_CODES"]:
+        code = f"{random.randint(0, 99999):05d}"
+
+    app.config["PAIRING_CODES"][code] = {"folder": folder, "created_at": now}
+
+    return jsonify({"ok": True, "code": code, "expires_in": 300})
 
 @app.route("/api/my_qr")
 def api_my_qr():
