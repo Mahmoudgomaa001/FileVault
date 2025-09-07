@@ -621,6 +621,57 @@ def api_accounts_token():
         "message": message
     })
 
+@app.route("/api/accounts/token/regenerate", methods=["POST"])
+def api_accounts_token_regenerate():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    folder = session.get("folder")
+    if not folder:
+        return jsonify({"ok": False, "error": "no folder in session"}), 400
+
+    if not is_admin_device_of(folder):
+        return jsonify({"ok": False, "error": "only admin device can regenerate tokens"}), 403
+
+    users = app.config.setdefault("USERS", load_users())
+    user_cfg = users[folder]
+    tokens = user_cfg.setdefault("tokens", {})
+
+    # Find and remove the old permanent token if it exists
+    old_token_id = None
+    for token_id, token_info in tokens.items():
+        if token_info.get("expires") is None:
+            old_token_id = token_id
+            break
+    if old_token_id:
+        del tokens[old_token_id]
+
+    # Generate a new permanent token and a new unique code
+    try:
+        new_permanent_code = generate_unique_permanent_code()
+        user_cfg["permanent_code"] = new_permanent_code
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+    new_token = secrets.token_urlsafe(32)
+    new_token_id = str(uuid.uuid4())
+    tokens[new_token_id] = {
+        "token": new_token,
+        "created": datetime.utcnow().isoformat() + "Z",
+        "name": "Permanent API Token",
+        "expires": None
+    }
+
+    save_users(users)
+
+    return jsonify({
+        "ok": True,
+        "token": new_token,
+        "permanent_code": new_permanent_code,
+        "token_id": new_token_id,
+        "message": "Permanent token and code have been regenerated."
+    })
+
 def get_local_ip() -> str:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -1215,7 +1266,8 @@ BASE_HTML = """
           <label class="form-label" for="apiTokenInput">API Token</label>
           <div class="row" style="gap:.5rem; margin-top:.5rem;">
             <input type="text" id="apiTokenInput" name="apiTokenInput" class="form-input" placeholder="Token will appear here" readonly style="flex:1;">
-            <button class="btn btn-primary" id="generateTokenBtn"><i class="fas fa-key"></i> Generate Token</button>
+            <button class="btn btn-secondary" id="regenerateTokenBtn" title="Deletes the old token and creates a new one."><i class="fas fa-sync-alt"></i> Regenerate</button>
+            <button class="btn btn-primary" id="generateTokenBtn"><i class="fas fa-key"></i> Generate</button>
             <button class="btn btn-secondary" id="shareTokenBtn" style="display:none;"><i class="fas fa-share"></i> Share</button>
           </div>
           <div style="margin-top:.5rem; color:var(--text-muted); font-size:.85rem;">Generate a non-expiring token for API access.</div>
@@ -2760,6 +2812,7 @@ function removeFileCard(rel){
     document.getElementById('privacyToggle')?.addEventListener('click', togglePrivacy);
     document.getElementById('allowDeleteToggle')?.addEventListener('click', ()=> document.getElementById('allowDeleteToggle').classList.toggle('active'));
     document.getElementById('generateTokenBtn')?.addEventListener('click', generateToken);
+    document.getElementById('regenerateTokenBtn')?.addEventListener('click', regenerateToken);
     document.getElementById('shareTokenBtn')?.addEventListener('click', showTokenShare);
     document.getElementById('saveSettingsBtn')?.addEventListener('click', async ()=>{
       const priv = document.getElementById('privacyToggle').classList.contains('active'); // true => private
@@ -2814,6 +2867,39 @@ function removeFileCard(rel){
         }
       } catch (e) {
         showToast('Failed to generate token', 'error');
+      }
+    }
+
+    async function regenerateToken() {
+      if (!confirm('Are you sure you want to regenerate your permanent token and code? The old ones will stop working immediately.')) {
+        return;
+      }
+      try {
+        const r = await fetch('/api/accounts/token/regenerate', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'}
+        });
+        const j = await r.json();
+
+        if (j.ok) {
+          const tokenInput = document.getElementById('apiTokenInput');
+          tokenInput.value = j.token;
+
+          const codeInput = document.getElementById('permanentCodeInput');
+          if (j.permanent_code) {
+            codeInput.value = j.permanent_code;
+          }
+
+          tokenInput.select();
+          document.execCommand('copy');
+          tokenInput.dataset.token = j.token;
+          document.getElementById('shareTokenBtn').style.display = 'inline-flex';
+          showToast('New token and code generated. Token copied.', 'success');
+        } else {
+          showToast(j.error || 'Failed to regenerate token', 'error');
+        }
+      } catch (e) {
+        showToast('Failed to regenerate token', 'error');
       }
     }
 
@@ -3355,9 +3441,7 @@ LOGIN_HTML = """
     <!-- Left Column -->
     <div class="login-section">
       <h3 style="margin-bottom:.5rem;">Scan QR Code</h3>
-      <div style="display:flex; align-items:center; justify-content:center; padding:16px; background:#fff; border-radius:12px; max-width: 280px; margin: 0 auto;">
-        <img id="qrImage" src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code" style="image-rendering:pixelated; image-rendering:crisp-edges;" />
-      </div>
+      <img id="qrImage" src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code" style="image-rendering:pixelated; image-rendering:crisp-edges; max-width: 250px; height: auto; border-radius: 12px; margin: 0 auto;" />
       <p class="muted" style="margin-top:.75rem; color:var(--text-muted); word-break:break-all;">Or open: <code id="qrUrl">{{ qr_url }}</code></p>
     </div>
 
@@ -3372,7 +3456,7 @@ LOGIN_HTML = """
 
       <form action="{{ url_for('login_with_code') }}" method="POST">
           <label for="code-input" style="display: block; margin-bottom: .5rem; color: var(--text-secondary);">Enter a code from another device:</label>
-          <input id="code-input" type="text" name="code" class="form-input" placeholder="123456" required pattern="\\d{6}" maxlength="6" style="font-size: 1.5rem; text-align: center; letter-spacing: 0.2em; margin-bottom: 1rem;">
+          <input id="code-input" type="text" name="code" class="form-input" placeholder="123456" required pattern="[0-9]{6}" maxlength="6" inputmode="numeric" style="font-size: 1.5rem; text-align: center; letter-spacing: 0.2em; margin-bottom: 1rem;">
           <button type="submit" class="btn btn-primary" style="width: 100%;">Continue</button>
       </form>
     </div>
@@ -3542,13 +3626,42 @@ def login():
 
 @app.route("/login_with_default")
 def login_with_default():
-    device_id, folder = get_or_create_device_folder(request)
-    icon = get_user_icon(folder)
+    device_id = request.cookies.get(DEVICE_COOKIE_NAME)
+
+    # If the device has a default folder mapped, check if it's the admin
+    if device_id and device_id in app.config["DEVICE_MAP"]:
+        folder = app.config["DEVICE_MAP"][device_id].get("folder")
+        if folder and is_admin_device_of(folder):
+            # If admin, log them into their default account
+            session["authed"] = True
+            session["folder"] = folder
+            session["icon"] = get_user_icon(folder)
+            resp = make_response(redirect(url_for("browse", subpath=folder)))
+            # The cookie is already correct, no need to set it again
+            return resp
+
+    # In all other cases (no cookie, no mapped folder, or not admin of the folder),
+    # create a brand new account and associate it with a new device ID.
+    new_device_id = secrets.token_urlsafe(12)
+    new_folder = ensure_unique_folder_name()
+    (ROOT_DIR / new_folder).mkdir(parents=True, exist_ok=True)
+
+    # Map the new device ID to the new folder
+    app.config["DEVICE_MAP"][new_device_id] = {"folder": new_folder, "created": datetime.utcnow().isoformat() + "Z"}
+    save_device_map(app.config["DEVICE_MAP"])
+
+    # Assign this new device as the admin of the new folder
+    cfg = get_user_cfg(new_folder)
+    cfg["admin_device"] = new_device_id
+    save_users(app.config["USERS"])
+
+    # Log the user into their new account
     session["authed"] = True
-    session["folder"] = folder
-    session["icon"] = icon
-    resp = make_response(redirect(url_for("browse", subpath=folder)))
-    resp.set_cookie(DEVICE_COOKIE_NAME, device_id, max_age=60*60*24*730, samesite="Lax")
+    session["folder"] = new_folder
+    session["icon"] = get_user_icon(new_folder)
+
+    resp = make_response(redirect(url_for("browse", subpath=new_folder)))
+    resp.set_cookie(DEVICE_COOKIE_NAME, new_device_id, max_age=60*60*24*730, samesite="Lax")
     return resp
 
 @app.route("/api/login_qr")
