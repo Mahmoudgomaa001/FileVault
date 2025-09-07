@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block body %}
+<style>
+.user-badge {
+    display: none;
+}
+</style>
+
+<div class="card">
+  <h2 style="margin-bottom:.5rem;">Scan to login</h2>
+  <p style="color:var(--text-secondary); margin-bottom:.75rem;">{{ message }}</p>
+
+  {% if ngrok_available %}
+  <div class="toggle-container" style="margin-bottom:1rem;">
+    <span class="toggle-label">Local</span>
+    <div class="toggle-switch" id="loginModeToggle">
+      <div class="slider"></div>
+    </div>
+    <span class="toggle-label">Online</span>
+  </div>
+  {% endif %}
+
+  <div style="display:flex; align-items:center; justify-content:center; padding:16px; background:#fff; border-radius:12px;">
+    <img id="qrImage" src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code" style="image-rendering:pixelated; image-rendering:crisp-edges;" />
+  </div>
+  <p class="muted" style="margin-top:.75rem; color:var(--text-muted);">Or open: <code id="qrUrl">{{ qr_url }}</code></p>
+  <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1rem;">
+    <p style="color:var(--text-secondary); margin-bottom:.75rem;">Or if you're on a new device:</p>
+    <a href="{{ url_for('login_with_default') }}" class="btn btn-secondary">Continue with a new/default account</a>
+  </div>
+</div>
+<script>
+  let currentMode = 'local';
+  let currentToken = "{{ token }}";
+
+  {% if ngrok_available %}
+  const toggle = document.getElementById('loginModeToggle');
+  toggle.addEventListener('click', async ()=>{
+    currentMode = currentMode === 'local' ? 'online' : 'local';
+    toggle.classList.toggle('active', currentMode === 'online');
+    try {
+      const r = await fetch(`/api/login_qr?token=${currentToken}&mode=${currentMode}`, {cache:'no-store'});
+      const j = await r.json();
+      if(j.ok){
+        document.getElementById('qrImage').src = `data:image/png;base64,${j.b64}`;
+        document.getElementById('qrUrl').textContent = j.url;
+      }
+    } catch(e){}
+  });
+  {% endif %}
+
+  async function poll(){
+    try {
+      const r = await fetch("{{ url_for('check_login', token=token) }}", {cache:'no-store'});
+      const j = await r.json();
+      if(j.authenticated && j.url){ window.location = j.url; return; }
+    } catch(e){}
+    setTimeout(poll, 1000);
+  }
+  setTimeout(poll, 500);
+</script>
+{% endblock %}

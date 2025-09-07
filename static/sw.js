@@ -1,8 +1,11 @@
-const VERSION = 'v8';
+const VERSION = 'v9';
 const CACHE_NAME = `filevault-cache-${VERSION}`;
 const OFFLINE_URL = 'static/offline.html';
 const APP_SHELL_URLS = [
   '/',
+  '/login',
+  '/share',
+  '/static/app.js',
   '/static/fonts.css',
   '/static/vendor/fontawesome/css/all.min.css',
   '/static/vendor/fontawesome/css/fa-shims.css',

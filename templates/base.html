@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en">
+<head>
+
+<script>
+  (function(){try{var t=localStorage.getItem('theme')||''; if(t&&t!=='dark') document.documentElement.classList.add(t);}catch(e){}})();
+</script>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <title>FileVault</title>
+
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+<link rel="manifest" href="/static/site.webmanifest" />
+<meta name="theme-color" content="#0F172A" id="themeColorMeta" />
+<link rel="stylesheet" href="/static/fonts.css" />
+<link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
+<link rel="stylesheet" href="/static/vendor/fontawesome/css/fa-shims.css" />
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/static/sw.js').then(registration => {
+        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+      }, err => {
+        console.log('ServiceWorker registration failed: ', err);
+      });
+    });
+  }
+</script>
+
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    :root {
+      --primary:#3B82F6; --primary-dark:#2563EB; --secondary:#8B5CF6; --success:#10B981; --danger:#EF4444; --warning:#F59E0B;
+      --bg-primary:#0F172A; --bg-secondary:#1E293B; --bg-tertiary:#334155; --text-primary:#F8FAFC; --text-secondary:#CBD5E1; --text-muted:#64748B;
+      --border:#334155; --shadow:rgba(0,0,0,0.5); --header-height:60px; --mobile-padding:.75rem; --desktop-padding:1.5rem;
+      --dhikr-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    :root.light {
+      --bg-primary:#f7fafc; --bg-secondary:#ffffff; --bg-tertiary:#e5e7eb; --text-primary:#0f172a; --text-secondary:#334155; --text-muted:#64748b;
+      --border:#e5e7eb; --shadow:rgba(0,0,0,0.12);
+      --dhikr-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    :root.barbie {
+  --primary:#ff4fa3;
+  --primary-dark:#f12783;
+  --secondary:#ff7ac8;
+  --success:#ff9ad5;
+  --danger:#ff497a;
+  --warning:#ffb6e1;
+
+  --bg-primary:#ffe6f2;
+  --bg-secondary:#fff0f7;
+  --bg-tertiary:#ffd6ea;
+
+  --text-primary:#5b0440;
+  --text-secondary:#8a2664;
+  --text-muted:#a34a7c;
+
+  --border:#ffc0dd;
+  --shadow:rgba(255, 116, 183, 0.25);
+  --dhikr-bg: linear-gradient(135deg, #ff8ccf 0%, #ff4fa3 100%);
+}
+    html, body, a, button, .file-card { touch-action: manipulation; }
+    body { font-family:'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background:var(--bg-primary); color:var(--text-primary); min-height:100vh; position:relative; overflow-x:hidden; }
+
+    /* Dhikr Banner */
+    .dhikr-banner {
+      background: var(--dhikr-bg);
+      padding: 1rem;
+      text-align: center;
+      position: fixed;
+      top: var(--header-height);
+      left: 0;
+      right: 0;
+      z-index: 900;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      animation: slideDown 0.5s ease;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .dhikr-banner:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.3); transform: scale(1.01); }
+    .dhikr-content { display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; }
+    .dhikr-arabic { font-family: 'Amiri', serif; font-size: 1.5rem; font-weight: 700; color: #ffffff; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { transform: scale(1);} 50% { transform: scale(1.05);} }
+    .dhikr-translation { font-size: 0.9rem; color: rgba(255,255,255,0.9); font-style: italic; }
+    .dhikr-icon { font-size: 1.2rem; color: rgba(255,255,255,0.8); animation: rotate 4s linear infinite; }
+    @keyframes rotate { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
+    .dhikr-refresh { position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.2); border: none; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s ease; color: white; }
+    .dhikr-refresh:hover { background: rgba(255,255,255,0.3); transform: translateY(-50%) rotate(180deg); }
+
+    body.with-dhikr .container { padding-top: calc(var(--header-height) + 60px + var(--mobile-padding)); }
+
+    .header { background:rgba(30,41,59,.98); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); border-bottom:1px solid var(--border); position:fixed; top:0; left:0; right:0; z-index:1000; height:var(--header-height); }
+    :root.light .header { background:rgba(255,255,255,.98); }
+    .header-content { max-width:1400px; margin:0 auto; padding:0 var(--mobile-padding); height:100%; display:flex; justify-content:space-between; align-items:center; gap:.5rem; }
+    .logo { display:flex; align-items:center; gap:.5rem; font-size:1.125rem; font-weight:700; background:linear-gradient(135deg,var(--primary),var(--secondary)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; white-space:nowrap; text-decoration:none; }
+    .nav-menu { display:flex; gap:.5rem; align-items:center; }
+    .user-badge { display:none; padding:.375rem .75rem; background:var(--bg-tertiary); border-radius:2rem; font-size:.75rem; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .container { max-width:1400px; margin:0 auto; padding:calc(var(--header-height) + var(--mobile-padding)) var(--mobile-padding) var(--mobile-padding); min-height:100vh; }
+    .card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; padding:var(--mobile-padding); margin-bottom:var(--mobile-padding); animation:fadeIn .3s ease; }
+    @keyframes fadeIn { from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+    .toolbar { display:flex; flex-direction:column; gap:.75rem; margin-bottom:1rem; background:var(--bg-secondary); padding:var(--mobile-padding); border-radius:.75rem; border:1px solid var(--border); }
+    .toolbar-row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+    .search-box { flex:1; min-width:150px; position:relative; }
+    .search-input { width:100%; padding:.625rem 2.5rem .625rem .875rem; background:var(--bg-primary); border:1px solid var(--border); border-radius:.5rem; color:var(--text-primary); font-size:.875rem; }
+    .search-input:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(59,130,246,.1); }
+    .search-icon { position:absolute; right:.875rem; top:50%; transform:translateY(-50%); color:var(--text-muted); pointer-events:none; }
+    .view-controls { display:flex; gap:.25rem; padding:.25rem; background:var(--bg-primary); border-radius:.5rem; }
+    .view-btn { flex:1; padding:.5rem; background:transparent; border:none; color:var(--text-muted); cursor:pointer; border-radius:.375rem; font-size:.875rem; transition:all .2s; display:flex; align-items:center; justify-content:center; gap:.25rem; }
+    .view-btn.active { background:var(--primary); color:white; }
+    .btn { padding:.5rem .875rem; border-radius:.5rem; font-weight:600; cursor:pointer; transition:all .2s; border:none; display:inline-flex; align-items:center; justify-content:center; gap:.375rem; font-size:.8125rem; white-space:nowrap; text-decoration:none; color:inherit; }
+    .btn:active { transform:scale(.97); }
+    .btn-primary { background:var(--primary); color:#fff; }
+    .btn-secondary { background:var(--bg-tertiary); color:var(--text-primary); }
+    .btn.active { background:var(--primary); color:white; }
+    .btn-danger { background:var(--danger); color:#fff; }
+    .btn-success { background:var(--success); color:#fff; }
+
+    /* Toggle */
+    .toggle-container { display:flex; align-items:center; gap:.75rem; padding:.75rem; background:var(--bg-tertiary); border-radius:.5rem; }
+    .toggle-switch { position:relative; width:56px; height:28px; background:var(--bg-primary); border:2px solid var(--border); border-radius:14px; cursor:pointer; transition:all .3s; }
+    .toggle-switch.active { background:var(--primary); border-color:var(--primary); }
+    .toggle-switch .slider { position:absolute; top:2px; left:2px; width:20px; height:20px; background:white; border-radius:50%; transition:all .3s; }
+    .toggle-switch.active .slider { transform:translateX(28px); }
+    .toggle-label { font-size:.875rem; font-weight:600; -webkit-user-select:none; user-select:none; cursor:pointer; }
+
+    /* Upload */
+    .upload-section { margin-bottom:1.5rem; }
+    .upload-area { border:2px dashed var(--primary); border-radius:.75rem; padding:1.5rem 1rem; text-align:center; background:linear-gradient(135deg, rgba(59,130,246,.05), rgba(139,92,246,.05)); cursor:pointer; min-height:120px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.25rem; position:relative; }
+    .upload-area.dragover { background:linear-gradient(135deg, rgba(59,130,246,.15), rgba(139,92,246,.15)); border-color:var(--success); }
+    .upload-input { position:absolute; width:100%; height:100%; inset:0; opacity:0; cursor:pointer; }
+    .upload-icon { font-size:2rem; color:var(--primary); }
+    .upload-text { font-size:.875rem; font-weight:700; }
+    .upload-subtext { font-size:.75rem; color:var(--text-muted); }
+    .progress-container { margin-top:1rem; max-height:300px; overflow-y:auto; }
+    .progress-item { background:var(--bg-secondary); border-radius:.5rem; padding:.75rem; margin-bottom:.5rem; border:1px solid var(--border); animation:slideIn .3s ease; }
+    @keyframes slideIn { from{opacity:0; transform:translateX(-10px);} to{opacity:1; transform:translateX(0);} }
+    .progress-item.completed { border-color:var(--success); background:rgba(16,185,129,.1); }
+    .progress-item.error { border-color:var(--danger); background:rgba(239,68,68,.1); }
+    .progress-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:.5rem; gap:.5rem; }
+    .progress-info { flex:1; min-width:0; }
+    .progress-filename { font-size:.75rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:.25rem; }
+    .progress-stats { display:flex; gap:.5rem; font-size:.625rem; color:var(--text-muted); }
+    .progress-actions { display:flex; align-items:center; gap:.25rem; }
+    .progress-percent { font-size:.75rem; font-weight:700; min-width:35px; text-align:right; }
+    .progress-cancel { width:28px; height:28px; border-radius:50%; background:var(--bg-tertiary); border:none; color:var(--text-muted); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:.75rem; }
+    .progress-bar { height:4px; background:var(--bg-tertiary); border-radius:2px; overflow:hidden; }
+    .progress-fill { height:100%; background:linear-gradient(90deg, var(--primary), var(--secondary)); border-radius:2px; width:0%; transition:width .25s ease; }
+
+
+    /* File grid */
+    .file-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap:.75rem; margin-top:1rem; }
+    .file-grid.list-view { grid-template-columns: 1fr; gap:.5rem; }
+    .file-card { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; overflow:hidden; transition:all .2s ease; cursor:pointer; }
+    .file-card:active { transform:scale(.98); }
+    .file-card.selected { border: 5px solid var(--primary); background: color-mix(in srgb, var(--bg-secondary) 80%, var(--primary)); }
+    .file-select-checkbox { display: none; position: absolute; top: 8px; left: 8px; z-index: 5; width: 18px; height: 18px; accent-color: var(--primary); }
+    .select-mode .file-select-checkbox { display: block; }
+    .list-view .file-card { display:flex; align-items:center; padding:.75rem; gap:.75rem; }
+    .file-preview { height:120px; background:var(--bg-tertiary); display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; }
+    .list-view .file-preview { width:48px; height:48px; border-radius:.5rem; flex-shrink:0; }
+    .file-preview img, .file-preview video { width:100%; height:100%; object-fit:cover; }
+    .file-info { padding:.75rem; }
+    .list-view .file-info { flex:1; padding:0; min-width:0; }
+    .file-name { font-size:.85rem; font-weight:700; margin-bottom:.25rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .file-meta { font-size:.7rem; color:var(--text-muted); margin-bottom:.5rem; }
+    .list-view .file-meta { margin-bottom:0; }
+    .file-actions { display:flex; gap:.375rem; }
+    .btn-icon { width:34px; height:34px; padding:0; border-radius:.375rem; display:inline-flex; align-items:center; justify-content:center; }
+
+    /* Toasts */
+    .toast-container { position:fixed; top:calc(var(--header-height) + 70px + .5rem); right:.5rem; z-index:3000; max-width:calc(100vw - 1rem); }
+    .toast { background:var(--bg-secondary); border:1px solid var(--border); border-radius:.5rem; padding:.75rem; margin-bottom:.5rem; display:flex; align-items:center; gap:.75rem; min-width:250px; max-width:350px; box-shadow:0 4px 12px var(--shadow); animation:toastIn .3s ease; }
+    .toast.success { border-left:3px solid var(--success); }
+    .toast.error { border-left:3px solid var(--danger); }
+    .toast.warning { border-left:3px solid var(--warning); }
+    .toast.info { border-left:3px solid var(--primary); }
+    @keyframes toastIn { from{opacity:0; transform:translateX(100%);} to{opacity:1; transform:translateX(0);} }
+
+    /* Modal */
+    .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); z-index:2000; padding:1rem; overflow-y:auto; }
+    .modal.active { display:flex; align-items:center; justify-content:center; }
+    .modal-content { background:var(--bg-secondary); border-radius:1rem; max-width:900px; width:100%; max-height:90vh; overflow:hidden; display:flex; flex-direction:column; animation:modalSlide .25s ease; }
+    @keyframes modalSlide { from{opacity:0; transform:translateY(20px);} to{opacity:1; transform:translateY(0);} }
+    .modal-header { padding:1rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+    .modal-title { font-size:1rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .modal-close { width:28px; height:28px; border-radius:50%; background:var(--bg-tertiary); border:none; color:var(--text-primary); cursor:pointer; display:flex; align-items:center; justify-content:center; transition: transform 0.3s ease, background 0.3s ease;}
+    .modal-close:hover { background: var(--danger); transform: rotate(90deg); }
+    .modal-body { padding:1rem; overflow:auto; display:flex; flex-direction:column; gap:.75rem; }
+    .preview-holder { display:flex; align-items:center; justify-content:center; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:.5rem; min-height:240px; }
+    .preview-holder img, .preview-holder video, .preview-holder audio, .preview-holder embed, .preview-holder iframe { max-width:100%; max-height:65vh; }
+    .modal-footer { padding:1rem; border-top:1px solid var(--border); display:flex; gap:.5rem; justify-content:flex-end; }
+    #folderTree .folder-tree-item { padding:.375rem .75rem; border-radius:.375rem; cursor:pointer; -webkit-user-select:none; user-select:none; }
+    #folderTree .folder-tree-item:hover { background:var(--bg-tertiary); }
+    #folderTree .folder-tree-item.selected { background:var(--primary); color:white; font-weight:600; }
+    .form-input { margin-top: 5px; width: 100%; padding: 0.625rem 0.875rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 0.5rem; color: var(--text-primary); font-size: 0.875rem; }
+    .form-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    .qr-box { display:flex; align-items:center; justify-content:center; padding:16px; background:#fff; border-radius:12px; max-width: 320px; margin: 0 auto; }
+    .qr-box img { max-width: 100%; height: auto; }
+
+    /* Stats */
+    .stats-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:.75rem; margin-bottom:1rem; }
+    .stat-card { background:linear-gradient(135deg,var(--bg-secondary), rgba(59,130,246,.05)); border:1px solid var(--border); border-radius:.75rem; padding:.875rem; display:flex; align-items:center; gap:.75rem; }
+    .stat-icon { width:36px; height:36px; border-radius:.5rem; display:flex; align-items:center; justify-content:center; font-size:1rem; flex-shrink:0; }
+    .stat-info { flex:1; min-width:0; }
+    .stat-label { font-size:.625rem; color:var(--text-muted); margin-bottom:.125rem; }
+    .stat-value { font-size:1rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+    /* FAB */
+    .fab-container { position:fixed; bottom:1.5rem; right:1.5rem; z-index:999; }
+    .fab { width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,var(--primary),var(--primary-dark)); color:white; border:none; cursor:pointer; box-shadow:0 4px 12px rgba(59,130,246,.4); display:flex; align-items:center; justify-content:center; font-size:1.25rem; }
+    .fab:active { transform:scale(.95); }
+    .fab-menu { position:absolute; bottom:70px; right:0; background:var(--bg-secondary); border:1px solid var(--border); border-radius:.75rem; padding:.5rem; box-shadow:0 4px 12px var(--shadow); display:none; min-width:180px; }
+    .fab-menu.active { display:block; animation:fadeIn .2s ease; }
+    .fab-menu-item { padding:.625rem .875rem; border-radius:.5rem; cursor:pointer; display:flex; align-items:center; gap:.75rem; font-size:.875rem; color:var(--text-primary); border:none; background:transparent; width:100%; text-align:left; }
+    .account-actions { display: flex; gap: .5rem; flex-shrink: 0; }
+    .btn-text { margin-left: .375rem; }
+
+    /* Header Dropdown */
+    .nav-menu-mobile { display: none; position: relative; }
+    .dropdown-menu {
+      display: none;
+      position: absolute;
+      top: calc(100% + .5rem);
+      right: 0;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: .75rem;
+      padding: .5rem;
+      box-shadow: 0 4px 12px var(--shadow);
+      min-width: 220px;
+      z-index: 1100;
+    }
+    .dropdown-menu.active { display: block; animation: fadeIn .2s ease; }
+    .dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      padding: .625rem .875rem;
+      border-radius: .5rem;
+      cursor: pointer;
+      font-size: .875rem;
+      color: var(--text-primary);
+      background: transparent;
+      width: 100%;
+      text-align: left;
+      border: none;
+      text-decoration: none;
+    }
+    .dropdown-item:hover { background: var(--bg-tertiary); }
+    .dropdown-item-danger:hover { background: var(--danger); color: white; }
+    .dropdown-divider {
+      height: 1px;
+      background: var(--border);
+      margin: .5rem 0;
+    }
+
+    @media (max-width: 768px) {
+      .nav-items-desktop { display: none; }
+      .nav-menu-mobile { display: block; }
+    }
+
+    @media (max-width: 640px) {
+      .accounts-card { flex-direction: column; align-items: stretch; }
+      .account-actions { flex-direction: column; align-items: stretch; width: 100%; margin-top: .75rem; }
+      .account-actions .btn { width: 100%; justify-content: center; }
+    }
+
+    @media (min-width: 768px) {
+      .user-badge { display:block; }
+      body.with-dhikr .container { padding-top: calc(var(--header-height) + 70px + var(--desktop-padding)); }
+      .container { padding:calc(var(--header-height) + var(--desktop-padding)) var(--desktop-padding) var(--desktop-padding); }
+      .toolbar { flex-direction:row; justify-content:space-between; align-items:center; }
+      .file-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:1rem; }
+      .file-preview { height:150px; }
+      .stats-grid { grid-template-columns: repeat(4, 1fr); }
+      .modal { padding:2rem; }
+      .toast-container { top:calc(var(--header-height) + 70px + 1rem); right:1rem; }
+    }
+    @media (min-width: 1024px) { .file-grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); } }
+  </style>
+</head>
+<body class="{% if authed and not share_page_active %}with-dhikr{% endif %}">
+  <header class="header">
+    <div class="header-content">
+      <a class="logo" href="{{ url_for('home') }}" title="My Files">
+        <i class="fas fa-shield-alt"></i><span>FileVault</span>
+      </a>
+      <nav class="nav-menu">
+        <a class="btn btn-secondary" href="{{ url_for('home') }}" title="My Files"><i class="fas fa-home"></i></a>
+        <div class="user-badge">{{ icon or "📁" }} {{ user_label }}</div>
+        {% if authed %}
+          <!-- Desktop-only buttons -->
+          <div class="nav-items-desktop">
+              {% if is_on_ngrok %}
+                <button class="btn btn-primary" id="goOfflineBtn" title="Switch to Local IP"><i class="fas fa-network-wired"></i><span class="btn-text"> Local</span></button>
+              {% elif is_on_local_with_ngrok_available %}
+                <button class="btn btn-secondary" id="goOnlineBtn" title="Switch to Online URL"><i class="fas fa-wifi"></i><span class="btn-text"> Online</span></button>
+              {% endif %}
+              <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
+              {% if is_admin %}
+              <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
+              <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
+              {% endif %}
+              <button class="btn btn-secondary btn-icon" id="installBtn" title="Install App" style="display: none;"><i class="fas fa-mobile-screen-button"></i></button>
+              <button id="themeBtn" class="btn btn-secondary btn-icon" title="Toggle theme"><i class="fas fa-moon"></i></button>
+              <a href="{{ url_for('logout') }}" class="btn btn-danger btn-icon" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
+          </div>
+
+          <!-- Mobile-only dropdown menu -->
+          <div class="nav-menu-mobile">
+              {% if is_on_ngrok %}
+                <button class="btn btn-primary btn-icon" id="goOfflineBtnMobile" onclick="document.getElementById('goOfflineBtn').click()" title="Switch to Local IP"><i class="fas fa-network-wired"></i></button>
+              {% elif is_on_local_with_ngrok_available %}
+                <button class="btn btn-secondary btn-icon" id="goOnlineBtnMobile" onclick="document.getElementById('goOnlineBtn').click()" title="Switch to Online URL"><i class="fas fa-wifi"></i></button>
+              {% endif %}
+              <button class="btn btn-secondary btn-icon" id="mobileMenuBtn" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
+              <div class="dropdown-menu" id="mobileDropdown">
+                  <button class="dropdown-item" onclick="document.getElementById('myQRBtn').click()"><i class="fas fa-qrcode"></i><span>My QR</span></button>
+                  <hr class="dropdown-divider">
+                  {% if is_admin %}
+                  <button class="dropdown-item" onclick="document.getElementById('accountsBtn').click()"><i class="fas fa-user-gear"></i><span>Accounts</span></button>
+                  <button class="dropdown-item" onclick="document.getElementById('settingsBtn').click()"><i class="fas fa-gear"></i><span>Settings</span></button>
+                  {% endif %}
+                  <button class="dropdown-item" id="installBtnMobile" onclick="document.getElementById('installBtn').click()" style="display:none;"><i class="fas fa-mobile-screen-button"></i><span>Install App</span></button>
+                  <button class="dropdown-item" onclick="document.getElementById('themeBtn').click()"><i class="fas fa-moon"></i><span>Toggle Theme</span></button>
+                  <hr class="dropdown-divider">
+                  <a href="{{ url_for('logout') }}" class="dropdown-item dropdown-item-danger"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+              </div>
+          </div>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  {% if authed and not share_page_active %}
+  <div class="dhikr-banner" id="dhikrBanner">
+    <div class="dhikr-content">
+      <span class="dhikr-icon">✨</span>
+      <span class="dhikr-arabic" id="dhikrArabic">{{ dhikr }}</span>
+      <span class="dhikr-icon">🌟</span>
+    </div>
+    <button class="dhikr-refresh" onclick="changeDhikr()" title="Change Dhikr">
+      <i class="fas fa-sync-alt"></i>
+    </button>
+  </div>
+  {% endif %}
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <div class="container">
+    {% block body %}{% endblock %}
+  </div>
+
+  <!-- Preview Modal -->
+  <div class="modal" id="previewModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title" id="pvTitle">Preview</div>
+        <button class="modal-close" onclick="closeModal('previewModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="preview-container" style="position:relative;">
+          <div class="preview-holder" id="pvMedia">Loading…</div>
+          <button class="nav-arrow nav-prev" id="pvPrevBtn" aria-label="Previous file" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i class="fas fa-chevron-left"></i></button>
+          <button class="nav-arrow nav-next" id="pvNextBtn" aria-label="Next file" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i class="fas fa-chevron-right"></i></button>
+        </div>
+        <div class="row" style="gap:.5rem; align-items:center; margin-top:10px;">
+          <button class="btn btn-primary" id="pvOpenBtn"><i class="fas fa-up-right-from-square"></i> Open</button>
+          <a class="btn btn-secondary" id="pvDownloadBtn"><i class="fas fa-download"></i> Download</a>
+          <button class="btn btn-secondary" id="pvCopyBtn" style="display:none;"><i class="fas fa-copy"></i> Copy Text</button>
+          <button class="btn btn-secondary" id="pvShareBtn"><i class="fas fa-share"></i> Share</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal" id="settingsModal">
+    <div class="modal-content" style="max-width:520px;">
+      <div class="modal-header">
+        <div class="modal-title">Settings</div>
+        <button class="modal-close" onclick="closeModal('settingsModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="settingsBody">
+        <div class="toggle-container">
+          <span class="toggle-label">Public</span>
+          <div class="toggle-switch" id="privacyToggle">
+            <div class="slider"></div>
+          </div>
+          <span class="toggle-label">Private</span>
+        </div>
+        <div style="margin-top:.75rem;">
+          <label class="form-label" for="privacyPassword">Password (set/change when switching to Private)</label>
+          <input type="password" id="privacyPassword" name="privacyPassword" class="form-input" placeholder="New password">
+        </div>
+        <div class="toggle-container" style="margin-top: 1rem;">
+          <span class="toggle-label" title="If enabled, anyone with access can delete files.">Anyone can delete</span>
+          <div class="toggle-switch" id="allowDeleteToggle">
+            <div class="slider"></div>
+          </div>
+        </div>
+        <div style="margin-top: 1.5rem;">
+            <button class="btn btn-primary" id="subscribeBtn"><i class="fas fa-bell"></i> Enable Notifications</button>
+            <div id="pushStatus" style="margin-top:.5rem; color:var(--text-muted); font-size:.85rem;"></div>
+        </div>
+        <div style="margin-top:1.5rem;">
+          <label class="form-label" for="apiTokenInput">API Token</label>
+          <div class="row" style="gap:.5rem; margin-top:.5rem;">
+            <input type="text" id="apiTokenInput" name="apiTokenInput" class="form-input" placeholder="Token will appear here" readonly style="flex:1;">
+            <button class="btn btn-primary" id="generateTokenBtn"><i class="fas fa-key"></i> Generate Token</button>
+            <button class="btn btn-secondary" id="shareTokenBtn" style="display:none;"><i class="fas fa-share"></i> Share</button>
+          </div>
+          <div style="margin-top:.5rem; color:var(--text-muted); font-size:.85rem;">Generate a non-expiring token for API access.</div>
+        </div>
+        <div style="margin-top:.75rem; color:var(--text-muted); font-size:.85rem;">Only the first device (admin) can change privacy.</div>
+      </div>
+      <div class="modal-footer" style="justify-content: space-between; align-items: center;">
+        <span style="font-size: 0.75rem; color: var(--text-muted);">Version 1.2.0</span>
+        <div>
+          <button class="btn btn-secondary" onclick="closeModal('settingsModal')">Close</button>
+          <button class="btn btn-primary" id="saveSettingsBtn"><i class="fas fa-save"></i> Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Token Share Modal -->
+  <div class="modal" id="tokenShareModal">
+    <div class="modal-content" style="max-width:520px;">
+      <div class="modal-header">
+        <div class="modal-title">Share Access Token</div>
+        <button class="modal-close" onclick="closeModal('tokenShareModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="tokenShareBody">
+        <div class="qr-box"><div style="color:#222;">Loading…</div></div>
+        <div class="row" style="justify-content:space-between; margin-top:.75rem;">
+          <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all;" id="tokenShareLink"></div>
+          <button class="btn btn-secondary" id="copyTokenShareBtn"><i class="fas fa-link"></i> Copy</button>
+        </div>
+        <div style="margin-top:1rem; color:var(--text-muted); font-size:.85rem;">
+          <p>Scan this QR code or share the link to allow others to access your server even after restarts.</p>
+          <p>This token does not expire and provides full access to your files.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- My QR Modal -->
+  <div class="modal" id="myQRModal">
+    <div class="modal-content" style="max-width:400px;">
+      <div class="modal-header">
+        <div class="modal-title">My QR</div>
+        <button class="modal-close" onclick="closeModal('myQRModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="myQRBody">
+        <div class="qr-box"><div style="color:#222;">Loading…</div></div>
+        <div class="row" style="justify-content:space-between; margin-top:.75rem;">
+          <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all;" id="myQRLink"></div>
+          <button class="btn btn-secondary" id="copyQRBtn"><i class="fas fa-link"></i> Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<!-- Move Modal -->
+<div class="modal" id="moveModal">
+  <div class="modal-content" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">Move Items</div>
+      <button class="modal-close" onclick="closeModal('moveModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p>Select destination folder:</p>
+      <div id="folderTree" style="height: 300px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary);">
+        Loading...
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('moveModal')">Cancel</button>
+      <button class="btn btn-primary" id="confirmMoveBtn"><i class="fas fa-folder-tree"></i> Move Here</button>
+    </div>
+  </div>
+</div>
+
+<!-- Accounts Modal -->
+<div class="modal" id="accountsModal">
+  <div class="modal-content" style="max-width:620px;">
+    <div class="modal-header">
+      <div class="modal-title">Accounts</div>
+      <button class="modal-close" onclick="closeModal('accountsModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="accountsBody">Loading…</div>
+    <div class="modal-footer" style="flex-wrap:wrap; gap:.5rem;">
+      <label for="accCreateNameInput" style="position:absolute;width:1px;height:1px;overflow:hidden;">Custom account name</label>
+      <input type="text" id="accCreateNameInput" name="accCreateNameInput" class="form-input" placeholder="Custom name (optional) e.g. lucky-duck-042" style="flex:1; min-width:220px;">
+      <button class="btn btn-primary" id="accCreateBtn"><i class="fas fa-user-plus"></i> Create & Switch</button>
+    </div>
+  </div>
+</div>
+
+<!-- Transfer Admin Modal -->
+<div class="modal" id="transferAdminModal">
+  <div class="modal-content" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title" id="transferTitle">Transfer Admin</div>
+      <button class="modal-close" onclick="closeModal('transferAdminModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="transferBody">
+      <div class="qr-box"><div style="color:#222;">Generating…</div></div>
+      <div class="row" style="justify-content:space-between; margin-top:.75rem;">
+        <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all;" id="transferLink"></div>
+        <button class="btn btn-secondary" id="transferCopyBtn"><i class="fas fa-link"></i> Copy</button>
+      </div>
+      <div style="margin-top:.5rem; color:var(--text-muted); font-size:.85rem;">
+        Scan this QR from the new device to become the admin of this account. The scanning device will be logged in and set as default.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('transferAdminModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rename Account Modal -->
+<div class="modal" id="renameAccountModal">
+  <div class="modal-content" style="max-width:520px;">
+    <div class="modal-header">
+      <h3 class="modal-title">Rename Account</h3>
+      <button class="modal-close" onclick="closeModal('renameAccountModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p>Renaming account: <strong id="renameAccountOldName"></strong></p>
+      <div class="form-group">
+        <label class="form-label" for="renameAccountInput">New Account Name</label>
+        <input type="text" id="renameAccountInput" name="renameAccountInput" class="form-input" placeholder="Enter new name" autocomplete="off">
+        <input type="hidden" id="renameAccountHiddenOldName">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('renameAccountModal')">Cancel</button>
+      <button class="btn btn-primary" id="confirmRenameBtn"><i class="fas fa-save"></i> Rename</button>
+    </div>
+  </div>
+</div>
+
+</div>
+<script>
+  window.APP_CONFIG = {
+    CURRENT_FOLDER: {{ session.get('folder', '')|tojson }},
+    DHIKR_LIST: {{ dhikr_list|tojson }},
+    CURRENT_REL: "{{ current_rel|default('', true) }}"
+  };
+</script>
+<script src="/static/socket.io.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
