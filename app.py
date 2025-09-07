@@ -26,9 +26,7 @@ from flask_socketio import SocketIO
 import qrcode
 from qrcode.constants import ERROR_CORRECT_H
 
-# -----------------------------
-# Islamic Dhikr (Remembrance)
-# -----------------------------
+from shared_store import SharedStore
 
 
 # -----------------------------
@@ -61,9 +59,8 @@ ALLOWED_UPLOAD_EXT = None  # e.g. {"txt","png","jpg","pdf"}
 MAX_CONTENT_LENGTH = 10 * 1024 * 1024 * 1024  # 10GB
 SESSION_COOKIE_NAME = "qrfiles_sess"
 
-# Pending admin-claim tokens (QR-based transfer)
-admin_claim_tokens: dict[str, dict] = {}
-
+# Shared store for codes and session data
+code_store = SharedStore(ROOT_DIR / ".code_store.json")
 
 
 # Load adhkar and translations from JSON file
@@ -99,32 +96,9 @@ app.secret_key = APP_SECRET
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 app.config["SESSION_COOKIE_NAME"] = SESSION_COOKIE_NAME
 app.config["JSONIFY_MIMETYPE"] = "application/json; charset=utf-8"
-app.config["LOGIN_TOKENS"] = {}  # pc_token -> folder
-app.config["PAIRING_CODES"] = {}  # code -> {folder, created_at}
-app.config["PUSH_CODES"] = {} # code -> token
+app.config["LOGIN_TOKENS"] = {}  # pc_token -> folder - This one is for transferring a session from ngrok to local, let's keep it for now.
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
-
-# In-memory pending sessions for QR login
-pending_sessions: dict[str, dict] = {}
-
-def cleanup_expired_sessions():
-    """Remove pending sessions and tokens older than 10 minutes."""
-    now = datetime.utcnow()
-
-    expired_sessions = [
-        token for token, data in pending_sessions.items()
-        if "created_at" in data and (now - data["created_at"]).total_seconds() > 600
-    ]
-    for token in expired_sessions:
-        pending_sessions.pop(token, None)
-
-    expired_tokens = [
-        token for token, data in admin_claim_tokens.items()
-        if "created" in data and (now - datetime.fromisoformat(data["created"].replace("Z", ""))).total_seconds() > 600
-    ]
-    for token in expired_tokens:
-        admin_claim_tokens.pop(token, None)
 
 mimetypes.init()
 
@@ -391,12 +365,7 @@ def api_go_online():
         next_path = url_for('browse')
 
     pc_token = secrets.token_urlsafe(16)
-    app.config["LOGIN_TOKENS"][pc_token] = {
-        "folder": folder,
-        "device_id": device_id,
-        "next_url": next_path,
-        "created_at": datetime.utcnow()
-    }
+    app.config["LOGIN_TOKENS"][pc_token] = {"folder": folder, "device_id": device_id, "next_url": next_path}
 
     ngrok_url = get_ngrok_url()
     if not ngrok_url:
@@ -594,21 +563,35 @@ def api_accounts_token():
     if users[folder].get("admin_device") != did:
         return jsonify({"ok": False, "error": "only admin device can generate tokens"}), 403
 
-    # Check if a permanent token already exists
     user_cfg = users[folder]
     tokens = user_cfg.setdefault("tokens", {})
-    existing = next((info for info in tokens.values() if info.get("expires") is None), None)
 
-    if existing:
+    # Find if a permanent token and its code already exist
+    existing_token_info = next((info for info in tokens.values() if info.get("expires") is None), None)
+    existing_code = None
+    if existing_token_info:
+        # Search code_store for a code pointing to this token
+        for code, data in code_store._data.items():
+            if isinstance(data, dict) and data.get("value", {}).get("token") == existing_token_info["token"]:
+                existing_code = code
+                break
+
+    if existing_token_info and existing_code:
         return jsonify({
             "ok": True,
-            "token": existing["token"],
-            "message": "Permanent token already exists"
+            "token": existing_token_info["token"],
+            "code": existing_code,
+            "message": "Permanent token and code already exist."
         })
 
-    # Otherwise generate one new permanent token
+    # If token exists but code doesn't, or vice-versa, it's a broken state.
+    # For simplicity, we generate a new set. A more robust solution might try to repair.
+
     token = secrets.token_urlsafe(32)
     token_id = str(uuid.uuid4())
+    code = code_store.generate_unique_code()
+
+    # Store the permanent token in the user's config
     tokens[token_id] = {
         "token": token,
         "created": datetime.utcnow().isoformat() + "Z",
@@ -617,11 +600,14 @@ def api_accounts_token():
     }
     save_users(users)
 
+    # Store the code-to-token mapping in the shared store (no expiry)
+    code_store.set(code, {"type": "api_token", "token": token})
+
     return jsonify({
         "ok": True,
         "token": token,
-        "token_id": token_id,
-        "message": "Permanent token created successfully"
+        "code": code,
+        "message": "Permanent token and code created successfully."
     })
 
 def get_local_ip() -> str:
@@ -1108,8 +1094,6 @@ BASE_HTML = """
                 <button class="btn btn-secondary" id="goOnlineBtn" title="Switch to Online URL"><i class="fas fa-wifi"></i><span class="btn-text"> Online</span></button>
               {% endif %}
               <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
-              <button class="btn btn-secondary" id="getPairingCodeBtn" title="Get Login Code"><i class="fas fa-keyboard"></i><span class="btn-text"> Get Code</span></button>
-              <a href="{{ url_for('approve_device') }}" class="btn btn-secondary" title="Approve a Device"><i class="fas fa-check-square"></i><span class="btn-text"> Approve</span></a>
               {% if is_admin %}
               <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
               <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
@@ -1129,8 +1113,6 @@ BASE_HTML = """
               <button class="btn btn-secondary btn-icon" id="mobileMenuBtn" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
               <div class="dropdown-menu" id="mobileDropdown">
                   <button class="dropdown-item" onclick="document.getElementById('myQRBtn').click()"><i class="fas fa-qrcode"></i><span>My QR</span></button>
-                  <button class="dropdown-item" onclick="document.getElementById('getPairingCodeBtn').click()"><i class="fas fa-keyboard"></i><span>Get Code</span></button>
-                  <a href="{{ url_for('approve_device') }}" class="dropdown-item"><i class="fas fa-check-square"></i><span>Approve Device</span></a>
                   <hr class="dropdown-divider">
                   {% if is_admin %}
                   <button class="dropdown-item" onclick="document.getElementById('accountsBtn').click()"><i class="fas fa-user-gear"></i><span>Accounts</span></button>
@@ -1219,13 +1201,14 @@ BASE_HTML = """
             <div id="pushStatus" style="margin-top:.5rem; color:var(--text-muted); font-size:.85rem;"></div>
         </div>
         <div style="margin-top:1.5rem;">
-          <label class="form-label" for="apiTokenInput">API Token</label>
-          <div class="row" style="gap:.5rem; margin-top:.5rem;">
+          <label class="form-label" for="apiTokenInput">Permanent API Token & Code</label>
+          <div class="row" style="gap:.5rem; margin-top:.5rem; align-items: center;">
             <input type="text" id="apiTokenInput" name="apiTokenInput" class="form-input" placeholder="Token will appear here" readonly style="flex:1;">
-            <button class="btn btn-primary" id="generateTokenBtn"><i class="fas fa-key"></i> Generate Token</button>
-            <button class="btn btn-secondary" id="shareTokenBtn" style="display:none;"><i class="fas fa-share"></i> Share</button>
+            <input type="text" id="apiCodeInput" name="apiCodeInput" class="form-input" placeholder="Code" readonly style="width: 120px; text-align: center; font-weight: bold; letter-spacing: 0.1em;">
+            <button class="btn btn-primary" id="generateTokenBtn" title="Generate Token & Code"><i class="fas fa-key"></i> Generate</button>
+            <button class="btn btn-secondary" id="shareTokenBtn" style="display:none;" title="Share Token"><i class="fas fa-share"></i></button>
           </div>
-          <div style="margin-top:.5rem; color:var(--text-muted); font-size:.85rem;">Generate a non-expiring token for API access.</div>
+          <div style="margin-top:.5rem; color:var(--text-muted); font-size:.85rem;">Generate a permanent token and a corresponding 6-digit code for API access.</div>
         </div>
         <div style="margin-top:.75rem; color:var(--text-muted); font-size:.85rem;">Only the first device (admin) can change privacy.</div>
       </div>
@@ -1276,23 +1259,6 @@ BASE_HTML = """
       </div>
     </div>
   </div>
-
-<!-- Pairing Code Modal -->
-<div class="modal" id="pairingCodeModal">
-  <div class="modal-content" style="max-width:400px;">
-    <div class="modal-header">
-      <div class="modal-title">Login Code</div>
-      <button class="modal-close" onclick="closeModal('pairingCodeModal')" aria-label="Close"><i class="fas fa-times"></i></button>
-    </div>
-    <div class="modal-body" id="pairingCodeBody" style="text-align:center;">
-      <p>Enter this code on the new device to log in.</p>
-      <div style="font-size: 2.5rem; font-weight: bold; letter-spacing: 0.2em; color: var(--primary); margin: 1rem 0; background: var(--bg-primary); padding: 1rem; border-radius: .5rem;" id="pairingCodeDisplay">
-        - - - - - -
-      </div>
-      <p id="pairingCodeTimer" style="color:var(--text-muted);">Expires in 10:00</p>
-    </div>
-  </div>
-</div>
 
 <!-- Move Modal -->
 <div class="modal" id="moveModal">
@@ -2708,8 +2674,9 @@ function removeFileCard(rel){
         if(j.ok){
           const toggleId = 'qrToggle-' + Date.now();
           document.getElementById('myQRBody').innerHTML = `
+            <p style="color:var(--text-muted); text-align:center; margin-bottom:1rem;">Have a new device scan this QR code or enter the 6-digit code to log in to your account.</p>
             ${j.ngrok_available ? `
-            <div class="toggle-container">
+            <div class="toggle-container" style="margin-bottom:1rem;">
               <span class="toggle-label">Local</span>
               <div class="toggle-switch ${qrOnlineMode ? 'active' : ''}" id="${toggleId}">
                 <div class="slider"></div>
@@ -2718,6 +2685,9 @@ function removeFileCard(rel){
             </div>
             ` : ''}
             <div class="qr-box"><img src="data:image/png;base64,${j.b64}" alt="QR" style="image-rendering:pixelated; image-rendering:crisp-edges;"/></div>
+            <div style="font-size: 2.5rem; font-weight: bold; letter-spacing: 0.2em; color: var(--primary); margin: 1rem 0; background: var(--bg-primary); padding: 1rem; border-radius: .5rem; text-align:center;">
+              ${j.code}
+            </div>
             <div class="row" style="justify-content:space-between; margin-top:.75rem;">
               <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all;" id="myQRLink">${j.url}</div>
               <button class="btn btn-secondary" id="copyQRBtn"><i class="fas fa-link"></i> Copy</button>
@@ -2743,38 +2713,6 @@ function removeFileCard(rel){
       } catch(e){ showToast('Failed to generate QR', 'error'); }
     }
     document.getElementById('myQRBtn')?.addEventListener('click', showMyQR);
-
-    let pairingCodeInterval;
-    async function showPairingCode(){
-      try {
-        const r = await fetch('{{ url_for("api_generate_pairing_code") }}');
-        const j = await r.json();
-        if(j.ok){
-          document.getElementById('pairingCodeDisplay').textContent = j.code;
-          openModal('pairingCodeModal');
-
-          let expires = j.expires_in;
-          clearInterval(pairingCodeInterval);
-          document.getElementById('pairingCodeTimer').textContent = `Expires in 10:00`;
-          pairingCodeInterval = setInterval(()=>{
-            expires--;
-            const min = Math.floor(expires/60);
-            const sec = expires % 60;
-            document.getElementById('pairingCodeTimer').textContent = `Expires in ${min}:${String(sec).padStart(2,'0')}`;
-            if(expires <= 0){
-              clearInterval(pairingCodeInterval);
-              document.getElementById('pairingCodeDisplay').textContent = '- - - - -';
-              document.getElementById('pairingCodeTimer').textContent = 'Expired';
-            }
-          }, 1000);
-
-        } else {
-          showToast(j.error || 'Failed to get code', 'error');
-        }
-      } catch(e) {
-        showToast('Failed to get code', 'error');
-      }
-    }
 
     // Settings (only for admin; button is hidden for non-admin)
     async function openSettings(){
@@ -2830,14 +2768,16 @@ function removeFileCard(rel){
 
         if (j.ok) {
           const tokenInput = document.getElementById('apiTokenInput');
+          const codeInput = document.getElementById('apiCodeInput');
           tokenInput.value = j.token;
-          tokenInput.select();
-          document.execCommand('copy');
+          codeInput.value = j.code;
+
           // Store token for sharing
           tokenInput.dataset.token = j.token;
+
           // Show share button
           document.getElementById('shareTokenBtn').style.display = 'inline-flex';
-          showToast('Token generated and copied to clipboard', 'success');
+          showToast(j.message || 'Token and code generated!', 'success');
         } else {
           showToast(j.error || 'Failed to generate token', 'error');
         }
@@ -3093,7 +3033,6 @@ function removeFileCard(rel){
 
       // Global initializations for all pages
       document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
-      document.getElementById('getPairingCodeBtn')?.addEventListener('click', showPairingCode);
       document.getElementById('goOfflineBtn')?.addEventListener('click', goOffline);
       document.getElementById('goOnlineBtn')?.addEventListener('click', goOnline);
       document.getElementById('subscribeBtn')?.addEventListener('click', requestNotificationPermission);
@@ -3333,8 +3272,8 @@ LOGIN_HTML = """
 <style>
 .user-badge { display: none; }
 .login-container { display: flex; flex-direction: column; gap: 1.5rem; }
-.login-section { padding: 1.5rem; border: 1px solid var(--border); border-radius: .75rem; background: var(--bg-secondary); }
-#codeLoginSection { display: none; }
+.login-section { padding: 1.5rem; border: 1px solid var(--border); border-radius: .75rem; background: var(--bg-secondary); flex: 1; }
+.code-input-form { display: flex; flex-direction: column; gap: 1rem; }
 .code-box {
     font-size: 2.5rem; font-weight: bold; letter-spacing: 0.2em; color: var(--secondary);
     margin: 1rem auto; background: var(--bg-primary); padding: 1rem; border-radius: .5rem;
@@ -3342,7 +3281,6 @@ LOGIN_HTML = """
 }
 @media (min-width: 768px) {
   .login-container { flex-direction: row; }
-  .login-section { flex: 1; }
 }
 </style>
 
@@ -3350,53 +3288,23 @@ LOGIN_HTML = """
     <!-- QR Code Section -->
     <div class="login-section" id="qrLoginSection">
         <h2>Scan to Login</h2>
-        <p class="text-muted" style="color:var(--text-muted); margin-bottom:1rem;">{{ message }}</p>
-
-        {% if ngrok_available %}
-        <div class="toggle-container" style="margin-bottom:1rem;">
-          <span class="toggle-label">Local</span>
-          <div class="toggle-switch" id="loginModeToggle">
-            <div class="slider"></div>
-          </div>
-          <span class="toggle-label">Online</span>
-        </div>
-        {% endif %}
+        <p class="text-muted" style="color:var(--text-muted); margin-bottom:1rem;">Have an already logged-in device scan this QR code.</p>
 
         <div class="qr-box">
           <img id="qrImage" src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code" style="image-rendering:pixelated; image-rendering:crisp-edges;" />
         </div>
-        <p class="muted" style="margin-top:.75rem; color:var(--text-muted); word-break:break-all;">Or open: <code id="qrUrl">{{ qr_url }}</code></p>
-
-        <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1rem;">
-            <button class="btn btn-secondary" onclick="toggleLoginView()">Use a login code instead</button>
-        </div>
+        <p class="muted" style="margin-top:.75rem; color:var(--text-muted); word-break:break-all;">This QR code is for a new device session and will expire in 10 minutes. Have an existing device scan this to approve the session.</p>
     </div>
 
     <!-- Code Section -->
     <div class="login-section" id="codeLoginSection">
         <h2>Login with Code</h2>
-        <p class="text-muted" style="color:var(--text-muted); margin-bottom:1rem;">Use one of the methods below.</p>
+        <p class="text-muted" style="color:var(--text-muted); margin-bottom:1rem;">Get a temporary or permanent code from an existing device and enter it here.</p>
 
-        <!-- Push Code Display -->
-        {% if push_code %}
-        <div style="padding-bottom: 1rem;">
-          <p>To approve this device, enter this code on your phone:</p>
-          <div class="code-box">{{ push_code }}</div>
-        </div>
-        {% endif %}
-
-        <!-- Pull Code Form -->
-        <div style="border-top: 1px solid var(--border); padding-top: 1rem;">
-          <p>Or, enter a code from another device:</p>
-          <form method="POST" action="{{ url_for('login_with_code') }}" style="margin-top: 1rem;">
-              <input type="text" name="code" class="form-input" placeholder="6-digit code" required pattern="\\d{6}" maxlength="6" inputmode="numeric" style="font-size: 1.5rem; text-align: center; letter-spacing: 0.5em; margin-bottom: .5rem;">
-              <button class="btn btn-primary" type="submit" style="width: 100%;">Login with Code</button>
-          </form>
-        </div>
-
-        <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1rem;">
-            <button class="btn btn-secondary" onclick="toggleLoginView()">Use QR code instead</button>
-        </div>
+        <form method="POST" action="{{ url_for('login_with_code') }}" class="code-input-form">
+            <input type="text" name="code" class="form-input" placeholder="6-digit code" required pattern="\\d{6}" maxlength="6" inputmode="numeric" style="font-size: 1.5rem; text-align: center; letter-spacing: 0.5em;">
+            <button class="btn btn-primary" type="submit" style="width: 100%;">Login with Code</button>
+        </form>
     </div>
 </div>
 
@@ -3411,36 +3319,7 @@ LOGIN_HTML = """
 </div>
 
 <script>
-function toggleLoginView() {
-    const qrSection = document.getElementById('qrLoginSection');
-    const codeSection = document.getElementById('codeLoginSection');
-    if (qrSection.style.display === 'none') {
-        qrSection.style.display = 'block';
-        codeSection.style.display = 'none';
-    } else {
-        qrSection.style.display = 'none';
-        codeSection.style.display = 'block';
-    }
-}
-  let currentMode = 'local';
   let currentToken = "{{ token }}";
-
-  {% if ngrok_available %}
-  const toggle = document.getElementById('loginModeToggle');
-  toggle.addEventListener('click', async ()=>{
-    currentMode = currentMode === 'local' ? 'online' : 'local';
-    toggle.classList.toggle('active', currentMode === 'online');
-    try {
-      const r = await fetch(`/api/login_qr?token=${currentToken}&mode=${currentMode}`, {cache:'no-store'});
-      const j = await r.json();
-      if(j.ok){
-        document.getElementById('qrImage').src = `data:image/png;base64,${j.b64}`;
-        document.getElementById('qrUrl').textContent = j.url;
-      }
-    } catch(e){}
-  });
-  {% endif %}
-
   async function poll(){
     try {
       const r = await fetch("{{ url_for('check_login', token=token) }}", {cache:'no-store'});
@@ -3450,7 +3329,7 @@ function toggleLoginView() {
         return;
       }
       if (j.expired) {
-        document.getElementById('qrLoginSection').innerHTML = '<h2>QR Code Expired</h2><p style="color:var(--text-muted);">Please <a href="{{ url_for("login") }}">refresh the page</a> to get a new QR code.</p>';
+        document.getElementById('qrLoginSection').innerHTML = '<h2>Session Expired</h2><p style="color:var(--text-muted);">Please <a href="{{ url_for("login") }}">refresh the page</a> to get a new QR code and login code.</p>';
         document.getElementById('codeLoginSection').style.display = 'none';
         return; // Stop polling
       }
@@ -3494,8 +3373,6 @@ def api_accounts_transfer_admin_start():
     if not is_admin_device_of(folder):
         return jsonify({"ok": False, "error": "only current admin can start transfer"}), 403
 
-    cleanup_expired_sessions()
-
     token = secrets.token_urlsafe(16)
     admin_claim_tokens[token] = {
         "folder": folder,
@@ -3510,7 +3387,6 @@ def api_accounts_transfer_admin_start():
 
 @app.route("/scan_admin/<token>")
 def scan_admin(token: str):
-    cleanup_expired_sessions()
     info = admin_claim_tokens.pop(token, None)
     if not info:
         return ("Invalid or expired token", 404)
@@ -3540,100 +3416,83 @@ def scan_admin(token: str):
 
 @app.route("/login")
 def login():
-    # Check if a token parameter is provided for direct access
+    # Check if a token parameter is provided for direct access from a code or QR
     access_token = request.args.get("token")
     if access_token:
-        # Check if this is a valid API token
+        # First, check if it's a permanent API token
         user_data = get_user_by_token(access_token)
         if user_data:
-            # Set session data
             session["authed"] = True
             session["folder"] = user_data.get("folder")
             session["icon"] = user_data.get("icon") or get_user_icon(user_data.get("folder"))
-            # Redirect to browse
             return redirect(url_for("browse", subpath=session.get("folder", "")))
 
-    # Normal login flow if no token or invalid token
-    token = str(uuid.uuid4())
-    pc_token = secrets.token_urlsafe(16)
+        # If not, check if it's a temporary session token from "My QR"
+        qr_session_data = code_store.pop(access_token) # pop to consume it
+        if qr_session_data and qr_session_data.get("folder"):
+            session["authed"] = True
+            session["folder"] = qr_session_data.get("folder")
+            session["icon"] = qr_session_data.get("icon")
+            # Associate this new device with the folder
+            device_id, _ = get_or_create_device_folder(request)
+            app.config["DEVICE_MAP"][device_id]["folder"] = qr_session_data.get("folder")
+            save_device_map(app.config["DEVICE_MAP"])
+            resp = make_response(redirect(url_for("browse", subpath=session.get("folder", ""))))
+            resp.set_cookie(DEVICE_COOKIE_NAME, device_id, max_age=60*60*24*730, samesite="Lax")
+            return resp
 
-    # Generate push code for this session
-    push_code = f"{random.randint(0, 999999):06d}"
-    while push_code in app.config["PUSH_CODES"]:
-        push_code = f"{random.randint(0, 999999):06d}"
-    app.config["PUSH_CODES"][push_code] = token
+    # If no valid token, proceed with the normal login flow
+    session_token = str(uuid.uuid4())
+    login_code = code_store.generate_unique_code()
 
-    cleanup_expired_sessions()
-    pending_sessions[token] = {
-        "authenticated": False, "folder": None, "icon": None,
-        "pc_token": pc_token, "push_code": push_code,
-        "created_at": datetime.utcnow()
-    }
-    session["login_token"] = token
+    # Tie the 6-digit code to the session token
+    code_store.set(login_code, {"type": "login_session", "token": session_token}, expires_in_seconds=600)
+
+    # Store the initial state of the session token
+    code_store.set(session_token, {"authenticated": False, "folder": None, "icon": None}, expires_in_seconds=600)
+
+    session["login_token"] = session_token
 
     ngrok_url = get_ngrok_url()
     ngrok_available = bool(ngrok_url)
 
-    ip = get_local_ip()
-    # qr_url = f"http://{ip}:{PORT}/scan/{token}"
-    # qr_b64 = make_qr_png_b64(qr_url)
-    # in /login route
     scheme = "https" if (request.is_secure or request.headers.get("X-Forwarded-Proto", "http") == "https") else "http"
-    qr_url = url_for("scan", token=token, _external=True, _scheme=scheme)
+    qr_url = url_for("scan", token=session_token, _external=True, _scheme=scheme)
     qr_b64 = make_qr_png_b64(qr_url)
 
-
-
-    message = "Scan this QR with your phone to approve this session."
-    if ngrok_available:
-        message = "Choose local (same network) or online (anywhere) and scan the QR."
+    message = "Scan the QR code with your phone, or enter the 6-digit code below."
 
     body = render_template_string(LOGIN_HTML,
                                    qr_b64=qr_b64,
                                    qr_url=qr_url,
-                                   token=token,
-                                   push_code=pending_sessions[token].get("push_code"),
+                                   token=session_token,
+                                   login_code=login_code,
                                    ngrok_available=ngrok_available,
                                    message=message,
                                    error=request.args.get("error"))
-    # On login page, no dhikr banner
-    return render_template_string(BASE_HTML, body=body, authed=is_authed(), icon=None, user_label="", current_rel="", dhikr="", dhikr_list=[], is_admin=False, error=request.args.get("error"))
+
+    return render_template_string(BASE_HTML, body=body, authed=is_authed(), icon=None, user_label="", current_rel="", dhikr="", dhikr_list=[], is_admin=False)
 
 @app.route("/login_with_code", methods=["POST"])
 def login_with_code():
     code = request.form.get("code", "").strip()
+    if not code:
+        return redirect(url_for("login", error="Code is required."))
 
-    # Clean up expired codes first
-    now = datetime.utcnow()
-    expired_codes = [
-        c for c, data in app.config["PAIRING_CODES"].items()
-        if (now - data["created_at"]).total_seconds() > 600
-    ]
-    for c in expired_codes:
-        app.config["PAIRING_CODES"].pop(c, None)
+    data = code_store.pop(code) # Use pop for temporary codes
+    if not data:
+        # Maybe it's a permanent code, try get
+        data = code_store.get(code)
 
-    # Check if the submitted code is valid
-    code_info = app.config["PAIRING_CODES"].pop(code, None)
-    if not code_info:
+    if not data:
         return redirect(url_for("login", error="Invalid or expired code."))
 
-    folder = code_info.get("folder")
-    if not folder:
-        return redirect(url_for("login", error="Code is not associated with a folder."))
+    token = data.get("token")
+    if not token:
+        return redirect(url_for("login", error="Invalid code data."))
 
-    # Log the user in
-    session["authed"] = True
-    session["folder"] = folder
-    session["icon"] = get_user_icon(folder)
-
-    # Associate this device with the folder
-    device_id, _ = get_or_create_device_folder(request)
-    app.config["DEVICE_MAP"][device_id]["folder"] = folder
-    save_device_map(app.config["DEVICE_MAP"])
-
-    resp = make_response(redirect(url_for("browse", subpath=folder)))
-    resp.set_cookie(DEVICE_COOKIE_NAME, device_id, max_age=60*60*24*730, samesite="Lax")
-    return resp
+    # Redirect to the main login handler with the full token
+    return redirect(url_for("login", token=token))
 
 @app.route("/login_with_default")
 def login_with_default():
@@ -3689,63 +3548,59 @@ def unlock():
 
 @app.route("/check/<token>")
 def check_login(token: str):
-    cleanup_expired_sessions()
-    info = pending_sessions.get(token)
+    info = code_store.get(token)
 
     if not info:
-        # Check if the token was valid for this session but is now gone
+        # If the session's login token is no longer in the store, it has expired.
         if token == session.get("login_token"):
             return jsonify({"authenticated": False, "expired": True})
         return jsonify({"authenticated": False})
 
-    if info["authenticated"]:
-        pc_token = info.get("pc_token")
-        pc_url = None
-        if pc_token and info.get("folder"):
-            # Also add created_at for this token
-            app.config["LOGIN_TOKENS"][pc_token] = {
-                "folder": info["folder"],
-                "created_at": datetime.utcnow()
-            }
-            pc_url = url_for("pc_login", token=pc_token)
-        return jsonify({"authenticated": True, "folder": info.get("folder"), "icon": info.get("icon"), "url": pc_url})
+    if info.get("authenticated"):
+        # The session has been approved. Create a temporary token for the final redirect.
+        pc_token = secrets.token_urlsafe(16)
+        app.config["LOGIN_TOKENS"][pc_token] = {"folder": info.get("folder")}
+        pc_url = url_for("pc_login", token=pc_token)
+
+        # Clean up the session token from the store as it's now used
+        code_store.pop(token)
+
+        return jsonify({
+            "authenticated": True,
+            "folder": info.get("folder"),
+            "icon": info.get("icon"),
+            "url": pc_url
+        })
 
     return jsonify({"authenticated": False})
 
 @app.route("/scan/<token>")
 def scan(token: str):
-    cleanup_expired_sessions()
-    info = pending_sessions.get(token)
+    info = code_store.get(token)
     if not info:
-        return ("Invalid or expired token", 404)
+        return ("Invalid or expired session token", 404)
+
+    # This device (the scanner) determines the folder to log into.
     device_id, folder = get_or_create_device_folder(request)
     icon = get_user_icon(folder)
+
+    # Mark the session token as authenticated and store the folder info
+    info["authenticated"] = True
+    info["folder"] = folder
+    info["icon"] = icon
+    code_store.set(token, info, expires_in_seconds=60) # Give 60s for polling to pick it up
+
+    # Also log in this (scanner) device directly
     session["authed"] = True
     session["folder"] = folder
     session["icon"] = icon
-    info["authenticated"] = True
-    if info.get("folder"):
-        session["folder"] = info["folder"]
-        session["icon"] = info.get("icon") or get_user_icon(info["folder"])
-        folder = info["folder"]
-        icon = session["icon"]
-    else:
-        info["folder"] = folder
-        info["icon"] = icon
+
     resp = make_response(redirect(url_for("browse", subpath=folder)))
     resp.set_cookie(DEVICE_COOKIE_NAME, device_id, max_age=60*60*24*730, samesite="Lax")
     return resp
 
 @app.route("/pc_login/<token>")
 def pc_login(token):
-    now = datetime.utcnow()
-    expired_tokens = [
-        t for t, data in app.config["LOGIN_TOKENS"].items()
-        if "created_at" in data and (now - data["created_at"]).total_seconds() > 600
-    ]
-    for t in expired_tokens:
-        app.config["LOGIN_TOKENS"].pop(t, None)
-
     token_data = app.config["LOGIN_TOKENS"].pop(token, None)
     if not token_data:
         abort(403)
@@ -3781,65 +3636,6 @@ def pc_login(token):
 def logout():
     session.clear()
     return redirect(url_for("login"))
-
-APPROVE_DEVICE_HTML = """
-<div class="card" style="max-width:520px; margin:0 auto;">
-  <h2 style="margin-bottom:.5rem;">Approve New Device</h2>
-  <p style="color:var(--text-secondary); margin-bottom:.75rem;">Enter the 6-digit code displayed on the new device's screen to approve it.</p>
-  {% if error %}
-    <div style="background:rgba(239,68,68,.12); color:#fecaca; border:1px solid rgba(239,68,68,.4); border-radius:.5rem; padding:.5rem .75rem; margin-bottom:.5rem;">
-      <i class="fas fa-exclamation-triangle"></i> {{ error }}
-    </div>
-  {% endif %}
-  <form method="POST" action="{{ url_for('submit_approval') }}">
-    <input type="text" name="code" class="form-input" placeholder="6-digit code" required pattern="\\d{6}" maxlength="6" inputmode="numeric" style="font-size: 1.5rem; text-align: center; letter-spacing: 0.5em; margin-bottom: .5rem;">
-    <button class="btn btn-primary" type="submit" style="width: 100%;">Approve Device</button>
-  </form>
-</div>
-"""
-
-@app.route("/approve_device")
-def approve_device():
-    if not is_authed():
-        return redirect(url_for("login"))
-    error = request.args.get("error")
-    body = render_template_string(APPROVE_DEVICE_HTML, error=error)
-    return render_template_string(
-        BASE_HTML,
-        body=body,
-        authed=True,
-        icon=session.get("icon"),
-        user_label=session.get("folder",""),
-        current_rel="",
-        dhikr=get_random_dhikr(),
-        dhikr_list=[{"dhikr": d} for d in ISLAMIC_DHIKR],
-        is_admin=is_admin_device_of(session.get("folder","")),
-        share_page_active=False
-    )
-
-@app.route("/submit_approval", methods=["POST"])
-def submit_approval():
-    if not is_authed():
-        return redirect(url_for("login"))
-
-    code = request.form.get("code", "").strip()
-    token = app.config["PUSH_CODES"].pop(code, None)
-
-    if not token or token not in pending_sessions:
-        return redirect(url_for("approve_device", error="Invalid or expired code."))
-
-    info = pending_sessions.get(token)
-    if not info:
-        return redirect(url_for("approve_device", error="Session not found for this code."))
-
-    device_id, folder = get_or_create_device_folder(request)
-    icon = get_user_icon(folder)
-
-    info["authenticated"] = True
-    info["folder"] = folder
-    info["icon"] = icon
-
-    return redirect(url_for("browse"))
 
 # -----------------------------
 # Routes: Files
@@ -4090,73 +3886,46 @@ def api_mkdir():
     socketio.emit("file_update", {"action":"added","dir": dest_rel, "meta": meta})
     return jsonify({"ok": True, "meta": meta})
 
-@app.route("/api/generate_pairing_code")
-def api_generate_pairing_code():
-    if not is_authed():
-        return jsonify({"ok": False, "error": "not authed"}), 401
-
-    folder = session.get("folder")
-    if not folder:
-        return jsonify({"ok": False, "error": "no folder in session"}), 400
-
-    # Clean up expired codes
-    now = datetime.utcnow()
-    expired_codes = [
-        code for code, data in app.config["PAIRING_CODES"].items()
-        if (now - data["created_at"]).total_seconds() > 600  # 10 minutes
-    ]
-    for code in expired_codes:
-        app.config["PAIRING_CODES"].pop(code, None)
-
-    # Generate a new unique code
-    code = f"{random.randint(0, 999999):06d}"
-    while code in app.config["PAIRING_CODES"]:
-        code = f"{random.randint(0, 999999):06d}"
-
-    app.config["PAIRING_CODES"][code] = {"folder": folder, "created_at": now}
-
-    return jsonify({"ok": True, "code": code, "expires_in": 600})
-
 @app.route("/api/my_qr")
 def api_my_qr():
     if not is_authed():
         return jsonify({"ok": False, "error": "not authed"}), 401
 
     mode = request.args.get("mode", "local")
-    access_token = request.args.get("token")
 
-    # If a specific token is provided, create a URL with that token
-    if access_token:
-        ngrok_url = get_ngrok_url()
-        ngrok_available = bool(ngrok_url)
+    # "My QR" generates a temporary token that, when used, logs a new device
+    # into the current user's account.
+    token = secrets.token_urlsafe(16)
+    code = code_store.generate_unique_code()
 
-        if mode == "online" and ngrok_url:
-            qr_url = f"{ngrok_url}/login?token={access_token}"
-        else:
-            ip = get_local_ip()
-            qr_url = f"http://{ip}:{PORT}/login?token={access_token}"
-    # Otherwise, generate a temporary session token for QR login
+    # The token is the key for the data, the code is a shortcut to the token
+    code_store.set(code, {"type": "my_qr_session", "token": token}, expires_in_seconds=600)
+    code_store.set(token, {"folder": session.get("folder"), "icon": session.get("icon")}, expires_in_seconds=600)
+
+    # The URL for the QR code contains the main token
+    login_url = url_for("login", token=token, _external=True)
+
+    ngrok_url = get_ngrok_url()
+    ngrok_available = bool(ngrok_url)
+
+    if mode == "online" and ngrok_url:
+        # Replace the host with the ngrok host
+        parsed_url = urlparse(login_url)
+        parsed_ngrok = urlparse(ngrok_url)
+        qr_url = parsed_url._replace(scheme=parsed_ngrok.scheme, netloc=parsed_ngrok.netloc).geturl()
     else:
-        token = str(uuid.uuid4())
-        pc_token = secrets.token_urlsafe(16)
-        pending_sessions[token] = {
-            "authenticated": False,
-            "folder": session.get("folder"),
-            "icon": session.get("icon"),
-            "pc_token": pc_token,
-        }
-
-        ngrok_url = get_ngrok_url()
-        ngrok_available = bool(ngrok_url)
-
-        if mode == "online" and ngrok_url:
-            qr_url = f"{ngrok_url}/scan/{token}"
-        else:
-            ip = get_local_ip()
-            qr_url = f"http://{ip}:{PORT}/scan/{token}"
+        # Use the default URL which is based on the local IP
+        qr_url = login_url
 
     qr_b64 = make_qr_png_b64(qr_url)
-    return jsonify({"ok": True, "b64": qr_b64, "url": qr_url, "ngrok_available": ngrok_available})
+
+    return jsonify({
+        "ok": True,
+        "b64": qr_b64,
+        "url": qr_url,
+        "code": code,
+        "ngrok_available": ngrok_available
+    })
 
 @app.route("/api/cliptext", methods=["POST"])
 def api_cliptext():
@@ -4224,12 +3993,7 @@ def api_go_offline():
         next_path = url_for('browse')
 
     pc_token = secrets.token_urlsafe(16)
-    app.config["LOGIN_TOKENS"][pc_token] = {
-        "folder": folder,
-        "device_id": device_id,
-        "next_url": next_path,
-        "created_at": datetime.utcnow()
-    }
+    app.config["LOGIN_TOKENS"][pc_token] = {"folder": folder, "device_id": device_id, "next_url": next_path}
 
     local_ip = get_local_ip()
     local_url = f"http://{local_ip}:{PORT}{url_for('pc_login', token=pc_token)}"
