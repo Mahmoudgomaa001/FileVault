@@ -100,6 +100,7 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 app.config["SESSION_COOKIE_NAME"] = SESSION_COOKIE_NAME
 app.config["JSONIFY_MIMETYPE"] = "application/json; charset=utf-8"
 app.config["LOGIN_TOKENS"] = {}  # pc_token -> folder
+app.config["LOGIN_CODES"] = {}  # code -> token
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
@@ -1083,6 +1084,7 @@ BASE_HTML = """
                 <button class="btn btn-secondary" id="goOnlineBtn" title="Switch to Online URL"><i class="fas fa-wifi"></i><span class="btn-text"> Online</span></button>
               {% endif %}
               <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
+              <a href="{{ url_for('code_login') }}" class="btn btn-secondary" title="Login via Code"><i class="fas fa-keyboard"></i><span class="btn-text"> Enter Code</span></a>
               {% if is_admin %}
               <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
               <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
@@ -1102,6 +1104,7 @@ BASE_HTML = """
               <button class="btn btn-secondary btn-icon" id="mobileMenuBtn" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
               <div class="dropdown-menu" id="mobileDropdown">
                   <button class="dropdown-item" onclick="document.getElementById('myQRBtn').click()"><i class="fas fa-qrcode"></i><span>My QR</span></button>
+                  <a href="{{ url_for('code_login') }}" class="dropdown-item"><i class="fas fa-keyboard"></i><span>Enter Code</span></a>
                   <hr class="dropdown-divider">
                   {% if is_admin %}
                   <button class="dropdown-item" onclick="document.getElementById('accountsBtn').click()"><i class="fas fa-user-gear"></i><span>Accounts</span></button>
@@ -3275,6 +3278,16 @@ LOGIN_HTML = """
     <img id="qrImage" src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code" style="image-rendering:pixelated; image-rendering:crisp-edges;" />
   </div>
   <p class="muted" style="margin-top:.75rem; color:var(--text-muted);">Or open: <code id="qrUrl">{{ qr_url }}</code></p>
+
+  {% if code %}
+  <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1rem;">
+    <p style="color:var(--text-secondary); margin-bottom:.75rem;">Or enter this code on your other device:</p>
+    <div style="font-size: 2.5rem; font-weight: bold; letter-spacing: 0.2em; color: var(--primary); margin-bottom: 1rem; background: var(--bg-primary); padding: .5rem; border-radius: .5rem; max-width: 250px; margin: auto;">
+        {{ code }}
+    </div>
+  </div>
+  {% endif %}
+
   <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1rem;">
     <p style="color:var(--text-secondary); margin-bottom:.75rem;">Or if you're on a new device:</p>
     <a href="{{ url_for('login_with_default') }}" class="btn btn-secondary">Continue with a new/default account</a>
@@ -3331,9 +3344,71 @@ UNLOCK_HTML = """
 </div>
 """
 
+CODE_LOGIN_HTML = """
+<div class="card" style="max-width:520px; margin:0 auto;">
+  <h2 style="margin-bottom:.5rem;">Enter Code</h2>
+  <p style="color:var(--text-secondary); margin-bottom:.75rem;">Enter the 5-digit code from the other device to log it in.</p>
+  {% if error %}
+    <div style="background:rgba(239,68,68,.12); color:#fecaca; border:1px solid rgba(239,68,68,.4); border-radius:.5rem; padding:.5rem .75rem; margin-bottom:.5rem;">
+      <i class="fas fa-exclamation-triangle"></i> {{ error }}
+    </div>
+  {% endif %}
+  <form method="POST" action="{{ url_for('submit_code') }}">
+    <input type="text" name="code" class="form-input" placeholder="5-digit code" required pattern="\\d{5}" maxlength="5" inputmode="numeric" style="font-size: 2rem; text-align: center; letter-spacing: 0.5em;">
+    <div class="modal-footer" style="padding:0; margin-top:.75rem;">
+      <button class="btn btn-primary" type="submit"><i class="fas fa-check"></i> Submit</button>
+    </div>
+  </form>
+</div>
+"""
+
 # -----------------------------
 # Routes: Auth with persistent device folders + Privacy
 # -----------------------------
+@app.route("/code_login", methods=["GET"])
+def code_login():
+    if not is_authed():
+        return redirect(url_for("login"))
+    error = request.args.get("error")
+    body = render_template_string(CODE_LOGIN_HTML, error=error)
+    return render_template_string(
+        BASE_HTML,
+        body=body,
+        authed=True,
+        icon=session.get("icon"),
+        user_label=session.get("folder",""),
+        current_rel="",
+        dhikr=get_random_dhikr(),
+        dhikr_list=[{"dhikr": d} for d in ISLAMIC_DHIKR],
+        is_admin=is_admin_device_of(session.get("folder","")),
+        share_page_active=False
+    )
+
+@app.route("/submit_code", methods=["POST"])
+def submit_code():
+    if not is_authed():
+        return redirect(url_for("login"))
+
+    code = request.form.get("code", "").strip()
+    token = app.config["LOGIN_CODES"].pop(code, None)
+
+    if not token or token not in pending_sessions:
+        return redirect(url_for("code_login", error="Invalid or expired code."))
+
+    info = pending_sessions.get(token)
+    if not info:
+        return redirect(url_for("code_login", error="Session not found for this code."))
+
+    device_id, folder = get_or_create_device_folder(request)
+    icon = get_user_icon(folder)
+
+    info["authenticated"] = True
+    info["folder"] = folder
+    info["icon"] = icon
+
+    return redirect(url_for("browse"))
+
+
 @app.route("/api/accounts/transfer_admin_start", methods=["POST"])
 def api_accounts_transfer_admin_start():
     if not is_authed():
@@ -3404,7 +3479,14 @@ def login():
     # Normal login flow if no token or invalid token
     token = str(uuid.uuid4())
     pc_token = secrets.token_urlsafe(16)
-    pending_sessions[token] = {"authenticated": False, "folder": None, "icon": None, "pc_token": pc_token}
+
+    # Generate a unique 5-digit code
+    code = f"{random.randint(0, 99999):05d}"
+    while code in app.config.get("LOGIN_CODES", {}):
+        code = f"{random.randint(0, 99999):05d}"
+
+    app.config["LOGIN_CODES"][code] = token
+    pending_sessions[token] = {"authenticated": False, "folder": None, "icon": None, "pc_token": pc_token, "code": code}
     session["login_token"] = token
 
     ngrok_url = get_ngrok_url()
@@ -3428,6 +3510,7 @@ def login():
                                    qr_b64=qr_b64,
                                    qr_url=qr_url,
                                    token=token,
+                                   code=pending_sessions[token].get("code"),
                                    ngrok_available=ngrok_available,
                                    message=message)
     # On login page, no dhikr banner
