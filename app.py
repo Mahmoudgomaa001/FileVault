@@ -101,6 +101,7 @@ app.config["SESSION_COOKIE_NAME"] = SESSION_COOKIE_NAME
 app.config["JSONIFY_MIMETYPE"] = "application/json; charset=utf-8"
 app.config["LOGIN_TOKENS"] = {}  # pc_token -> folder
 app.config["PAIRING_CODES"] = {}  # code -> {folder, created_at}
+app.config["PUSH_CODES"] = {} # code -> token
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
@@ -1085,6 +1086,7 @@ BASE_HTML = """
               {% endif %}
               <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
               <button class="btn btn-secondary" id="getPairingCodeBtn" title="Get Login Code"><i class="fas fa-keyboard"></i><span class="btn-text"> Get Code</span></button>
+              <a href="{{ url_for('approve_device') }}" class="btn btn-secondary" title="Approve a Device"><i class="fas fa-check-square"></i><span class="btn-text"> Approve</span></a>
               {% if is_admin %}
               <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
               <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
@@ -1105,6 +1107,7 @@ BASE_HTML = """
               <div class="dropdown-menu" id="mobileDropdown">
                   <button class="dropdown-item" onclick="document.getElementById('myQRBtn').click()"><i class="fas fa-qrcode"></i><span>My QR</span></button>
                   <button class="dropdown-item" onclick="document.getElementById('getPairingCodeBtn').click()"><i class="fas fa-keyboard"></i><span>Get Code</span></button>
+                  <a href="{{ url_for('approve_device') }}" class="dropdown-item"><i class="fas fa-check-square"></i><span>Approve Device</span></a>
                   <hr class="dropdown-divider">
                   {% if is_admin %}
                   <button class="dropdown-item" onclick="document.getElementById('accountsBtn').click()"><i class="fas fa-user-gear"></i><span>Accounts</span></button>
@@ -1260,8 +1263,8 @@ BASE_HTML = """
     </div>
     <div class="modal-body" id="pairingCodeBody" style="text-align:center;">
       <p>Enter this code on the new device to log in.</p>
-      <div style="font-size: 3rem; font-weight: bold; letter-spacing: 0.2em; color: var(--primary); margin: 1rem 0; background: var(--bg-primary); padding: 1rem; border-radius: .5rem;" id="pairingCodeDisplay">
-        - - - - -
+      <div style="font-size: 2.5rem; font-weight: bold; letter-spacing: 0.2em; color: var(--primary); margin: 1rem 0; background: var(--bg-primary); padding: 1rem; border-radius: .5rem;" id="pairingCodeDisplay">
+        - - - - - -
       </div>
       <p id="pairingCodeTimer" style="color:var(--text-muted);">Expires in 5:00</p>
     </div>
@@ -3329,10 +3332,19 @@ LOGIN_HTML = """
   </div>
   <p class="muted" style="margin-top:.75rem; color:var(--text-muted);">Or open: <code id="qrUrl">{{ qr_url }}</code></p>
 
+  {% if push_code %}
+  <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1rem;">
+    <p style="color:var(--text-secondary); margin-bottom:.75rem;">To approve this device, enter this code on your phone:</p>
+    <div style="font-size: 2.5rem; font-weight: bold; letter-spacing: 0.2em; color: var(--secondary); margin-bottom: 1rem; background: var(--bg-primary); padding: .5rem; border-radius: .5rem; max-width: 320px; margin: auto;">
+        {{ push_code }}
+    </div>
+  </div>
+  {% endif %}
+
   <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1rem;">
     <p style="color:var(--text-secondary); margin-bottom:.75rem;">Or, enter a code from another device:</p>
     <form method="POST" action="{{ url_for('login_with_code') }}" style="max-width: 320px; margin: auto;">
-        <input type="text" name="code" class="form-input" placeholder="5-digit code" required pattern="\\d{5}" maxlength="5" inputmode="numeric" style="font-size: 1.5rem; text-align: center; letter-spacing: 0.5em; margin-bottom: .5rem;">
+        <input type="text" name="code" class="form-input" placeholder="6-digit code" required pattern="\\d{6}" maxlength="6" inputmode="numeric" style="font-size: 1.5rem; text-align: center; letter-spacing: 0.5em; margin-bottom: .5rem;">
         <button class="btn btn-primary" type="submit" style="width: 100%;">Login with Code</button>
     </form>
     {% if error %}
@@ -3471,7 +3483,14 @@ def login():
     # Normal login flow if no token or invalid token
     token = str(uuid.uuid4())
     pc_token = secrets.token_urlsafe(16)
-    pending_sessions[token] = {"authenticated": False, "folder": None, "icon": None, "pc_token": pc_token}
+
+    # Generate push code for this session
+    push_code = f"{random.randint(0, 999999):06d}"
+    while push_code in app.config["PUSH_CODES"]:
+        push_code = f"{random.randint(0, 999999):06d}"
+    app.config["PUSH_CODES"][push_code] = token
+
+    pending_sessions[token] = {"authenticated": False, "folder": None, "icon": None, "pc_token": pc_token, "push_code": push_code}
     session["login_token"] = token
 
     ngrok_url = get_ngrok_url()
@@ -3495,8 +3514,10 @@ def login():
                                    qr_b64=qr_b64,
                                    qr_url=qr_url,
                                    token=token,
+                                   push_code=pending_sessions[token].get("push_code"),
                                    ngrok_available=ngrok_available,
-                                   message=message)
+                                   message=message,
+                                   error=request.args.get("error"))
     # On login page, no dhikr banner
     return render_template_string(BASE_HTML, body=body, authed=is_authed(), icon=None, user_label="", current_rel="", dhikr="", dhikr_list=[], is_admin=False, error=request.args.get("error"))
 
@@ -3662,6 +3683,65 @@ def pc_login(token):
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+APPROVE_DEVICE_HTML = """
+<div class="card" style="max-width:520px; margin:0 auto;">
+  <h2 style="margin-bottom:.5rem;">Approve New Device</h2>
+  <p style="color:var(--text-secondary); margin-bottom:.75rem;">Enter the 6-digit code displayed on the new device's screen to approve it.</p>
+  {% if error %}
+    <div style="background:rgba(239,68,68,.12); color:#fecaca; border:1px solid rgba(239,68,68,.4); border-radius:.5rem; padding:.5rem .75rem; margin-bottom:.5rem;">
+      <i class="fas fa-exclamation-triangle"></i> {{ error }}
+    </div>
+  {% endif %}
+  <form method="POST" action="{{ url_for('submit_approval') }}">
+    <input type="text" name="code" class="form-input" placeholder="6-digit code" required pattern="\\d{6}" maxlength="6" inputmode="numeric" style="font-size: 1.5rem; text-align: center; letter-spacing: 0.5em; margin-bottom: .5rem;">
+    <button class="btn btn-primary" type="submit" style="width: 100%;">Approve Device</button>
+  </form>
+</div>
+"""
+
+@app.route("/approve_device")
+def approve_device():
+    if not is_authed():
+        return redirect(url_for("login"))
+    error = request.args.get("error")
+    body = render_template_string(APPROVE_DEVICE_HTML, error=error)
+    return render_template_string(
+        BASE_HTML,
+        body=body,
+        authed=True,
+        icon=session.get("icon"),
+        user_label=session.get("folder",""),
+        current_rel="",
+        dhikr=get_random_dhikr(),
+        dhikr_list=[{"dhikr": d} for d in ISLAMIC_DHIKR],
+        is_admin=is_admin_device_of(session.get("folder","")),
+        share_page_active=False
+    )
+
+@app.route("/submit_approval", methods=["POST"])
+def submit_approval():
+    if not is_authed():
+        return redirect(url_for("login"))
+
+    code = request.form.get("code", "").strip()
+    token = app.config["PUSH_CODES"].pop(code, None)
+
+    if not token or token not in pending_sessions:
+        return redirect(url_for("approve_device", error="Invalid or expired code."))
+
+    info = pending_sessions.get(token)
+    if not info:
+        return redirect(url_for("approve_device", error="Session not found for this code."))
+
+    device_id, folder = get_or_create_device_folder(request)
+    icon = get_user_icon(folder)
+
+    info["authenticated"] = True
+    info["folder"] = folder
+    info["icon"] = icon
+
+    return redirect(url_for("browse"))
 
 # -----------------------------
 # Routes: Files
@@ -3931,9 +4011,9 @@ def api_generate_pairing_code():
         app.config["PAIRING_CODES"].pop(code, None)
 
     # Generate a new unique code
-    code = f"{random.randint(0, 99999):05d}"
+    code = f"{random.randint(0, 999999):06d}"
     while code in app.config["PAIRING_CODES"]:
-        code = f"{random.randint(0, 99999):05d}"
+        code = f"{random.randint(0, 999999):06d}"
 
     app.config["PAIRING_CODES"][code] = {"folder": folder, "created_at": now}
 
