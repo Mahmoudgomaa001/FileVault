@@ -5,5 +5,39 @@ Ngrok not detected. To enable online access, run: ngrok http 5000
 Root directory: /app/shared
  * Serving Flask app 'app'
  * Debug mode: off
-Address already in use
-Port 5000 is in use by another program. Either identify and stop that program, or start the server with a different port.
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.0.2:5000
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [07/Sep/2025 18:46:55] "GET /login HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:55] "GET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:55] "GET /static/vendor/fontawesome/css/all.min.css HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:55] "GET /static/fonts.css HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:55] "GET /static/socket.io.min.js HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:55] "GET /static/vendor/fontawesome/webfonts/fa-solid-900.woff2 HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:55] "GET /api/prefs HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:55] "GET /api/prefs HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "POST /api/prefs HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "GET /static/sw.js HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "[32mGET / HTTP/1.1[0m" 302 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "GET /check/56268cc0-493e-4863-880b-8838ff01128f HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "GET /static/favicon.svg HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "GET /static/site.webmanifest HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "GET /static/vendor/fontawesome/webfonts/fa-brands-400.ttf HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "GET /static/adhkar.json HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "GET /static/vendor/fontawesome/webfonts/fa-brands-400.woff2 HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "GET /login HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "GET /static/vendor/fontawesome/webfonts/fa-solid-900.ttf HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "GET /static/vendor/fontawesome/webfonts/fa-regular-400.woff2 HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "GET /static/vendor/fontawesome/webfonts/fa-regular-400.ttf HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "[33mGET /static/static/offline.html HTTP/1.1[0m" 404 -
+127.0.0.1 - - [07/Sep/2025 18:46:56] "[36mGET /static/vendor/fontawesome/webfonts/fa-solid-900.woff2 HTTP/1.1[0m" 304 -
+127.0.0.1 - - [07/Sep/2025 18:46:57] "GET /check/56268cc0-493e-4863-880b-8838ff01128f HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:58] "GET /check/56268cc0-493e-4863-880b-8838ff01128f HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:46:59] "GET /check/56268cc0-493e-4863-880b-8838ff01128f HTTP/1.1" 200 -
+127.0.0.1 - - [07/Sep/2025 18:47:00] "GET /check/56268cc0-493e-4863-880b-8838ff01128f HTTP/1.1" 200 -

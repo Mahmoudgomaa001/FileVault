@@ -3430,7 +3430,7 @@ LOGIN_HTML = """
   {% if ngrok_available %}
   <div class="toggle-container" style="margin-bottom:1rem; justify-content: center;">
     <span class="toggle-label">Local</span>
-    <div class="toggle-switch" id="loginModeToggle">
+    <div class="toggle-switch {% if is_on_ngrok %}active{% endif %}" id="loginModeToggle">
       <div class="slider"></div>
     </div>
     <span class="toggle-label">Online</span>
@@ -3468,7 +3468,7 @@ LOGIN_HTML = """
   </div>
 </div>
 <script>
-  let currentMode = 'local';
+  let currentMode = '{{ "online" if is_on_ngrok else "local" }}';
   let currentToken = "{{ token }}";
 
   {% if ngrok_available %}
@@ -3599,15 +3599,17 @@ def login():
     ngrok_url = get_ngrok_url()
     ngrok_available = bool(ngrok_url)
 
-    ip = get_local_ip()
-    # qr_url = f"http://{ip}:{PORT}/scan/{token}"
-    # qr_b64 = make_qr_png_b64(qr_url)
-    # in /login route
+    is_on_ngrok = False
+    if ngrok_available:
+        ngrok_host = urlparse(ngrok_url).hostname
+        if ngrok_host and ngrok_host == request.host.split(':')[0]:
+            is_on_ngrok = True
+
+    # The qr_url generation correctly uses the request context, so it will be an
+    # ngrok url if accessed via ngrok, and a local url otherwise.
     scheme = "https" if (request.is_secure or request.headers.get("X-Forwarded-Proto", "http") == "https") else "http"
     qr_url = url_for("scan", token=token, _external=True, _scheme=scheme)
     qr_b64 = make_qr_png_b64(qr_url)
-
-
 
     message = "Scan this QR with your phone to approve this session."
     if ngrok_available:
@@ -3620,7 +3622,8 @@ def login():
                                    ngrok_available=ngrok_available,
                                    message=message,
                                    login_code=login_code,
-                                   error=error)
+                                   error=error,
+                                   is_on_ngrok=is_on_ngrok)
     # On login page, no dhikr banner
     return render_template_string(BASE_HTML, body=body, authed=is_authed(), icon=None, user_label="", current_rel="", dhikr="", dhikr_list=[], is_admin=False)
 
