@@ -48,6 +48,19 @@ def generate_name() -> str:
     # e.g. lucky-duck-042
     return f"{random.choice(ADJECTIVES)}-{random.choice(ANIMALS)}-{random.randint(0,999):03d}"
 
+def generate_temp_code() -> str:
+    """Generates a 6-digit numeric code."""
+    return f"{random.randint(100000, 999999):06d}"
+
+def generate_unique_permanent_code() -> str:
+    """Generates a unique 6-digit code for permanent login."""
+    users = app.config.setdefault("USERS", load_users())
+    for _ in range(100):  # Max 100 retries
+        code = f"{random.randint(100000, 999999):06d}"
+        if not any(user.get("permanent_code") == code for user in users.values()):
+            return code
+    raise Exception("Could not generate a unique permanent code.")
+
 def get_user_icon(user_id: str) -> str:
     return USER_ICONS[hash(user_id) % len(USER_ICONS)]
 
@@ -569,34 +582,43 @@ def api_accounts_token():
     if users[folder].get("admin_device") != did:
         return jsonify({"ok": False, "error": "only admin device can generate tokens"}), 403
 
-    # Check if a permanent token already exists
     user_cfg = users[folder]
     tokens = user_cfg.setdefault("tokens", {})
-    existing = next((info for info in tokens.values() if info.get("expires") is None), None)
 
-    if existing:
-        return jsonify({
-            "ok": True,
-            "token": existing["token"],
-            "message": "Permanent token already exists"
-        })
+    # Get or create permanent code
+    permanent_code = user_cfg.get("permanent_code")
+    if not permanent_code:
+        try:
+            permanent_code = generate_unique_permanent_code()
+            user_cfg["permanent_code"] = permanent_code
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
 
-    # Otherwise generate one new permanent token
-    token = secrets.token_urlsafe(32)
-    token_id = str(uuid.uuid4())
-    tokens[token_id] = {
-        "token": token,
-        "created": datetime.utcnow().isoformat() + "Z",
-        "name": data.get("name", "API Token"),
-        "expires": None
-    }
+    # Get or create permanent token
+    existing_token_info = next((info for info in tokens.values() if info.get("expires") is None), None)
+    if existing_token_info:
+        token = existing_token_info["token"]
+        token_id = next((tid for tid, info in tokens.items() if info == existing_token_info), None)
+        message = "Permanent token and code already exist."
+    else:
+        token = secrets.token_urlsafe(32)
+        token_id = str(uuid.uuid4())
+        tokens[token_id] = {
+            "token": token,
+            "created": datetime.utcnow().isoformat() + "Z",
+            "name": data.get("name", "API Token"),
+            "expires": None
+        }
+        message = "Permanent token and code created successfully."
+
     save_users(users)
 
     return jsonify({
         "ok": True,
         "token": token,
+        "permanent_code": permanent_code,
         "token_id": token_id,
-        "message": "Permanent token created successfully"
+        "message": message
     })
 
 def get_local_ip() -> str:
@@ -1197,6 +1219,13 @@ BASE_HTML = """
             <button class="btn btn-secondary" id="shareTokenBtn" style="display:none;"><i class="fas fa-share"></i> Share</button>
           </div>
           <div style="margin-top:.5rem; color:var(--text-muted); font-size:.85rem;">Generate a non-expiring token for API access.</div>
+        </div>
+        <div style="margin-top:.75rem;">
+          <label class="form-label" for="permanentCodeInput">Permanent Login Code</label>
+          <div class="row" style="gap:.5rem; margin-top:.5rem;">
+            <input type="text" id="permanentCodeInput" name="permanentCodeInput" class="form-input" placeholder="Generate token to see code" readonly style="flex:1; text-align: center; font-size: 1.2rem; letter-spacing: 0.2em; background-color: var(--bg-primary);">
+          </div>
+          <div style="margin-top:.5rem; color:var(--text-muted); font-size:.85rem;">Use this code on the login page for permanent access. It is generated with your token.</div>
         </div>
         <div style="margin-top:.75rem; color:var(--text-muted); font-size:.85rem;">Only the first device (admin) can change privacy.</div>
       </div>
@@ -2663,7 +2692,7 @@ function removeFileCard(rel){
           const toggleId = 'qrToggle-' + Date.now();
           document.getElementById('myQRBody').innerHTML = `
             ${j.ngrok_available ? `
-            <div class="toggle-container">
+            <div class="toggle-container" style="margin-bottom: 1rem; justify-content: center;">
               <span class="toggle-label">Local</span>
               <div class="toggle-switch ${qrOnlineMode ? 'active' : ''}" id="${toggleId}">
                 <div class="slider"></div>
@@ -2672,9 +2701,11 @@ function removeFileCard(rel){
             </div>
             ` : ''}
             <div class="qr-box"><img src="data:image/png;base64,${j.b64}" alt="QR" style="image-rendering:pixelated; image-rendering:crisp-edges;"/></div>
-            <div class="row" style="justify-content:space-between; margin-top:.75rem;">
+            <p style="text-align: center; margin-top: .75rem; color: var(--text-secondary);">Or enter this code on the other device:</p>
+            <p style="font-size: 2rem; font-weight: bold; color: var(--primary); text-align: center; letter-spacing: 0.1em; margin-bottom: 1rem;">${j.login_code}</p>
+            <div class="row" style="justify-content:space-between; margin-top:.75rem; border-top: 1px solid var(--border); padding-top: .75rem;">
               <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all;" id="myQRLink">${j.url}</div>
-              <button class="btn btn-secondary" id="copyQRBtn"><i class="fas fa-link"></i> Copy</button>
+              <button class="btn btn-secondary" id="copyQRBtn"><i class="fas fa-link"></i> Copy Link</button>
             </div>
             ${!j.ngrok_available && qrOnlineMode ? '<p style="color:var(--warning); text-align:center; margin-top:.5rem;"><i class="fas fa-exclamation-triangle"></i> Ngrok not available. Showing local QR.</p>' : ''}
           `;
@@ -2703,11 +2734,23 @@ function removeFileCard(rel){
       try {
         const r = await fetch('/api/me', {cache:'no-store'});
         const j = await r.json();
+        if(!j.ok) return;
+
         const privacyToggle = document.getElementById('privacyToggle');
         if(j.public === false) privacyToggle.classList.add('active'); else privacyToggle.classList.remove('active');
 
         const deleteToggle = document.getElementById('allowDeleteToggle');
         if(j.prefs?.allow_non_admin_delete === false) deleteToggle.classList.remove('active'); else deleteToggle.classList.add('active');
+
+        const codeInput = document.getElementById('permanentCodeInput');
+        if (j.permanent_code) {
+          codeInput.value = j.permanent_code;
+        } else {
+          codeInput.value = '';
+        }
+        // Also try to populate the token if it exists, though it's mainly set on generation
+        // This requires a new endpoint or modifying /api/me to return the token, which is a security risk.
+        // Let's stick to showing the code only, and the token on generation.
 
         openModal('settingsModal');
       } catch(e){ openModal('settingsModal'); }
@@ -2753,13 +2796,19 @@ function removeFileCard(rel){
         if (j.ok) {
           const tokenInput = document.getElementById('apiTokenInput');
           tokenInput.value = j.token;
+
+          const codeInput = document.getElementById('permanentCodeInput');
+          if (j.permanent_code) {
+            codeInput.value = j.permanent_code;
+          }
+
           tokenInput.select();
           document.execCommand('copy');
           // Store token for sharing
           tokenInput.dataset.token = j.token;
           // Show share button
           document.getElementById('shareTokenBtn').style.display = 'inline-flex';
-          showToast('Token generated and copied to clipboard', 'success');
+          showToast('Token and code generated. Token copied.', 'success');
         } else {
           showToast(j.error || 'Failed to generate token', 'error');
         }
@@ -3255,14 +3304,45 @@ LOGIN_HTML = """
 .user-badge {
     display: none;
 }
+.login-container {
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+}
+.login-divider {
+  width: 1px;
+  background-color: var(--border);
+  align-self: stretch;
+  min-height: 250px;
+}
+.login-section {
+  flex: 1;
+  text-align: center;
+}
+@media (max-width: 768px) {
+  .login-container {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  .login-divider {
+    width: 100%;
+    height: 1px;
+    min-height: auto;
+  }
+}
 </style>
 
 <div class="card">
-  <h2 style="margin-bottom:.5rem;">Scan to login</h2>
-  <p style="color:var(--text-secondary); margin-bottom:.75rem;">{{ message }}</p>
+  <h2 style="margin-bottom:.5rem;">Log In or Pair a Device</h2>
+  {% if error %}
+    <div style="background:rgba(239,68,68,.12); color:#fecaca; border:1px solid rgba(239,68,68,.4); border-radius:.5rem; padding:.5rem .75rem; margin-bottom:.75rem;">
+      <i class="fas fa-exclamation-triangle"></i> {{ error }}
+    </div>
+  {% endif %}
+  <p style="color:var(--text-secondary); margin-bottom:.75rem;">Scan the QR code with your phone, or enter the 6-digit code on another device.</p>
 
   {% if ngrok_available %}
-  <div class="toggle-container" style="margin-bottom:1rem;">
+  <div class="toggle-container" style="margin-bottom:1rem; justify-content: center;">
     <span class="toggle-label">Local</span>
     <div class="toggle-switch" id="loginModeToggle">
       <div class="slider"></div>
@@ -3271,10 +3351,33 @@ LOGIN_HTML = """
   </div>
   {% endif %}
 
-  <div style="display:flex; align-items:center; justify-content:center; padding:16px; background:#fff; border-radius:12px;">
-    <img id="qrImage" src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code" style="image-rendering:pixelated; image-rendering:crisp-edges;" />
+  <div class="login-container">
+    <!-- Left Column -->
+    <div class="login-section">
+      <h3 style="margin-bottom:.5rem;">Scan QR Code</h3>
+      <div style="display:flex; align-items:center; justify-content:center; padding:16px; background:#fff; border-radius:12px; max-width: 280px; margin: 0 auto;">
+        <img id="qrImage" src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code" style="image-rendering:pixelated; image-rendering:crisp-edges;" />
+      </div>
+      <p class="muted" style="margin-top:.75rem; color:var(--text-muted); word-break:break-all;">Or open: <code id="qrUrl">{{ qr_url }}</code></p>
+    </div>
+
+    <!-- Divider -->
+    <div class="login-divider" style="background-color: #334155;"></div>
+
+    <!-- Right Column -->
+    <div class="login-section">
+      <h3 style="margin-bottom:.5rem;">Log In With A Code</h3>
+      <p style="color:var(--text-secondary); margin-bottom:.75rem;">Your temporary code is:</p>
+      <p style="font-size: 2rem; font-weight: bold; color: var(--primary); letter-spacing: 0.1em; margin-bottom: 1rem;">{{ login_code }}</p>
+
+      <form action="{{ url_for('login_with_code') }}" method="POST">
+          <label for="code-input" style="display: block; margin-bottom: .5rem; color: var(--text-secondary);">Enter a code from another device:</label>
+          <input id="code-input" type="text" name="code" class="form-input" placeholder="123456" required pattern="\\d{6}" maxlength="6" style="font-size: 1.5rem; text-align: center; letter-spacing: 0.2em; margin-bottom: 1rem;">
+          <button type="submit" class="btn btn-primary" style="width: 100%;">Continue</button>
+      </form>
+    </div>
   </div>
-  <p class="muted" style="margin-top:.75rem; color:var(--text-muted);">Or open: <code id="qrUrl">{{ qr_url }}</code></p>
+
   <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1rem;">
     <p style="color:var(--text-secondary); margin-bottom:.75rem;">Or if you're on a new device:</p>
     <a href="{{ url_for('login_with_default') }}" class="btn btn-secondary">Continue with a new/default account</a>
@@ -3401,10 +3504,12 @@ def login():
             # Redirect to browse
             return redirect(url_for("browse", subpath=session.get("folder", "")))
 
+    error = request.args.get("error")
     # Normal login flow if no token or invalid token
     token = str(uuid.uuid4())
     pc_token = secrets.token_urlsafe(16)
-    pending_sessions[token] = {"authenticated": False, "folder": None, "icon": None, "pc_token": pc_token}
+    login_code = generate_temp_code()
+    pending_sessions[token] = {"authenticated": False, "folder": None, "icon": None, "pc_token": pc_token, "login_code": login_code}
     session["login_token"] = token
 
     ngrok_url = get_ngrok_url()
@@ -3429,7 +3534,9 @@ def login():
                                    qr_url=qr_url,
                                    token=token,
                                    ngrok_available=ngrok_available,
-                                   message=message)
+                                   message=message,
+                                   login_code=login_code,
+                                   error=error)
     # On login page, no dhikr banner
     return render_template_string(BASE_HTML, body=body, authed=is_authed(), icon=None, user_label="", current_rel="", dhikr="", dhikr_list=[], is_admin=False)
 
@@ -3498,6 +3605,55 @@ def check_login(token: str):
             pc_url = url_for("pc_login", token=pc_token)
         return jsonify({"authenticated": True, "folder": info.get("folder"), "icon": info.get("icon"), "url": pc_url})
     return jsonify({"authenticated": False})
+
+@app.route("/login_with_code", methods=["POST"])
+def login_with_code():
+    code = request.form.get("code", "").strip()
+    if not code or not code.isdigit() or len(code) != 6:
+        return redirect(url_for("login", error="Invalid code format. Please enter a 6-digit code."))
+
+    # 1. Check for temporary codes in pending_sessions
+    found_token = None
+    for token, info in pending_sessions.items():
+        if info.get("login_code") == code:
+            # To prevent replay attacks, let's remove the code once it's used.
+            # The session will be authenticated by the scan endpoint.
+            info.pop("login_code", None)
+            found_token = token
+            break
+
+    if found_token:
+        # Found a temporary code, mimic the /scan/<token> logic by redirecting to it.
+        # This will log in the current device and also allow the original device to poll and log in.
+        return redirect(url_for("scan", token=found_token))
+
+    # 2. Check for permanent codes in users.json
+    users = app.config.setdefault("USERS", load_users())
+    found_folder = None
+    for folder, user_data in users.items():
+        if user_data.get("permanent_code") == code:
+            found_folder = folder
+            break
+
+    if found_folder:
+        # Found a permanent code, log this device in directly.
+        device_id, _ = get_or_create_device_folder(request)
+
+        # This device becomes associated with this user folder now.
+        app.config["DEVICE_MAP"][device_id] = {"folder": found_folder, "created": datetime.utcnow().isoformat() + "Z"}
+        save_device_map(app.config["DEVICE_MAP"])
+
+        session["authed"] = True
+        session["folder"] = found_folder
+        session["icon"] = get_user_icon(found_folder)
+
+        resp = make_response(redirect(url_for("browse", subpath=found_folder)))
+        resp.set_cookie(DEVICE_COOKIE_NAME, device_id, max_age=60*60*24*730, samesite="Lax")
+        return resp
+
+    # 3. If no code is found
+    return redirect(url_for("login", error="Invalid or expired code."))
+
 
 @app.route("/scan/<token>")
 def scan(token: str):
@@ -3672,7 +3828,15 @@ def api_me():
     cfg = get_user_cfg(folder)
     device_id = request.cookies.get(DEVICE_COOKIE_NAME)
     is_admin = bool(device_id and device_id == cfg.get("admin_device"))
-    return jsonify({"ok": True, "folder": folder, "public": cfg.get("public", True), "has_password": bool(cfg.get("password_hash")), "prefs": cfg.get("prefs", {}), "is_admin": is_admin})
+    return jsonify({
+        "ok": True,
+        "folder": folder,
+        "public": cfg.get("public", True),
+        "has_password": bool(cfg.get("password_hash")),
+        "prefs": cfg.get("prefs", {}),
+        "is_admin": is_admin,
+        "permanent_code": cfg.get("permanent_code")
+    })
 
 @app.route("/api/privacy", methods=["POST"])
 def api_privacy():
@@ -3816,12 +3980,12 @@ def api_my_qr():
 
     mode = request.args.get("mode", "local")
     access_token = request.args.get("token")
+    ngrok_available = bool(get_ngrok_url())
+    login_code = None
 
     # If a specific token is provided, create a URL with that token
     if access_token:
         ngrok_url = get_ngrok_url()
-        ngrok_available = bool(ngrok_url)
-
         if mode == "online" and ngrok_url:
             qr_url = f"{ngrok_url}/login?token={access_token}"
         else:
@@ -3831,16 +3995,16 @@ def api_my_qr():
     else:
         token = str(uuid.uuid4())
         pc_token = secrets.token_urlsafe(16)
+        login_code = generate_temp_code()
         pending_sessions[token] = {
             "authenticated": False,
             "folder": session.get("folder"),
             "icon": session.get("icon"),
             "pc_token": pc_token,
+            "login_code": login_code,
         }
 
         ngrok_url = get_ngrok_url()
-        ngrok_available = bool(ngrok_url)
-
         if mode == "online" and ngrok_url:
             qr_url = f"{ngrok_url}/scan/{token}"
         else:
@@ -3848,7 +4012,13 @@ def api_my_qr():
             qr_url = f"http://{ip}:{PORT}/scan/{token}"
 
     qr_b64 = make_qr_png_b64(qr_url)
-    return jsonify({"ok": True, "b64": qr_b64, "url": qr_url, "ngrok_available": ngrok_available})
+    return jsonify({
+        "ok": True,
+        "b64": qr_b64,
+        "url": qr_url,
+        "ngrok_available": ngrok_available,
+        "login_code": login_code
+    })
 
 @app.route("/api/cliptext", methods=["POST"])
 def api_cliptext():
