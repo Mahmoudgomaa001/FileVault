@@ -4374,28 +4374,74 @@ def api_download_zip():
 SHARE_BODY_HTML = """
 <div class="card" id="mainContainer">
   <h1>Shared Files</h1>
-  {% if files %}
-    <p>You have shared {{ files|length }} file(s). Select a destination and click Save, or clear the list.</p>
-    <div id="shareFileList">
-      {% for file in files %}
-        <div class="card">{{ file.name }}</div>
-      {% endfor %}
-    </div>
+  <div id="shareFileList">
+    <p>Loading shared files...</p>
+  </div>
+  <div id="shareControls" style="display: none;">
     <p><b>Select destination folder:</b></p>
     <div id="folderTree" style="height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary); margin-bottom: 1rem;">Loading...</div>
     <div style="display: flex; gap: 0.5rem;">
         <button class="btn btn-primary" id="confirmShareBtn" disabled><i class="fas fa-save"></i> Save All Files</button>
         <button class="btn btn-danger" id="clearShareBtn"><i class="fas fa-trash"></i> Clear All</button>
     </div>
-  {% else %}
+  </div>
+  <div id="noFilesMessage" style="display: none;">
     <p>No pending files to share. You can close this page.</p>
-  {% endif %}
+  </div>
+  <div style="margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1rem; display: flex; gap: .5rem;">
+    {% if is_on_ngrok %}
+      <button class="btn btn-secondary" onclick="goOffline()"><i class="fas fa-network-wired"></i> Switch to Local</button>
+    {% else %}
+      <button class="btn btn-secondary" onclick="goOnline()"><i class="fas fa-wifi"></i> Switch to Online</button>
+    {% endif %}
+  </div>
 </div>
 
 <script>
-  // Simplified script for this page
+  const DB_NAME = 'share-target-db';
+  const STORE_NAME = 'shared-files';
   let selectedShareDestination = '';
-  const file_ids = {{ files|map(attribute='id')|list|tojson }};
+
+  function openDB() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, 1);
+      request.onsuccess = event => resolve(event.target.result);
+      request.onerror = event => reject(event.target.error);
+    });
+  }
+
+  async function getAllFiles() {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async function deleteFile(id) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.delete(id);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async function clearAllFiles() {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+          const transaction = db.transaction([STORE_NAME], 'readwrite');
+          const store = transaction.objectStore(STORE_NAME);
+          const request = store.clear();
+          request.onsuccess = () => resolve();
+          request.onerror = () => reject(request.error);
+      });
+  }
 
   function renderFolderTree(nodes, level = 0) {
       let html = '';
@@ -4432,61 +4478,80 @@ SHARE_BODY_HTML = """
       }
   }
 
-  async function confirmShare() {
-      if (file_ids.length === 0 || selectedShareDestination === '') {
-          showToast('Please select a destination folder.', 'error');
-          return;
-      }
-      document.getElementById('confirmShareBtn').disabled = true;
-      document.getElementById('confirmShareBtn').innerHTML = 'Saving...';
+  async function uploadFile(fileRecord) {
+      const formData = new FormData();
+      formData.append('dest', selectedShareDestination);
+      formData.append('file', fileRecord.file, fileRecord.name);
 
       try {
-          const r = await fetch('/api/commit_share', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ids: file_ids, destination: selectedShareDestination })
-          });
-          const j = await r.json();
-          if (j.ok) {
-              document.getElementById('mainContainer').innerHTML = '<h1>Share Complete!</h1><p>' + j.committed.length + ' file(s) saved successfully.</p><a href="/" class="btn btn-primary">Back to App</a>';
-          } else {
-              showToast(j.error || 'Share failed.', 'error');
-              document.getElementById('confirmShareBtn').disabled = false;
-              document.getElementById('confirmShareBtn').innerHTML = '<i class="fas fa-save"></i> Save All Files';
-          }
-      } catch (e) {
-          showToast('An error occurred during the share.', 'error');
-          document.getElementById('confirmShareBtn').disabled = false;
-          document.getElementById('confirmShareBtn').innerHTML = '<i class="fas fa-save"></i> Save All Files';
+        const response = await fetch('{{ url_for("api_upload") }}', {
+            method: 'POST',
+            body: formData
+        });
+        const result = await response.json();
+        if (result.ok) {
+            showToast(`Uploaded: ${fileRecord.name}`, 'success');
+            await deleteFile(fileRecord.id);
+            return true;
+        } else {
+            showToast(`Failed to upload ${fileRecord.name}: ${result.error}`, 'error');
+            return false;
+        }
+      } catch(e) {
+        showToast(`Error uploading ${fileRecord.name}`, 'error');
+        return false;
       }
   }
 
-  async function clearShareList() {
-      if (!confirm('Are you sure you want to clear all shared files? This cannot be undone.')) {
-        return;
-      }
+  document.addEventListener('DOMContentLoaded', async () => {
+    const fileListDiv = document.getElementById('shareFileList');
+    const controlsDiv = document.getElementById('shareControls');
+    const noFilesDiv = document.getElementById('noFilesMessage');
+    const confirmBtn = document.getElementById('confirmShareBtn');
+    const clearBtn = document.getElementById('clearShareBtn');
 
-      try {
-          const r = await fetch('/api/clear_shares', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-          });
-          const j = await r.json();
-          if (j.ok) {
-              document.getElementById('mainContainer').innerHTML = '<h1>List Cleared</h1><p>' + j.deleted_count + ' file(s) have been removed.</p><a href="/" class="btn btn-primary">Back to App</a>';
-          } else {
-              showToast(j.error || 'Failed to clear list.', 'error');
-          }
-      } catch (e) {
-          showToast('An error occurred while clearing the list.', 'error');
-      }
-  }
+    const files = await getAllFiles();
 
-  if (file_ids.length > 0) {
-      loadFolderTree();
-      document.getElementById('confirmShareBtn').addEventListener('click', confirmShare);
-      document.getElementById('clearShareBtn').addEventListener('click', clearShareList);
-  }
+    if (files && files.length > 0) {
+      let fileListHtml = '';
+      for (const file of files) {
+        fileListHtml += `<div class="card">${file.name}</div>`;
+      }
+      fileListDiv.innerHTML = fileListHtml;
+      controlsDiv.style.display = 'block';
+      noFilesDiv.style.display = 'none';
+
+      await loadFolderTree();
+
+      confirmBtn.addEventListener('click', async () => {
+        if (selectedShareDestination === '') {
+            showToast('Please select a destination folder.', 'warning');
+            return;
+        }
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = 'Saving...';
+
+        const allFiles = await getAllFiles();
+        for(const file of allFiles) {
+            await uploadFile(file);
+        }
+
+        document.getElementById('mainContainer').innerHTML = '<h1>Share Complete!</h1><p>All files have been uploaded.</p><a href="/" class="btn btn-primary">Back to App</a>';
+      });
+
+      clearBtn.addEventListener('click', async () => {
+        if(confirm('Are you sure you want to clear all pending shared files? This cannot be undone.')) {
+            await clearAllFiles();
+            document.getElementById('mainContainer').innerHTML = '<h1>List Cleared</h1><p>All pending files have been removed.</p><a href="/" class="btn btn-primary">Back to App</a>';
+        }
+      });
+
+    } else {
+      fileListDiv.innerHTML = '';
+      controlsDiv.style.display = 'none';
+      noFilesDiv.style.display = 'block';
+    }
+  });
 </script>
 """
 
@@ -4518,7 +4583,20 @@ def share_page():
                 except ValueError:
                     continue
 
-    body = render_template_string(SHARE_BODY_HTML, files=files)
+    # Get ngrok status for the template
+    ngrok_url_str = get_ngrok_url()
+    is_on_ngrok = False
+    if ngrok_url_str:
+        ngrok_host = urlparse(ngrok_url_str).hostname
+        request_host = request.host.split(':')[0]
+        if ngrok_host and ngrok_host == request_host:
+            is_on_ngrok = True
+
+    body = render_template_string(
+        SHARE_BODY_HTML,
+        files=files,
+        is_on_ngrok=is_on_ngrok
+    )
 
     # Get values for BASE_HTML rendering
     dhikr = get_random_dhikr()
@@ -4573,89 +4651,6 @@ def share_receiver():
     # Redirect to the folder where the file(s) were saved.
     return redirect(url_for("browse", subpath=folder))
 
-@app.route("/api/commit_share", methods=["POST"])
-def api_commit_share():
-    if not is_authed():
-        return jsonify({"ok": False, "error": "not authed"}), 401
-
-    data = request.get_json(silent=True) or {}
-    pending_ids = data.get("ids", [])
-    destination_rel = data.get("destination")
-
-    if not pending_ids or destination_rel is None:
-        return jsonify({"ok": False, "error": "ids and destination required"}), 400
-
-    base_folder = session.get("folder")
-    if first_segment(destination_rel) != base_folder and destination_rel != base_folder:
-        return jsonify({"ok": False, "error": "forbidden destination"}), 403
-
-    pending_dir = safe_path(base_folder) / ".pending_shares"
-    committed = []
-    errors = []
-
-    for pending_id in pending_ids:
-        pending_file = pending_dir / pending_id
-        if not pending_file.exists() or not pending_file.is_file():
-            errors.append({"id": pending_id, "error": "not found"})
-            continue
-
-        try:
-            _, original_filename = pending_id.split("__", 1)
-        except ValueError:
-            original_filename = pending_id
-
-        dest_dir = safe_path(destination_rel)
-        save_path = dest_dir / original_filename
-
-        base, ext = os.path.splitext(original_filename)
-        i = 1
-        while save_path.exists():
-            save_path = dest_dir / f"{base} ({i}){ext}"
-            i += 1
-
-        try:
-            shutil.move(str(pending_file), str(save_path))
-            meta = get_file_meta(save_path)
-            socketio.emit("file_update", {"action":"added", "dir": destination_rel, "meta": meta})
-            committed.append(meta)
-        except Exception as e:
-            errors.append({"id": pending_id, "error": str(e)})
-
-    return jsonify({"ok": True, "committed": committed, "errors": errors})
-
-@app.route("/api/clear_shares", methods=["POST"])
-def api_clear_shares():
-    if not is_authed():
-        return jsonify({"ok": False, "error": "not authed"}), 401
-
-    base_folder = session.get("folder")
-    pending_dir = safe_path(base_folder) / ".pending_shares"
-
-    if not pending_dir.exists():
-        return jsonify({"ok": True, "deleted_count": 0})
-
-    deleted_count = 0
-    errors = []
-    for item in pending_dir.iterdir():
-        try:
-            if item.is_file():
-                item.unlink()
-                deleted_count += 1
-            elif item.is_dir():
-                shutil.rmtree(item)
-                deleted_count += 1
-        except Exception as e:
-            errors.append({"name": item.name, "error": str(e)})
-            print(f"Error deleting {item.name}: {e}")
-
-    if not errors:
-        try:
-            pending_dir.rmdir()
-        except Exception as e:
-            print(f"Error deleting .pending_shares directory: {e}")
-
-
-    return jsonify({"ok": True, "deleted_count": deleted_count, "errors": errors})
 
 
 # Error handlers: redirect to login on not found/forbidden

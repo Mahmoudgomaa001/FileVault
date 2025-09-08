@@ -1,12 +1,24 @@
+import socket
 from playwright.sync_api import sync_playwright, expect
+
+def get_local_ip() -> str:
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+    finally:
+        s.close()
+    return ip
 
 def run():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
 
+        local_ip = get_local_ip()
+
         # 1. Verify Login Page
-        page.goto("http://127.0.0.1:5000/login", wait_until="networkidle")
+        page.goto(f"http://{local_ip}:5000/login", wait_until="networkidle")
         expect(page.locator(".login-container")).to_be_visible()
         page.screenshot(path="jules-scratch/verification/login_page_final.png")
 
