@@ -159,6 +159,9 @@ def ensure_favicon_assets():
             print("[assets] favicon write failed:", e)
 
     # Minimal PWA manifest using SVG icons (offline-friendly)
+    local_ip = get_local_ip()
+    share_target_url = f"http://{local_ip}:{PORT}/share-receiver"
+
     manifest = {
         "name": "FileVault",
         "short_name": "FileVault",
@@ -171,7 +174,7 @@ def ensure_favicon_assets():
             {"src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml"}
         ],
         "share_target": {
-            "action": "/share-receiver",
+            "action": share_target_url,
             "method": "POST",
             "enctype": "multipart/form-data",
             "params": {

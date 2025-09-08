@@ -8,6 +8,7 @@
     :root {
       --primary:#3B82F6;
       --primary-dark:#2563EB;
+      --secondary:#8B5CF6;
       --danger:#EF4444;
       --bg-primary:#0F172A;
       --bg-secondary:#1E293B;
@@ -36,7 +37,7 @@
     h1 {
       font-size: 2.5rem;
       font-weight: 700;
-      background: linear-gradient(135deg,var(--primary),#8B5CF6);
+      background: linear-gradient(135deg,var(--primary),var(--secondary));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       margin-bottom: 1rem;
@@ -59,7 +60,9 @@
       gap: .5rem;
       font-size: 1.125rem;
       text-decoration: none;
-      margin-top: 2rem;
+      margin-top: 1rem;
+      width: 100%;
+      max-width: 320px;
     }
     .btn:active {
       transform: scale(.97);
@@ -71,75 +74,118 @@
     .btn-primary:hover {
         background: var(--primary-dark);
     }
+    .btn-secondary {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+    }
+    .btn-secondary:hover {
+      background: var(--bg-tertiary);
+    }
+    .btn-danger {
+      background: var(--danger);
+      color: #fff;
+    }
     .status-message {
         margin-top: 1.5rem;
         padding: 1rem;
         border-radius: .75rem;
-        display: none; /* Hidden by default */
         font-weight: 600;
+        min-height: 58px;
     }
     .status-message.error {
         background: rgba(239,68,68,.15);
         color: #fecaca;
         border: 1px solid var(--danger);
-        display: block;
     }
     .status-message.connecting {
         background: rgba(59,130,246,.15);
         color: #93c5fd;
         border: 1px solid var(--primary);
-        display: block;
+    }
+    .status-message.success {
+        background: rgba(16, 185, 129, 0.15);
+        color: #6ee7b7;
+        border: 1px solid var(--success);
+    }
+    #button-container {
+        margin-top: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        align-items: center;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>FileVault</h1>
-    <p>This app works completely offline. Use the button below to connect to your local FileVault server.</p>
-    <button class="btn btn-primary" id="connectBtn" onclick="connectToServer()">
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-zap"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-      Go Local
-    </button>
-    <div id="status" class="status-message"></div>
+    <p id="main-text">Attempting to find your local FileVault server. Please wait...</p>
+    <div id="status" class="status-message connecting">Searching for server...</div>
+    <div id="button-container">
+      <!-- Buttons will be dynamically inserted here -->
+    </div>
   </div>
 
   <script>
-    function connectToServer() {
-      const connectBtn = document.getElementById('connectBtn');
-      const statusEl = document.getElementById('status');
-      const targetUrl = 'http://192.168.1.10:5000';
+    const statusEl = document.getElementById('status');
+    const buttonContainer = document.getElementById('button-container');
+    const mainText = document.getElementById('main-text');
 
-      // Disable button and show connecting message
-      connectBtn.disabled = true;
-      connectBtn.style.opacity = 0.7;
-      statusEl.className = 'status-message connecting';
-      statusEl.textContent = 'Attempting to connect to ' + targetUrl + '...';
-
-      // We use fetch with an AbortController for a timeout.
-      // We can't read the response due to CORS, but a successful opaque response means the server is reachable.
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 second timeout
-
-      fetch(targetUrl, { mode: 'no-cors', signal: controller.signal })
-        .then(response => {
-          // Success! The server is reachable.
-          clearTimeout(timeoutId);
-          statusEl.textContent = 'Connection successful! Redirecting...';
-          window.location.href = targetUrl;
-        })
-        .catch(err => {
-          // Failure. Server is likely down or unreachable.
-          clearTimeout(timeoutId);
-          connectBtn.disabled = false;
-          connectBtn.style.opacity = 1;
-          statusEl.className = 'status-message error';
-          if (err.name === 'AbortError') {
-            statusEl.textContent = 'Connection timed out. Please ensure the server is running and you are on the same WiFi network.';
-          } else {
-            statusEl.textContent = 'Could not connect. Please ensure the server at ' + targetUrl + ' is running.';
-          }
-        });
+    function setStatus(message, type) {
+      statusEl.textContent = message;
+      statusEl.className = `status-message ${type}`;
     }
+
+    function createButton(text, url, isPrimary = false) {
+      const button = document.createElement('a');
+      button.href = url;
+      button.textContent = text;
+      button.className = isPrimary ? 'btn btn-primary' : 'btn btn-secondary';
+      return button;
+    }
+
+    async function checkServerStatus() {
+      mainText.textContent = 'Attempting to find your local FileVault server. Please wait...';
+      setStatus('Searching for server...', 'connecting');
+      buttonContainer.innerHTML = ''; // Clear old buttons
+
+      try {
+        const response = await fetch('/api/server-status', { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`Server responded with status: ${response.status}`);
+        }
+        const data = await response.json();
+
+        if (data.ok) {
+          mainText.textContent = 'Your server is online. Choose a connection method below.';
+          setStatus('Server found!', 'success');
+
+          if (data.local_url) {
+            buttonContainer.appendChild(createButton('Connect via Local Network', data.local_url, true));
+          }
+          if (data.ngrok_url) {
+            buttonContainer.appendChild(createButton('Connect via Internet (ngrok)', data.ngrok_url));
+          }
+
+        } else {
+          throw new Error(data.error || 'Failed to get server status.');
+        }
+
+      } catch (error) {
+        console.error('Error checking server status:', error);
+        mainText.textContent = 'Could not connect to the server. Please ensure it is running and that you are on the same WiFi network.';
+        setStatus('Server not found', 'error');
+
+        const retryButton = document.createElement('button');
+        retryButton.textContent = 'Retry Connection';
+        retryButton.className = 'btn btn-danger';
+        retryButton.onclick = checkServerStatus;
+        buttonContainer.appendChild(retryButton);
+      }
+    }
+
+    // Initial check when the page loads
+    document.addEventListener('DOMContentLoaded', checkServerStatus);
   </script>
 </body>
 </html>
