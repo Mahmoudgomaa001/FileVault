@@ -1224,6 +1224,33 @@ BASE_HTML = """
     </div>
   </div>
 
+<!-- Share Link Modal -->
+<div class="modal" id="shareLinkModal">
+  <div class="modal-content" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">Share File</div>
+      <button class="modal-close" onclick="closeModal('shareLinkModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p>Use these links to share the file. The online link requires ngrok to be running.</p>
+      <div id="shareLinkLocalContainer" style="margin-top:1rem; display:none;">
+        <label class="form-label" for="shareLinkLocalInput">Local Network Link</label>
+        <div class="row" style="gap:.5rem;">
+          <input type="text" id="shareLinkLocalInput" class="form-input" readonly>
+          <button class="btn btn-secondary" onclick="copyLinkFromInput('shareLinkLocalInput')"><i class="fas fa-copy"></i> Copy</button>
+        </div>
+      </div>
+      <div id="shareLinkOnlineContainer" style="margin-top:1rem; display:none;">
+        <label class="form-label" for="shareLinkOnlineInput">Online Link (via ngrok)</label>
+        <div class="row" style="gap:.5rem;">
+          <input type="text" id="shareLinkOnlineInput" class="form-input" readonly>
+          <button class="btn btn-secondary" onclick="copyLinkFromInput('shareLinkOnlineInput')"><i class="fas fa-copy"></i> Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
   <!-- Settings Modal -->
   <div class="modal" id="settingsModal">
     <div class="modal-content" style="max-width:520px;">
@@ -1976,52 +2003,59 @@ async function changeDhikr() {
     }
 
     // SHARE / COPY
-    function shareFile(rel){
-      const rawUrl = `${window.location.origin}{{ url_for('raw') }}?path=${encodeURIComponent(rel)}`;
-      if(navigator.share && /mobile|android|iphone/i.test(navigator.userAgent)){
-        navigator.share({title:'Shared File', url:rawUrl}).catch(()=> copyLink(rawUrl));
-      } else {
-        copyLink(rawUrl);
+    async function shareFile(rel){
+      try {
+        const r = await fetch('/api/server-status');
+        const data = await r.json();
+        if (!data.ok) {
+          showToast('Could not get server URLs to create share links.', 'error');
+          return;
+        }
+
+        const rawPath = `{{ url_for('raw') }}?path=${encodeURIComponent(rel)}`;
+
+        const localContainer = document.getElementById('shareLinkLocalContainer');
+        const localInput = document.getElementById('shareLinkLocalInput');
+        if (data.local_url) {
+          localInput.value = `${data.local_url.replace(/\/$/, '')}${rawPath}`;
+          localContainer.style.display = 'block';
+        } else {
+          localContainer.style.display = 'none';
+        }
+
+        const onlineContainer = document.getElementById('shareLinkOnlineContainer');
+        const onlineInput = document.getElementById('shareLinkOnlineInput');
+        if (data.ngrok_url) {
+          onlineInput.value = `${data.ngrok_url.replace(/\/$/, '')}${rawPath}`;
+          onlineContainer.style.display = 'block';
+        } else {
+          onlineContainer.style.display = 'none';
+        }
+
+        openModal('shareLinkModal');
+
+      } catch (e) {
+        showToast('Failed to fetch server details for sharing.', 'error');
       }
     }
-    function copyLink(url){
-      try {
+
+    function copyLinkFromInput(inputId) {
+        const input = document.getElementById(inputId);
+        if (!input || !input.value) return;
+
         if(navigator.clipboard){
-          navigator.clipboard.writeText(url)
+          navigator.clipboard.writeText(input.value)
             .then(() => showToast('Link copied!', 'success'))
-            .catch(err => {
-              console.error('Clipboard API error:', err);
-              fallbackCopy();
-            });
+            .catch(() => showToast('Failed to copy link', 'error'));
         } else {
-          fallbackCopy();
-        }
-        
-        function fallbackCopy() {
           try {
-            const i = document.createElement('input');
-            i.value = url;
-            i.style.position = 'fixed';
-            i.style.opacity = '0';
-            document.body.appendChild(i);
-            i.select();
-            const successful = document.execCommand('copy');
-            document.body.removeChild(i);
-            
-            if (successful) {
-              showToast('Link copied!', 'success');
-            } else {
-              showToast('Failed to copy link', 'error');
-            }
+            input.select();
+            document.execCommand('copy');
+            showToast('Link copied!', 'success');
           } catch (err) {
-            console.error('Fallback copy error:', err);
             showToast('Failed to copy link', 'error');
           }
         }
-      } catch (e) {
-        console.error('Copy error:', e);
-        showToast('Failed to copy link', 'error');
-      }
     }
 
     // PREVIEW (pointerup to avoid double-tap; throttle duplicates)
