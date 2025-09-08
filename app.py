@@ -162,7 +162,7 @@ def ensure_favicon_assets():
     manifest = {
         "name": "FileVault",
         "short_name": "FileVault",
-        "start_url": "/",
+        "start_url": "/static/launcher.html",
         "display": "standalone",
         "background_color": "#ffe6f2",
         "theme_color": "#ff4fa3",
