@@ -167,10 +167,6 @@ def ensure_favicon_assets():
         except Exception as e:
             print("[assets] favicon write failed:", e)
 
-    # Dynamically generate manifest to inject local IP
-    local_ip = get_local_ip()
-    share_target_url = f"http://{local_ip}:{PORT}/share-staging"
-
     # Minimal PWA manifest using SVG icons (offline-friendly)
     manifest = {
         "name": "FileVault",
@@ -184,7 +180,7 @@ def ensure_favicon_assets():
             {"src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml"}
         ],
         "share_target": {
-            "action": share_target_url,
+            "action": "/share-staging",
             "method": "POST",
             "enctype": "multipart/form-data",
             "params": {
