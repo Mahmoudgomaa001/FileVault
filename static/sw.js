@@ -1,9 +1,8 @@
-const VERSION = 'v9';
+const VERSION = 'v11';
 const CACHE_NAME = `filevault-cache-${VERSION}`;
-const LAUNCHER_URL = '/static/launcher.html';
 const OFFLINE_URL = '/static/offline.html';
 const APP_SHELL_URLS = [
-  LAUNCHER_URL,
+  OFFLINE_URL,
   '/static/fonts.css',
   '/static/vendor/fontawesome/css/all.min.css',
   '/static/vendor/fontawesome/css/fa-shims.css',
@@ -17,7 +16,6 @@ const APP_SHELL_URLS = [
   '/static/vendor/fontawesome/webfonts/fa-regular-400.woff2',
   '/static/vendor/fontawesome/webfonts/fa-solid-900.ttf',
   '/static/vendor/fontawesome/webfonts/fa-solid-900.woff2',
-  OFFLINE_URL
 ];
 
 self.addEventListener('install', event => {
@@ -26,15 +24,11 @@ self.addEventListener('install', event => {
     caches.open(CACHE_NAME)
       .then(cache => {
         console.log('[ServiceWorker] Caching app shell and offline page');
-        // Use addAll with a catch to prevent a single failed asset from breaking the entire cache
         return cache.addAll(APP_SHELL_URLS).catch(error => {
           console.error('[ServiceWorker] Failed to cache app shell:', error);
         });
       })
-      .then(() => {
-        // Force the waiting service worker to become the active service worker.
-        return self.skipWaiting();
-      })
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -44,109 +38,78 @@ self.addEventListener('activate', event => {
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          // Delete old caches
           if (cacheName !== CACHE_NAME) {
             console.log('[ServiceWorker] Clearing old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => {
-      // Tell the active service worker to take control of the page immediately.
-      return self.clients.claim();
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Serve the launcher with a cache-first strategy.
-  if (url.pathname === LAUNCHER_URL) {
-    event.respondWith(
-      caches.open(CACHE_NAME).then(cache => {
-        return cache.match(LAUNCHER_URL).then(response => {
-          return response || fetch(event.request);
-        });
-      })
-    );
-    return;
-  }
-
-  // Handle Web Share Target POST requests
   if (event.request.method === 'POST' && url.pathname === '/share-receiver') {
     event.respondWith(Response.redirect('/share'));
     event.waitUntil(
       (async function () {
         const formData = await event.request.formData();
         const client = await self.clients.get(event.resultingClientId);
-        const files = formData.get('files');
-        client.postMessage({ files });
+        client.postMessage({ files: formData.getAll('files') });
       })()
     );
     return;
   }
 
-  // For navigation requests, use a network-first strategy.
   if (event.request.mode === 'navigate') {
     event.respondWith(
       (async () => {
         try {
-          // Try the network first.
           const networkResponse = await fetch(event.request);
-
           // If successful, cache the response for future offline use.
           const cache = await caches.open(CACHE_NAME);
-          // Do not cache error pages
-          if(networkResponse.ok) {
+          if (networkResponse.ok) {
             cache.put(event.request, networkResponse.clone());
           }
-
           return networkResponse;
         } catch (error) {
-          // The network failed.
-          console.log('[ServiceWorker] Fetch failed; returning offline page or cached page.', error);
-
+          console.log('[ServiceWorker] Fetch failed; trying cache...', error);
           const cache = await caches.open(CACHE_NAME);
-          // Try to serve the page from the cache.
           const cachedResponse = await cache.match(event.request);
           if (cachedResponse) {
             return cachedResponse;
           }
           // If the page is not in the cache, serve the master offline page.
+          console.log('[ServiceWorker] Page not in cache; returning offline page.');
           return await cache.match(OFFLINE_URL);
         }
       })()
     );
-  }
-  // For API calls, use a network-first strategy as well, but don't fall back to offline page.
-  else if (url.pathname.startsWith('/api/')) {
+  } else if (url.pathname.startsWith('/api/')) {
+    // For API calls, it's network-first, but we don't cache or serve offline content.
+    // The offline.html page will handle API failures gracefully.
     event.respondWith(
-        fetch(event.request).catch(() => {
-            return new Response(JSON.stringify({ ok: false, error: 'offline' }), {
-                headers: { 'Content-Type': 'application/json' }
-            });
-        })
-    );
-  }
-  // For all other requests (CSS, JS, images, fonts), use a cache-first strategy.
-  else {
-    event.respondWith(
-      caches.open(CACHE_NAME).then(cache => {
-        return cache.match(event.request).then(cachedResponse => {
-          // If we have a cached response, return it.
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-
-          // Otherwise, fetch from the network, cache it, and then return it.
-          return fetch(event.request).then(networkResponse => {
-            if (networkResponse.ok) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          });
+      fetch(event.request).catch(() => {
+        return new Response(JSON.stringify({ ok: false, error: 'offline' }), {
+          headers: { 'Content-Type': 'application/json' }
         });
+      })
+    );
+  } else {
+    // For all other requests (CSS, JS, images), use a cache-first strategy.
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cachedResponse = await cache.match(event.request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        const networkResponse = await fetch(event.request);
+        if (networkResponse && networkResponse.status === 200) {
+          cache.put(event.request, networkResponse.clone());
+        }
+        return networkResponse;
       })
     );
   }

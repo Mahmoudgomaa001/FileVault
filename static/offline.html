@@ -3,48 +3,180 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FileVault - Offline</title>
+  <title>FileVault - Launcher</title>
   <style>
+    :root {
+      --primary:#3B82F6;
+      --primary-dark:#2563EB;
+      --secondary:#8B5CF6;
+      --danger:#EF4444;
+      --bg-primary:#0F172A;
+      --bg-secondary:#1E293B;
+      --text-primary:#F8FAFC;
+      --text-secondary:#CBD5E1;
+      --border:#334155;
+    }
+    html, body {
+        touch-action: manipulation;
+    }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      background-color: #1E293B;
-      color: #F8FAFC;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
+      min-height: 100vh;
       margin: 0;
       text-align: center;
     }
     .container {
       padding: 2rem;
+      max-width: 500px;
     }
     h1 {
-      font-size: 2rem;
-      color: #8B5CF6;
+      font-size: 2.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg,var(--primary),var(--secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 1rem;
     }
     p {
       font-size: 1.1rem;
-      color: #CBD5E1;
+      color: var(--text-secondary);
+      line-height: 1.6;
     }
-    a {
-      display: inline-block;
-      margin-top: 1.5rem;
-      padding: 0.75rem 1.5rem;
-      background-color: #3B82F6;
-      color: white;
+    .btn {
+      padding: 1rem 2rem;
+      border-radius: .75rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all .2s;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .5rem;
+      font-size: 1.125rem;
       text-decoration: none;
-      border-radius: 0.5rem;
-      font-weight: 600;
+      margin-top: 1rem;
+      width: 100%;
+      max-width: 320px;
+    }
+    .btn:active {
+      transform: scale(.97);
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+    .btn-primary:hover {
+        background: var(--primary-dark);
+    }
+    .btn-secondary {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+    }
+    .btn-secondary:hover {
+      background: var(--bg-tertiary);
+    }
+    .btn-danger {
+      background: var(--danger);
+      color: #fff;
+    }
+    .status-message {
+        margin-top: 1.5rem;
+        padding: 1rem;
+        border-radius: .75rem;
+        font-weight: 600;
+        min-height: 58px;
+    }
+    .status-message.error {
+        background: rgba(239,68,68,.15);
+        color: #fecaca;
+        border: 1px solid var(--danger);
+    }
+    .status-message.connecting {
+        background: rgba(59,130,246,.15);
+        color: #93c5fd;
+        border: 1px solid var(--primary);
+    }
+    #button-container {
+        margin-top: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        align-items: center;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>You are Offline</h1>
-    <p>This page can't be displayed because you are not connected to the internet.</p>
-    <p>Content you have visited before may be available offline.</p>
-    <a href="/">Go to Home</a>
+    <h1>FileVault</h1>
+    <p>Attempting to find your local FileVault server. Please wait...</p>
+    <div id="status" class="status-message connecting">Searching for server...</div>
+    <div id="button-container">
+      <!-- Buttons will be dynamically inserted here -->
+    </div>
   </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const buttonContainer = document.getElementById('button-container');
+
+    function setStatus(message, type) {
+      statusEl.textContent = message;
+      statusEl.className = `status-message ${type}`;
+    }
+
+    function createButton(text, url, isPrimary = false) {
+      const button = document.createElement('a');
+      button.href = url;
+      button.textContent = text;
+      button.className = isPrimary ? 'btn btn-primary' : 'btn btn-secondary';
+      return button;
+    }
+
+    async function checkServerStatus() {
+      setStatus('Searching for server...', 'connecting');
+      buttonContainer.innerHTML = ''; // Clear old buttons
+
+      try {
+        const response = await fetch('/api/server-status', { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`Server responded with status: ${response.status}`);
+        }
+        const data = await response.json();
+
+        if (data.ok) {
+          setStatus('Server found! Select a connection method.', 'success');
+
+          if (data.local_url) {
+            buttonContainer.appendChild(createButton('Connect to Local', data.local_url, true));
+          }
+          if (data.ngrok_url) {
+            buttonContainer.appendChild(createButton('Connect to Online', data.ngrok_url));
+          }
+
+        } else {
+          throw new Error(data.error || 'Failed to get server status.');
+        }
+
+      } catch (error) {
+        console.error('Error checking server status:', error);
+        setStatus('Could not find server. Please ensure it is running and you are on the same network.', 'error');
+
+        const retryButton = document.createElement('button');
+        retryButton.textContent = 'Retry';
+        retryButton.className = 'btn btn-danger';
+        retryButton.onclick = checkServerStatus;
+        buttonContainer.appendChild(retryButton);
+      }
+    }
+
+    // Initial check when the page loads
+    document.addEventListener('DOMContentLoaded', checkServerStatus);
+  </script>
 </body>
 </html>

@@ -162,7 +162,7 @@ def ensure_favicon_assets():
     manifest = {
         "name": "FileVault",
         "short_name": "FileVault",
-        "start_url": "/static/launcher.html",
+        "start_url": "/static/offline.html",
         "scope": "/",
         "display": "standalone",
         "background_color": "#ffe6f2",
@@ -4137,6 +4137,23 @@ def api_cliptext():
     parent_rel = path_rel(dest_dir) if dest_dir != ROOT_DIR else ""
     socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
     return jsonify({"ok": True, "meta": meta})
+
+@app.route("/api/server-status")
+def api_server_status():
+    """
+    Provides the available URLs for the server.
+    This is used by the offline launcher to know where to connect.
+    It does not require authentication.
+    """
+    local_ip = get_local_ip()
+    local_url = f"http://{local_ip}:{PORT}"
+    ngrok_url = get_ngrok_url()
+
+    return jsonify({
+        "ok": True,
+        "local_url": local_url,
+        "ngrok_url": ngrok_url,  # This will be null if ngrok is not running
+    })
 
 @app.route("/api/go_offline")
 def api_go_offline():
