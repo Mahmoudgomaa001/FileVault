@@ -1150,11 +1150,6 @@ BASE_HTML = """
         {% if authed %}
           <!-- Desktop-only buttons -->
           <div class="nav-items-desktop">
-              {% if is_on_ngrok %}
-                <button class="btn btn-primary" id="goOfflineBtn" title="Switch to Local IP"><i class="fas fa-network-wired"></i><span class="btn-text"> Local</span></button>
-              {% elif is_on_local_with_ngrok_available %}
-                <button class="btn btn-secondary" id="goOnlineBtn" title="Switch to Online URL"><i class="fas fa-wifi"></i><span class="btn-text"> Online</span></button>
-              {% endif %}
               <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
               {% if is_admin %}
               <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
@@ -1167,11 +1162,6 @@ BASE_HTML = """
 
           <!-- Mobile-only dropdown menu -->
           <div class="nav-menu-mobile">
-              {% if is_on_ngrok %}
-                <button class="btn btn-primary btn-icon" id="goOfflineBtnMobile" onclick="document.getElementById('goOfflineBtn').click()" title="Switch to Local IP"><i class="fas fa-network-wired"></i></button>
-              {% elif is_on_local_with_ngrok_available %}
-                <button class="btn btn-secondary btn-icon" id="goOnlineBtnMobile" onclick="document.getElementById('goOnlineBtn').click()" title="Switch to Online URL"><i class="fas fa-wifi"></i></button>
-              {% endif %}
               <button class="btn btn-secondary btn-icon" id="mobileMenuBtn" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
               <div class="dropdown-menu" id="mobileDropdown">
                   <button class="dropdown-item" onclick="document.getElementById('myQRBtn').click()"><i class="fas fa-qrcode"></i><span>My QR</span></button>
@@ -3009,36 +2999,6 @@ function removeFileCard(rel){
       }
     }
 
-    async function goOffline() {
-        try {
-            const r = await fetch('/api/go_offline?next=' + encodeURIComponent(window.location.pathname + window.location.search));
-            const j = await r.json();
-            if (j.ok && j.url) {
-                showToast('Switching to local address...', 'info');
-                window.location.href = j.url;
-            } else {
-                showToast(j.error || 'Failed to switch to local mode.', 'error');
-            }
-        } catch (e) {
-            showToast('Error switching to local mode.', 'error');
-        }
-    }
-
-    async function goOnline() {
-        try {
-            const r = await fetch('/api/go_online?next=' + encodeURIComponent(window.location.pathname + window.location.search));
-            const j = await r.json();
-            if (j.ok && j.url) {
-                showToast('Switching to online address...', 'info');
-                window.location.href = j.url;
-            } else {
-                showToast(j.error || 'Failed to switch to online mode.', 'error');
-            }
-        } catch (e) {
-            showToast('Error switching to online mode.', 'error');
-        }
-    }
-
     // Mobile Menu
     function initMobileMenu() {
       const menuBtn = document.getElementById('mobileMenuBtn');
@@ -3150,8 +3110,6 @@ function removeFileCard(rel){
 
       // Global initializations for all pages
       document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
-      document.getElementById('goOfflineBtn')?.addEventListener('click', goOffline);
-      document.getElementById('goOnlineBtn')?.addEventListener('click', goOnline);
       document.getElementById('subscribeBtn')?.addEventListener('click', requestNotificationPermission);
       initPwaInstall();
       initMobileMenu();

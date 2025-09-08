@@ -1,8 +1,9 @@
-const VERSION = 'v8';
+const VERSION = 'v9';
 const CACHE_NAME = `filevault-cache-${VERSION}`;
-const OFFLINE_URL = 'static/offline.html';
+const LAUNCHER_URL = '/static/launcher.html';
+const OFFLINE_URL = '/static/offline.html';
 const APP_SHELL_URLS = [
-  '/',
+  LAUNCHER_URL,
   '/static/fonts.css',
   '/static/vendor/fontawesome/css/all.min.css',
   '/static/vendor/fontawesome/css/fa-shims.css',
@@ -59,6 +60,18 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
+
+  // Serve the launcher with a cache-first strategy.
+  if (url.pathname === LAUNCHER_URL) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(cache => {
+        return cache.match(LAUNCHER_URL).then(response => {
+          return response || fetch(event.request);
+        });
+      })
+    );
+    return;
+  }
 
   // Handle Web Share Target POST requests
   if (event.request.method === 'POST' && url.pathname === '/share-receiver') {
