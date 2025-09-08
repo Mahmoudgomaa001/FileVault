@@ -158,10 +158,11 @@ def ensure_favicon_assets():
         except Exception as e:
             print("[assets] favicon write failed:", e)
 
-    # Minimal PWA manifest using SVG icons (offline-friendly)
+    # Dynamically generate manifest to inject local IP
     local_ip = get_local_ip()
-    share_target_url = f"http://{local_ip}:{PORT}/share-receiver"
+    share_target_url = f"http://{local_ip}:{PORT}/share-staging"
 
+    # Minimal PWA manifest using SVG icons (offline-friendly)
     manifest = {
         "name": "FileVault",
         "short_name": "FileVault",
@@ -1154,6 +1155,11 @@ BASE_HTML = """
         {% if authed %}
           <!-- Desktop-only buttons -->
           <div class="nav-items-desktop">
+              {% if is_on_ngrok %}
+                <button class="btn btn-primary" id="goOfflineBtn" title="Switch to Local IP"><i class="fas fa-network-wired"></i><span class="btn-text"> Local</span></button>
+              {% elif is_on_local_with_ngrok_available %}
+                <button class="btn btn-secondary" id="goOnlineBtn" title="Switch to Online URL"><i class="fas fa-wifi"></i><span class="btn-text"> Online</span></button>
+              {% endif %}
               <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
               {% if is_admin %}
               <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
@@ -1166,6 +1172,11 @@ BASE_HTML = """
 
           <!-- Mobile-only dropdown menu -->
           <div class="nav-menu-mobile">
+              {% if is_on_ngrok %}
+                <button class="btn btn-primary btn-icon" id="goOfflineBtnMobile" onclick="document.getElementById('goOfflineBtn').click()" title="Switch to Local IP"><i class="fas fa-network-wired"></i></button>
+              {% elif is_on_local_with_ngrok_available %}
+                <button class="btn btn-secondary btn-icon" id="goOnlineBtnMobile" onclick="document.getElementById('goOnlineBtn').click()" title="Switch to Online URL"><i class="fas fa-wifi"></i></button>
+              {% endif %}
               <button class="btn btn-secondary btn-icon" id="mobileMenuBtn" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
               <div class="dropdown-menu" id="mobileDropdown">
                   <button class="dropdown-item" onclick="document.getElementById('myQRBtn').click()"><i class="fas fa-qrcode"></i><span>My QR</span></button>
@@ -1226,33 +1237,6 @@ BASE_HTML = """
       </div>
     </div>
   </div>
-
-<!-- Share Link Modal -->
-<div class="modal" id="shareLinkModal">
-  <div class="modal-content" style="max-width:520px;">
-    <div class="modal-header">
-      <div class="modal-title">Share File</div>
-      <button class="modal-close" onclick="closeModal('shareLinkModal')" aria-label="Close"><i class="fas fa-times"></i></button>
-    </div>
-    <div class="modal-body">
-      <p>Use these links to share the file. The online link requires ngrok to be running.</p>
-      <div id="shareLinkLocalContainer" style="margin-top:1rem; display:none;">
-        <label class="form-label" for="shareLinkLocalInput">Local Network Link</label>
-        <div class="row" style="gap:.5rem;">
-          <input type="text" id="shareLinkLocalInput" class="form-input" readonly>
-          <button class="btn btn-secondary" onclick="copyLinkFromInput('shareLinkLocalInput')"><i class="fas fa-copy"></i> Copy</button>
-        </div>
-      </div>
-      <div id="shareLinkOnlineContainer" style="margin-top:1rem; display:none;">
-        <label class="form-label" for="shareLinkOnlineInput">Online Link (via ngrok)</label>
-        <div class="row" style="gap:.5rem;">
-          <input type="text" id="shareLinkOnlineInput" class="form-input" readonly>
-          <button class="btn btn-secondary" onclick="copyLinkFromInput('shareLinkOnlineInput')"><i class="fas fa-copy"></i> Copy</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
   <!-- Settings Modal -->
   <div class="modal" id="settingsModal">
@@ -2006,59 +1990,52 @@ async function changeDhikr() {
     }
 
     // SHARE / COPY
-    async function shareFile(rel){
-      try {
-        const r = await fetch('/api/server-status');
-        const data = await r.json();
-        if (!data.ok) {
-          showToast('Could not get server URLs to create share links.', 'error');
-          return;
-        }
-
-        const rawPath = `{{ url_for('raw') }}?path=${encodeURIComponent(rel)}`;
-
-        const localContainer = document.getElementById('shareLinkLocalContainer');
-        const localInput = document.getElementById('shareLinkLocalInput');
-        if (data.local_url) {
-          localInput.value = `${data.local_url.replace(/\/$/, '')}${rawPath}`;
-          localContainer.style.display = 'block';
-        } else {
-          localContainer.style.display = 'none';
-        }
-
-        const onlineContainer = document.getElementById('shareLinkOnlineContainer');
-        const onlineInput = document.getElementById('shareLinkOnlineInput');
-        if (data.ngrok_url) {
-          onlineInput.value = `${data.ngrok_url.replace(/\/$/, '')}${rawPath}`;
-          onlineContainer.style.display = 'block';
-        } else {
-          onlineContainer.style.display = 'none';
-        }
-
-        openModal('shareLinkModal');
-
-      } catch (e) {
-        showToast('Failed to fetch server details for sharing.', 'error');
+    function shareFile(rel){
+      const rawUrl = `${window.location.origin}{{ url_for('raw') }}?path=${encodeURIComponent(rel)}`;
+      if(navigator.share && /mobile|android|iphone/i.test(navigator.userAgent)){
+        navigator.share({title:'Shared File', url:rawUrl}).catch(()=> copyLink(rawUrl));
+      } else {
+        copyLink(rawUrl);
       }
     }
-
-    function copyLinkFromInput(inputId) {
-        const input = document.getElementById(inputId);
-        if (!input || !input.value) return;
-
+    function copyLink(url){
+      try {
         if(navigator.clipboard){
-          navigator.clipboard.writeText(input.value)
+          navigator.clipboard.writeText(url)
             .then(() => showToast('Link copied!', 'success'))
-            .catch(() => showToast('Failed to copy link', 'error'));
+            .catch(err => {
+              console.error('Clipboard API error:', err);
+              fallbackCopy();
+            });
         } else {
+          fallbackCopy();
+        }
+
+        function fallbackCopy() {
           try {
-            input.select();
-            document.execCommand('copy');
-            showToast('Link copied!', 'success');
+            const i = document.createElement('input');
+            i.value = url;
+            i.style.position = 'fixed';
+            i.style.opacity = '0';
+            document.body.appendChild(i);
+            i.select();
+            const successful = document.execCommand('copy');
+            document.body.removeChild(i);
+
+            if (successful) {
+              showToast('Link copied!', 'success');
+            } else {
+              showToast('Failed to copy link', 'error');
+            }
           } catch (err) {
+            console.error('Fallback copy error:', err);
             showToast('Failed to copy link', 'error');
           }
         }
+      } catch (e) {
+        console.error('Copy error:', e);
+        showToast('Failed to copy link', 'error');
+      }
     }
 
     // PREVIEW (pointerup to avoid double-tap; throttle duplicates)
@@ -3037,6 +3014,36 @@ function removeFileCard(rel){
       }
     }
 
+    async function goOffline() {
+        try {
+            const r = await fetch('/api/go_offline?next=' + encodeURIComponent(window.location.pathname + window.location.search));
+            const j = await r.json();
+            if (j.ok && j.url) {
+                showToast('Switching to local address...', 'info');
+                window.location.href = j.url;
+            } else {
+                showToast(j.error || 'Failed to switch to local mode.', 'error');
+            }
+        } catch (e) {
+            showToast('Error switching to local mode.', 'error');
+        }
+    }
+
+    async function goOnline() {
+        try {
+            const r = await fetch('/api/go_online?next=' + encodeURIComponent(window.location.pathname + window.location.search));
+            const j = await r.json();
+            if (j.ok && j.url) {
+                showToast('Switching to online address...', 'info');
+                window.location.href = j.url;
+            } else {
+                showToast(j.error || 'Failed to switch to online mode.', 'error');
+            }
+        } catch (e) {
+            showToast('Error switching to online mode.', 'error');
+        }
+    }
+
     // Mobile Menu
     function initMobileMenu() {
       const menuBtn = document.getElementById('mobileMenuBtn');
@@ -3148,6 +3155,8 @@ function removeFileCard(rel){
 
       // Global initializations for all pages
       document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
+      document.getElementById('goOfflineBtn')?.addEventListener('click', goOffline);
+      document.getElementById('goOnlineBtn')?.addEventListener('click', goOnline);
       document.getElementById('subscribeBtn')?.addEventListener('click', requestNotificationPermission);
       initPwaInstall();
       initMobileMenu();
@@ -4189,8 +4198,91 @@ def api_server_status():
     return jsonify({
         "ok": True,
         "local_url": local_url,
-        "ngrok_url": ngrok_url,  # This will be null if ngrok is not running
+        "ngrok_url": ngrok_url,
     })
+
+@app.route("/share-staging", methods=["POST"])
+def share_staging():
+    device_id, folder = get_or_create_device_folder(request)
+
+    files = request.files.getlist("files")
+    if not files or not any(f.filename for f in files):
+        return "No files were provided for staging.", 400
+
+    staging_dir = safe_path(folder) / ".staging_shares"
+    staging_dir.mkdir(exist_ok=True)
+
+    staged_files = []
+    for f in files:
+        if f and f.filename:
+            filename = sanitize_filename(f.filename)
+            # Use a UUID to ensure the staged file has a unique, non-conflicting name
+            file_id = str(uuid.uuid4())
+            save_name = f"{file_id}__{filename}"
+            save_path = staging_dir / save_name
+            try:
+                f.save(save_path)
+                staged_files.append({"id": file_id, "name": filename})
+            except Exception as e:
+                print(f"[share-staging] Save failed for {filename}: {e}")
+
+    if not staged_files:
+        return "Failed to save any of the provided files.", 500
+
+    # For simplicity, we handle one file at a time in the chooser.
+    # The user can share multiple files, but the chooser will process the first one.
+    # A more advanced implementation could show a list on the chooser page.
+    first_file_id = staged_files[0]["id"]
+    first_file_name = staged_files[0]["name"]
+
+    local_url = f"http://{get_local_ip()}:{PORT}"
+    ngrok_url = get_ngrok_url() or ""
+
+    # Redirect to the chooser page with all necessary info
+    chooser_url = url_for('static', filename='share_chooser.html',
+                          file_id=first_file_id,
+                          file_name=first_file_name,
+                          local_url=local_url,
+                          ngrok_url=ngrok_url)
+    return redirect(chooser_url)
+
+@app.route("/api/commit_staged_share", methods=["POST"])
+def api_commit_staged_share():
+    # This endpoint can be called from a different origin (e.g., ngrok URL)
+    # so we need to ensure the user context is established correctly.
+    device_id, folder = get_or_create_device_folder(request)
+    session["authed"] = True
+    session["folder"] = folder
+    session["icon"] = get_user_icon(folder)
+
+    data = request.get_json(silent=True) or {}
+    file_id = data.get("file_id")
+
+    if not file_id:
+        return jsonify({"ok": False, "error": "File ID is required"}), 400
+
+    staging_dir = safe_path(folder) / ".staging_shares"
+    pending_dir = safe_path(folder) / ".pending_shares"
+    pending_dir.mkdir(exist_ok=True)
+
+    staged_file = next(staging_dir.glob(f"{file_id}__*"), None)
+
+    if not staged_file or not staged_file.is_file():
+        return jsonify({"ok": False, "error": "Staged file not found"}), 404
+
+    try:
+        # Move the file from staging to the final pending directory
+        final_pending_path = pending_dir / staged_file.name
+        shutil.move(str(staged_file), str(final_pending_path))
+
+        # Notify clients that a new file is ready to be managed
+        socketio.emit("share_ready", {"folder": folder})
+
+        return jsonify({"ok": True, "message": "File committed successfully."})
+    except Exception as e:
+        print(f"[commit-share] Failed to move file {file_id}: {e}")
+        return jsonify({"ok": False, "error": f"Failed to commit file: {e}"}), 500
+
 
 @app.route("/api/go_offline")
 def api_go_offline():

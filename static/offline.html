@@ -67,6 +67,12 @@
     .btn:active {
       transform: scale(.97);
     }
+    .btn.disabled {
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
     .btn-primary {
       background: var(--primary);
       color: #fff;
@@ -77,35 +83,14 @@
     .btn-secondary {
       background: var(--bg-secondary);
       color: var(--text-primary);
+      border: 1px solid var(--border);
     }
     .btn-secondary:hover {
-      background: var(--bg-tertiary);
+      background: var(--border);
     }
     .btn-danger {
       background: var(--danger);
       color: #fff;
-    }
-    .status-message {
-        margin-top: 1.5rem;
-        padding: 1rem;
-        border-radius: .75rem;
-        font-weight: 600;
-        min-height: 58px;
-    }
-    .status-message.error {
-        background: rgba(239,68,68,.15);
-        color: #fecaca;
-        border: 1px solid var(--danger);
-    }
-    .status-message.connecting {
-        background: rgba(59,130,246,.15);
-        color: #93c5fd;
-        border: 1px solid var(--primary);
-    }
-    .status-message.success {
-        background: rgba(16, 185, 129, 0.15);
-        color: #6ee7b7;
-        border: 1px solid var(--success);
     }
     #button-container {
         margin-top: 1.5rem;
@@ -114,73 +99,68 @@
         gap: 1rem;
         align-items: center;
     }
+    #status {
+        margin-top: 1.5rem;
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        min-height: 20px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>FileVault</h1>
-    <p id="main-text">Attempting to find your local FileVault server. Please wait...</p>
-    <div id="status" class="status-message connecting">Searching for server...</div>
+    <p>Choose a connection method to access your files.</p>
     <div id="button-container">
-      <!-- Buttons will be dynamically inserted here -->
+      <a id="local-btn" href="#" class="btn btn-primary disabled">Connect Local</a>
+      <a id="online-btn" href="#" class="btn btn-secondary disabled">Connect Online</a>
     </div>
+    <div id="status">Connecting...</div>
   </div>
 
   <script>
+    const localBtn = document.getElementById('local-btn');
+    const onlineBtn = document.getElementById('online-btn');
     const statusEl = document.getElementById('status');
-    const buttonContainer = document.getElementById('button-container');
-    const mainText = document.getElementById('main-text');
 
-    function setStatus(message, type) {
-      statusEl.textContent = message;
-      statusEl.className = `status-message ${type}`;
-    }
-
-    function createButton(text, url, isPrimary = false) {
-      const button = document.createElement('a');
-      button.href = url;
-      button.textContent = text;
-      button.className = isPrimary ? 'btn btn-primary' : 'btn btn-secondary';
-      return button;
+    function setButtonState(btn, url, text) {
+        btn.classList.remove('disabled');
+        btn.href = url;
+        btn.textContent = text;
     }
 
     async function checkServerStatus() {
-      mainText.textContent = 'Attempting to find your local FileVault server. Please wait...';
-      setStatus('Searching for server...', 'connecting');
-      buttonContainer.innerHTML = ''; // Clear old buttons
+      statusEl.textContent = 'Searching for server...';
 
       try {
-        const response = await fetch('/api/server-status', { cache: 'no-store' });
+        // We add a cache-busting query param to ensure we don't get a stale
+        // response from a misconfigured cache or service worker.
+        const response = await fetch(`/api/server-status?t=${new Date().getTime()}`, { cache: 'no-store' });
         if (!response.ok) {
           throw new Error(`Server responded with status: ${response.status}`);
         }
         const data = await response.json();
 
         if (data.ok) {
-          mainText.textContent = 'Your server is online. Choose a connection method below.';
-          setStatus('Server found!', 'success');
-
-          if (data.local_url) {
-            buttonContainer.appendChild(createButton('Connect via Local Network', data.local_url, true));
-          }
-          if (data.ngrok_url) {
-            buttonContainer.appendChild(createButton('Connect via Internet (ngrok)', data.ngrok_url));
-          }
-
+            statusEl.textContent = 'Server found!';
+            if (data.local_url) {
+                setButtonState(localBtn, data.local_url, 'Connect Local');
+            } else {
+                localBtn.textContent = 'Local Not Found';
+            }
+            if (data.ngrok_url) {
+                setButtonState(onlineBtn, data.ngrok_url, 'Connect Online');
+            } else {
+                onlineBtn.textContent = 'Online Not Available';
+            }
         } else {
           throw new Error(data.error || 'Failed to get server status.');
         }
-
       } catch (error) {
         console.error('Error checking server status:', error);
-        mainText.textContent = 'Could not connect to the server. Please ensure it is running and that you are on the same WiFi network.';
-        setStatus('Server not found', 'error');
-
-        const retryButton = document.createElement('button');
-        retryButton.textContent = 'Retry Connection';
-        retryButton.className = 'btn btn-danger';
-        retryButton.onclick = checkServerStatus;
-        buttonContainer.appendChild(retryButton);
+        statusEl.innerHTML = 'Server not found. <a href="javascript:void(0)" onclick="checkServerStatus()" style="color:var(--primary)">Retry?</a>';
+        localBtn.textContent = 'Connect Local (Offline)';
+        onlineBtn.textContent = 'Connect Online (Offline)';
       }
     }
 
