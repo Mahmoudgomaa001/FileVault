@@ -163,6 +163,7 @@ def ensure_favicon_assets():
         "name": "FileVault",
         "short_name": "FileVault",
         "start_url": "/static/launcher.html",
+        "scope": "/",
         "display": "standalone",
         "background_color": "#ffe6f2",
         "theme_color": "#ff4fa3",
