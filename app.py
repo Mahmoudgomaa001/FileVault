@@ -180,7 +180,7 @@ def ensure_favicon_assets():
             {"src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml"}
         ],
         "share_target": {
-            "action": "/share-staging",
+            "action": "/share-receiver",
             "method": "POST",
             "enctype": "multipart/form-data",
             "params": {
