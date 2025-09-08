@@ -4197,89 +4197,6 @@ def api_server_status():
         "ngrok_url": ngrok_url,
     })
 
-@app.route("/share-staging", methods=["POST"])
-def share_staging():
-    device_id, folder = get_or_create_device_folder(request)
-
-    files = request.files.getlist("files")
-    if not files or not any(f.filename for f in files):
-        return "No files were provided for staging.", 400
-
-    staging_dir = safe_path(folder) / ".staging_shares"
-    staging_dir.mkdir(exist_ok=True)
-
-    staged_files = []
-    for f in files:
-        if f and f.filename:
-            filename = sanitize_filename(f.filename)
-            # Use a UUID to ensure the staged file has a unique, non-conflicting name
-            file_id = str(uuid.uuid4())
-            save_name = f"{file_id}__{filename}"
-            save_path = staging_dir / save_name
-            try:
-                f.save(save_path)
-                staged_files.append({"id": file_id, "name": filename})
-            except Exception as e:
-                print(f"[share-staging] Save failed for {filename}: {e}")
-
-    if not staged_files:
-        return "Failed to save any of the provided files.", 500
-
-    # For simplicity, we handle one file at a time in the chooser.
-    # The user can share multiple files, but the chooser will process the first one.
-    # A more advanced implementation could show a list on the chooser page.
-    first_file_id = staged_files[0]["id"]
-    first_file_name = staged_files[0]["name"]
-
-    local_url = f"http://{get_local_ip()}:{PORT}"
-    ngrok_url = get_ngrok_url() or ""
-
-    # Redirect to the chooser page with all necessary info
-    chooser_url = url_for('static', filename='share_chooser.html',
-                          file_id=first_file_id,
-                          file_name=first_file_name,
-                          local_url=local_url,
-                          ngrok_url=ngrok_url)
-    return redirect(chooser_url)
-
-@app.route("/api/commit_staged_share", methods=["POST"])
-def api_commit_staged_share():
-    # This endpoint can be called from a different origin (e.g., ngrok URL)
-    # so we need to ensure the user context is established correctly.
-    device_id, folder = get_or_create_device_folder(request)
-    session["authed"] = True
-    session["folder"] = folder
-    session["icon"] = get_user_icon(folder)
-
-    data = request.get_json(silent=True) or {}
-    file_id = data.get("file_id")
-
-    if not file_id:
-        return jsonify({"ok": False, "error": "File ID is required"}), 400
-
-    staging_dir = safe_path(folder) / ".staging_shares"
-    pending_dir = safe_path(folder) / ".pending_shares"
-    pending_dir.mkdir(exist_ok=True)
-
-    staged_file = next(staging_dir.glob(f"{file_id}__*"), None)
-
-    if not staged_file or not staged_file.is_file():
-        return jsonify({"ok": False, "error": "Staged file not found"}), 404
-
-    try:
-        # Move the file from staging to the final pending directory
-        final_pending_path = pending_dir / staged_file.name
-        shutil.move(str(staged_file), str(final_pending_path))
-
-        # Notify clients that a new file is ready to be managed
-        socketio.emit("share_ready", {"folder": folder})
-
-        return jsonify({"ok": True, "message": "File committed successfully."})
-    except Exception as e:
-        print(f"[commit-share] Failed to move file {file_id}: {e}")
-        return jsonify({"ok": False, "error": f"Failed to commit file: {e}"}), 500
-
-
 @app.route("/api/go_offline")
 def api_go_offline():
     if not is_authed():
@@ -4623,31 +4540,38 @@ def share_page():
 
 @app.route("/share-receiver", methods=["POST"])
 def share_receiver():
-    print("[DEBUG] /share-receiver called")
+    # This gets the user's root folder for their device.
     device_id, folder = get_or_create_device_folder(request)
-    print(f"[DEBUG] device_id: {device_id}, folder: {folder}")
+    dest_dir = safe_path(folder)
 
     files = request.files.getlist("files")
     if not files or not any(f.filename for f in files):
-        return redirect(url_for("home"))
+        # Redirect to the main folder view if no files were actually shared.
+        return redirect(url_for("browse", subpath=folder))
 
-    pending_dir = safe_path(folder) / ".pending_shares"
-    pending_dir.mkdir(exist_ok=True)
-
-    saved_count = 0
     for f in files:
         if f and f.filename:
             filename = sanitize_filename(f.filename)
-            save_name = f"{str(uuid.uuid4())}__{filename}"
-            save_path = pending_dir / save_name
+            save_path = dest_dir / filename
+
+            # Handle name conflicts by appending a number
+            base, ext = os.path.splitext(filename)
+            i = 1
+            while save_path.exists():
+                save_path = dest_dir / f"{base} ({i}){ext}"
+                i += 1
+
             try:
                 f.save(save_path)
-                saved_count += 1
+                # Notify client of the new file for a reactive UI
+                meta = get_file_meta(save_path)
+                parent_rel = path_rel(dest_dir) if dest_dir != ROOT_DIR else ""
+                socketio.emit("file_update", {"action":"added", "dir": parent_rel, "meta": meta})
             except Exception as e:
-                print(f"[share] Save failed for {filename}: {e}")
+                print(f"[share-receiver] Save failed for {filename}: {e}")
 
-    print(f"[DEBUG] Saved {saved_count} files. Redirecting to share_page.")
-    return redirect(url_for("share_page"))
+    # Redirect to the folder where the file(s) were saved.
+    return redirect(url_for("browse", subpath=folder))
 
 @app.route("/api/commit_share", methods=["POST"])
 def api_commit_share():
