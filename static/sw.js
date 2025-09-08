@@ -16,7 +16,7 @@ const APP_SHELL_URLS = [
   '/static/vendor/fontawesome/webfonts/fa-regular-400.woff2',
   '/static/vendor/fontawesome/webfonts/fa-solid-900.ttf',
   '/static/vendor/fontawesome/webfonts/fa-solid-900.woff2',
-  OFFLINE_URL,
+  OFFLINE_URL
 ];
 
 self.addEventListener('install', event => {
@@ -59,6 +59,12 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
+
+  // Handle Web Share Target POST requests
+  if (event.request.method === 'POST' && url.pathname === '/share-receiver') {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
   // For navigation requests, use a network-first strategy.
   if (event.request.mode === 'navigate') {
