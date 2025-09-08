@@ -144,6 +144,15 @@ FAVICON_SVG = """<?xml version="1.0" encoding="UTF-8"?>
 
 """
 
+def get_local_ip() -> str:
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+    finally:
+        s.close()
+    return ip
+
 def ensure_favicon_assets():
     base = Path(__file__).parent.resolve() / "static"
     base.mkdir(parents=True, exist_ok=True)
@@ -676,15 +685,6 @@ def api_accounts_token_regenerate():
         "token_id": new_token_id,
         "message": "Permanent token and code have been regenerated."
     })
-
-def get_local_ip() -> str:
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-    finally:
-        s.close()
-    return ip
 
 def get_ngrok_url() -> Optional[str]:
     global NGROK_URL
