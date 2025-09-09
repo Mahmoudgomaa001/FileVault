@@ -90,8 +90,8 @@ self.addEventListener('fetch', event => {
 
           await clearAndStoreFiles(files);
 
-          console.log('[SW] Files stored in IndexedDB. Redirecting to /share.');
-          return Response.redirect('/share', 303);
+          console.log('[SW] Files stored in IndexedDB. Redirecting to /static/share.html.');
+          return Response.redirect('/static/share.html', 303);
 
         } catch (error) {
             console.error('[SW] Error handling share:', error);

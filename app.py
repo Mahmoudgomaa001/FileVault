@@ -3120,6 +3120,40 @@ function removeFileCard(rel){
         }
     }
 
+    function initAppDataHydration() {
+        if (!{{ authed|tojson }}) {
+            return;
+        }
+
+        async function fetchAndStoreAppData() {
+            try {
+                const response = await fetch('/api/app_data');
+                if (!response.ok) {
+                    console.error('Failed to fetch app data for hydration');
+                    return;
+                }
+                const data = await response.json();
+                if (data.ok) {
+                    localStorage.setItem('appData', JSON.stringify({
+                        local_base_url: data.local_base_url,
+                        online_base_url: data.online_base_url,
+                        folder_tree: data.folder_tree,
+                        upload_api_path: data.upload_api_path,
+                        current_folder: data.current_folder,
+                        timestamp: new Date().toISOString()
+                    }));
+                }
+            } catch (error) {
+                console.error('Error hydrating app data:', error);
+            }
+        }
+
+        // Fetch immediately on load
+        fetchAndStoreAppData();
+        // And then periodically
+        setInterval(fetchAndStoreAppData, 5 * 60 * 1000);
+    }
+
     // INIT
     document.addEventListener('DOMContentLoaded', async ()=>{
       window.currentPath = "{{ current_rel|default('', true) }}";
@@ -3157,6 +3191,7 @@ function removeFileCard(rel){
       initPwaInstall();
       initMobileMenu();
       initNotificationState();
+      initAppDataHydration();
     });
 
     // PWA INSTALL
@@ -4204,6 +4239,58 @@ def api_server_status():
         "ngrok_url": ngrok_url,
     })
 
+@app.route("/api/app_data")
+def api_app_data():
+    """
+    Provides essential data for the frontend, especially for hydrating
+    the static share page. Requires auth.
+    """
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    # Get URLs
+    local_ip = get_local_ip()
+    local_base_url = f"http://{local_ip}:{PORT}"
+    online_base_url = get_ngrok_url()
+
+    # Get folder list for the user
+    base_folder_path = ROOT_DIR / session.get("folder", "")
+
+    def get_dir_structure(path):
+        structure = []
+        try:
+            # Limit recursion depth to avoid excessive scanning on very deep structures
+            if len(path.parts) > len(base_folder_path.parts) + 7:
+                return []
+            for item in path.iterdir():
+                if item.is_dir():
+                    children = get_dir_structure(item)
+                    structure.append({
+                        "name": item.name,
+                        "path": path_rel(item),
+                        "children": children
+                    })
+        except Exception as e:
+            print(f"Error reading directory {path}: {e}")
+        return sorted(structure, key=lambda x: x['name'].lower())
+
+    folder_tree = []
+    if base_folder_path.exists():
+        folder_tree = [{
+            "name": session.get("folder", "root"),
+            "path": session.get("folder", ""),
+            "children": get_dir_structure(base_folder_path)
+        }]
+
+    return jsonify({
+        "ok": True,
+        "local_base_url": local_base_url,
+        "online_base_url": online_base_url,
+        "folder_tree": folder_tree,
+        "upload_api_path": url_for("api_upload"),
+        "current_folder": session.get("folder", "")
+    })
+
 @app.route("/api/go_offline")
 def api_go_offline():
     if not is_authed():
@@ -4384,207 +4471,6 @@ def sw_js():
     response = make_response(send_from_directory('static', 'sw.js'))
     response.headers['Content-Type'] = 'application/javascript'
     return response
-
-SHARE_BODY_HTML = """
-<div class="card" id="mainContainer">
-  <h1>Shared Files</h1>
-  <p id="share-instructions">Loading shared files from your browser...</p>
-  <div id="shareFileList" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
-    <!-- File list will be populated by JavaScript -->
-  </div>
-  <div id="share-actions" style="display: none;">
-      <p><b>Select destination folder:</b></p>
-      <div id="folderTree" style="height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary); margin-bottom: 1rem;">Loading...</div>
-      <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-          <button class="btn btn-primary" id="confirmShareBtn" disabled><i class="fas fa-save"></i> Save All Files</button>
-          <button class="btn btn-danger" id="clearShareBtn"><i class="fas fa-trash"></i> Clear All</button>
-      </div>
-  </div>
-</div>
-
-<script>
-  const DB_NAME = 'file-share-db';
-  const STORE_NAME = 'shared-files';
-  let sharedFiles = []; // To hold the retrieved File objects
-
-  function openDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 1);
-        request.onupgradeneeded = () => {
-            if (!request.result.objectStoreNames.contains(STORE_NAME)) {
-                request.result.createObjectStore(STORE_NAME, { autoIncrement: true });
-            }
-        };
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
-  }
-
-  async function getStoredFiles() {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const store = tx.objectStore(STORE_NAME);
-    const allFiles = await new Promise((resolve, reject) => {
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
-    db.close();
-    return allFiles;
-  }
-
-  function renderFolderTree(nodes, level = 0) {
-      let html = '';
-      for (const node of nodes) {
-          html += `<div class="folder-tree-item" data-path="${node.path}" style="padding-left: ${level * 20}px;"><i class="fas fa-folder"></i> ${node.name}</div>`;
-          if (node.children && node.children.length > 0) {
-              html += renderFolderTree(node.children, level + 1);
-          }
-      }
-      return html;
-  }
-
-  async function loadFolderTree() {
-      const folderTreeDiv = document.getElementById('folderTree');
-      try {
-          const response = await fetch('/api/folders');
-          const data = await response.json();
-          if (data.ok) {
-              folderTreeDiv.innerHTML = renderFolderTree(data.tree);
-              document.querySelectorAll('#folderTree .folder-tree-item').forEach(item => {
-                  item.addEventListener('click', (e) => {
-                      e.stopPropagation();
-                      document.querySelectorAll('#folderTree .folder-tree-item').forEach(i => i.classList.remove('selected'));
-                      item.classList.add('selected');
-                      document.getElementById('confirmShareBtn').disabled = false;
-                  });
-              });
-          } else {
-              folderTreeDiv.innerHTML = `Error: ${data.error || 'Could not load folders.'}`;
-          }
-      } catch (error) {
-          folderTreeDiv.innerHTML = 'Error loading folders.';
-      }
-  }
-
-  async function clearShareList() {
-      if (!confirm('Are you sure you want to clear all shared files from your browser? This cannot be undone.')) {
-        return;
-      }
-      try {
-        const db = await openDB();
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.clear();
-        tx.oncomplete = () => {
-            db.close();
-            document.getElementById('mainContainer').innerHTML = '<h1>List Cleared</h1><p>The shared files have been removed from your browser.</p><a href="/" class="btn btn-primary">Back to App</a>';
-        };
-      } catch (e) {
-          showToast('An error occurred while clearing the list.', 'error');
-      }
-  }
-
-  document.addEventListener('DOMContentLoaded', async () => {
-    try {
-      sharedFiles = await getStoredFiles();
-      const fileListDiv = document.getElementById('shareFileList');
-      const instructions = document.getElementById('share-instructions');
-      const actionsDiv = document.getElementById('share-actions');
-
-      if (sharedFiles.length > 0) {
-        instructions.textContent = `You have shared ${sharedFiles.length} file(s). Select a destination and click Save, or clear the list.`;
-        fileListDiv.innerHTML = sharedFiles.map(file => `<div class="card">${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)</div>`).join('');
-        actionsDiv.style.display = 'block';
-        loadFolderTree();
-        document.getElementById('clearShareBtn').addEventListener('click', clearShareList);
-        document.getElementById('confirmShareBtn').addEventListener('click', confirmShare);
-      } else {
-        instructions.textContent = 'No pending files to share. You can close this page.';
-      }
-    } catch (error) {
-      console.error('Error retrieving shared files:', error);
-      document.getElementById('share-instructions').textContent = 'Could not retrieve shared files. Please try sharing again.';
-    }
-  });
-
-  async function confirmShare() {
-      const selectedFolderEl = document.querySelector('#folderTree .selected');
-      if (sharedFiles.length === 0 || !selectedFolderEl) {
-          showToast('Please select files and a destination folder.', 'error');
-          return;
-      }
-      const destination = selectedFolderEl.dataset.path;
-
-      const btn = document.getElementById('confirmShareBtn');
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-
-      try {
-          const formData = new FormData();
-          formData.append('dest', destination);
-          for (const file of sharedFiles) {
-              formData.append('file', file, file.name);
-          }
-
-          const r = await fetch('/api/upload', {
-              method: 'POST',
-              body: formData
-          });
-
-          const j = await r.json();
-          if (j.ok) {
-              document.getElementById('mainContainer').innerHTML = `<h1>Share Complete!</h1><p>${j.results.length} file(s) saved successfully.</p><a href="/" class="btn btn-primary">Back to App</a>`;
-              // Clear the DB
-              const db = await openDB();
-              const tx = db.transaction(STORE_NAME, 'readwrite');
-              await tx.objectStore(STORE_NAME).clear();
-              db.close();
-          } else {
-              showToast(j.error || 'Share failed.', 'error');
-              btn.disabled = false;
-              btn.innerHTML = '<i class="fas fa-save"></i> Save All Files';
-          }
-      } catch (e) {
-          showToast('An error occurred during the upload.', 'error');
-          btn.disabled = false;
-          btn.innerHTML = '<i class="fas fa-save"></i> Save All Files';
-      }
-  }
-</script>
-"""
-
-@app.route("/share")
-def share_page():
-    # This route no longer needs to query the filesystem.
-    # It just serves the page, and the client-side JS handles getting files.
-    device_id, folder = get_or_create_device_folder(request)
-    if not folder:
-        return redirect(url_for("login"))
-
-    session["authed"] = True
-    session["folder"] = folder
-    session["icon"] = get_user_icon(folder)
-
-    # The 'files' variable is no longer needed here, the template is fully dynamic.
-    body = render_template_string(SHARE_BODY_HTML, files=[])
-
-    dhikr = get_random_dhikr()
-    dhikr_list = [{"dhikr": d} for d in ISLAMIC_DHIKR]
-    cfg = get_user_cfg(folder)
-    is_admin = bool(device_id and device_id == cfg.get("admin_device"))
-
-    return render_template_string(
-        BASE_HTML,
-        body=body,
-        authed=True,
-        icon=session.get("icon"),
-        user_label=session.get("folder",""),
-        current_rel="share",
-        dhikr=dhikr, dhikr_list=dhikr_list,
-        is_admin=is_admin,
-        share_page_active=True
-    )
 
 # Error handlers: redirect to login on not found/forbidden
 # -----------------------------
