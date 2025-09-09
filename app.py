@@ -1974,7 +1974,7 @@ async function changeDhikr() {
         row.remove();
       });
 
-      xhr.open('POST', '{{ url_for("api_upload") }}');
+      xhr.open('POST', '{{ url_for("uploadapi") }}');
       xhr.send(form);
     }
 
@@ -4023,8 +4023,8 @@ def api_prefs():
     save_pref(folder, key, value)
     return jsonify({"ok": True})
 
-@app.route("/api/upload", methods=["POST"])
-def api_upload():
+@app.route("/uploadapi", methods=["POST"])
+def uploadapi():
     if not is_authed():
         return jsonify({"ok": False, "error": "not authed"}), 401
     dest_rel = request.form.get("dest", "")
@@ -4287,7 +4287,7 @@ def api_app_data():
         "local_base_url": local_base_url,
         "online_base_url": online_base_url,
         "folder_tree": folder_tree,
-        "upload_api_path": url_for("api_upload"),
+        "upload_api_path": url_for("uploadapi"),
         "current_folder": session.get("folder", "")
     })
 
