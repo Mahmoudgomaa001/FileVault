@@ -265,24 +265,35 @@
                 document.querySelectorAll('#folderTree .folder-tree-item').forEach(i => i.classList.remove('selected'));
                 item.classList.add('selected');
                 document.getElementById('localShareBtn').disabled = false;
-                if(appData.online_base_url) document.getElementById('onlineShareBtn').disabled = false;
+                // Also enable the online button if it exists
+                if (document.getElementById('onlineShareBtn')) {
+                    document.getElementById('onlineShareBtn').disabled = false;
+                }
             });
         });
 
         // Setup buttons
         const localBtn = document.getElementById('localShareBtn');
+        const onlineBtn = document.getElementById('onlineShareBtn');
         const clearBtn = document.getElementById('clearBtn');
 
         clearBtn.addEventListener('click', clearShareList);
 
-        // The new doShare function handles everything, so both buttons call it directly.
-        // The server will handle the session cookie to know if the user is logged in.
-        // The concept of a separate "local" or "online" URL is removed in this model,
-        // The new doShare function handles everything, so the local button calls it directly.
-        // The server will handle the session cookie to know if the user is logged in.
-        // The concept of a separate "online" URL is removed in this model,
-        // as the form submission will always go to the server's relative path.
-        localBtn.addEventListener('click', doShare);
+        // Wire up Local Share button
+        if (appData.local_base_url) {
+            localBtn.addEventListener('click', () => doShare(appData.local_base_url));
+        } else {
+            localBtn.disabled = true;
+        }
+
+        // Wire up Online Share button only if the URL exists
+        if (appData.online_base_url) {
+            onlineBtn.style.display = 'inline-flex';
+            onlineBtn.disabled = true; // Disabled until a folder is selected
+            onlineBtn.addEventListener('click', () => doShare(appData.online_base_url));
+        } else {
+            onlineBtn.style.display = 'none';
+        }
 
       } else {
         instructions.textContent = 'No pending files to share. You can close this page.';
