@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FileVault - Share Chooser</title>
+  <title>FileVault - Share</title>
   <style>
     :root {
       --primary:#3B82F6;
@@ -33,6 +33,7 @@
     .container {
       padding: 2rem;
       max-width: 500px;
+      width: 100%;
     }
     h1 {
       font-size: 2.5rem;
@@ -47,13 +48,22 @@
       color: var(--text-secondary);
       line-height: 1.6;
     }
-    .file-info {
+    #file-list-container {
         background: var(--bg-secondary);
         border: 1px solid var(--border);
         padding: 1rem;
         border-radius: 0.75rem;
         margin: 1.5rem 0;
-        word-break: break-all;
+        text-align: left;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    .file-item {
+        padding: 0.5rem;
+        border-bottom: 1px solid var(--border);
+    }
+    .file-item:last-child {
+        border-bottom: none;
     }
     .btn {
       padding: 1rem 2rem;
@@ -72,30 +82,14 @@
       width: 100%;
       max-width: 320px;
     }
-    .btn:active {
-      transform: scale(.97);
-    }
     .btn.disabled {
       background: var(--bg-secondary);
       color: var(--text-secondary);
       cursor: not-allowed;
       opacity: 0.6;
     }
-    .btn-primary {
-      background: var(--primary);
-      color: #fff;
-    }
-    .btn-primary:hover {
-        background: var(--primary-dark);
-    }
-    .btn-secondary {
-      background: var(--bg-secondary);
-      color: var(--text-primary);
-      border: 1px solid var(--border);
-    }
-    .btn-secondary:hover {
-      background: var(--border);
-    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-secondary { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); }
     #button-container {
         margin-top: 1.5rem;
         display: flex;
@@ -106,17 +100,17 @@
     #status {
         margin-top: 1.5rem;
         font-size: 0.9rem;
-        color: var(--text-muted);
+        color: var(--text-secondary);
         min-height: 20px;
     }
   </style>
 </head>
 <body>
   <div class="container" id="main-container">
-    <h1>File Received</h1>
-    <p>Your file is ready to be saved. Choose a destination server.</p>
-    <div class="file-info" id="file-name-display">Loading file info...</div>
-    <div id="button-container">
+    <h1>Receiving Files...</h1>
+    <p>Please wait while the shared files are processed.</p>
+    <div id="file-list-container" style="display: none;"></div>
+    <div id="button-container" style="display: none;">
       <button id="local-btn" class="btn btn-primary">Save to Local Server</button>
       <button id="online-btn" class="btn btn-secondary">Save to Online Server</button>
     </div>
@@ -127,15 +121,15 @@
     const localBtn = document.getElementById('local-btn');
     const onlineBtn = document.getElementById('online-btn');
     const statusEl = document.getElementById('status');
-    const fileNameDisplay = document.getElementById('file-name-display');
+    const fileListContainer = document.getElementById('file-list-container');
     const mainContainer = document.getElementById('main-container');
+    const heading = mainContainer.querySelector('h1');
+    const description = mainContainer.querySelector('p');
+    const buttonContainer = document.getElementById('button-container');
 
-    // Get parameters from URL
-    const params = new URLSearchParams(window.location.search);
-    const fileId = params.get('file_id');
-    const fileName = params.get('file_name');
-    const localUrl = params.get('local_url');
-    const ngrokUrl = params.get('ngrok_url');
+    let sharedFiles = [];
+    let localUrl = '';
+    let ngrokUrl = '';
 
     function showCompletion(message) {
         mainContainer.innerHTML = `
@@ -147,33 +141,50 @@
         `;
     }
 
-    async function commitFile(destination) {
-        if (!fileId) {
-            statusEl.textContent = 'Error: No file ID found.';
+    async function uploadFiles(destination) {
+        if (sharedFiles.length === 0) {
+            statusEl.textContent = 'Error: No files to upload.';
             return;
         }
 
-        statusEl.textContent = 'Saving file...';
+        statusEl.textContent = 'Uploading files...';
         localBtn.classList.add('disabled');
         onlineBtn.classList.add('disabled');
 
+        const formData = new FormData();
+        sharedFiles.forEach(file => {
+            // The server endpoint expects files under the name 'file'
+            formData.append('file', file);
+        });
+
         try {
-            const commitUrl = new URL('/api/commit_staged_share', destination);
-            const response = await fetch(commitUrl.href, {
+            // The upload endpoint is at /api/upload
+            const uploadUrl = new URL('/api/upload', destination);
+
+            const response = await fetch(uploadUrl.href, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ file_id: fileId }),
+                body: formData,
                 cache: 'no-store'
             });
 
-            const data = await response.json();
-            if (data.ok) {
-                showCompletion(`File "${fileName}" saved successfully. You can now manage it in your file list.`);
+            // It's better to check the response text even on failure
+            const responseText = await response.text();
+
+            if (response.ok) {
+                showCompletion(`${sharedFiles.length} file(s) uploaded successfully. You can now manage them in your file list.`);
             } else {
-                throw new Error(data.error || 'Failed to save the file.');
+                let errorMsg = 'Failed to upload files.';
+                try {
+                    const data = JSON.parse(responseText);
+                    if(data.error) errorMsg = data.error;
+                } catch(e) {
+                    // The response was not JSON, use the raw text if available
+                    if(responseText) errorMsg = responseText;
+                }
+                throw new Error(errorMsg);
             }
         } catch (error) {
-            console.error('Error committing file:', error);
+            console.error('Error uploading files:', error);
             statusEl.textContent = `Error: ${error.message}. Please try again.`;
             localBtn.classList.remove('disabled');
             if (ngrokUrl) {
@@ -182,23 +193,69 @@
         }
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-        if (fileName) {
-            fileNameDisplay.textContent = `File: ${fileName}`;
+    function updateUIWithFiles() {
+        if (sharedFiles.length > 0) {
+            heading.textContent = `Received ${sharedFiles.length} File(s)`;
+            description.textContent = 'Choose a destination server to save your files.';
+
+            fileListContainer.style.display = 'block';
+            buttonContainer.style.display = 'flex';
+
+            fileListContainer.innerHTML = '';
+            sharedFiles.forEach(file => {
+                const fileEl = document.createElement('div');
+                fileEl.className = 'file-item';
+                fileEl.textContent = file.name;
+                fileListContainer.appendChild(fileEl);
+            });
+        } else {
+            heading.textContent = 'No Files Received';
+            description.textContent = 'No files were shared. You can close this page or try again.';
+        }
+    }
+
+    async function getServerUrls() {
+        try {
+            // This assumes the chooser page is on the same domain as the API
+            const response = await fetch('/api/server-status');
+            const data = await response.json();
+            if (data.ok) {
+                localUrl = data.local_url;
+                ngrokUrl = data.ngrok_url;
+            }
+        } catch (e) {
+            console.error("Could not fetch server status", e);
+            statusEl.textContent = 'Could not contact server to get URLs.';
         }
 
         if (!localUrl) {
             localBtn.classList.add('disabled');
             localBtn.textContent = 'Local Server Unavailable';
         } else {
-            localBtn.addEventListener('click', () => commitFile(localUrl));
+            localBtn.addEventListener('click', () => uploadFiles(localUrl));
         }
 
         if (!ngrokUrl) {
             onlineBtn.classList.add('disabled');
             onlineBtn.textContent = 'Online Server Unavailable';
         } else {
-            onlineBtn.addEventListener('click', () => commitFile(ngrokUrl));
+            onlineBtn.addEventListener('click', () => uploadFiles(ngrokUrl));
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        getServerUrls();
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', event => {
+                if (event.data && event.data.files) {
+                    sharedFiles = event.data.files;
+                    updateUIWithFiles();
+                }
+            });
+        } else {
+            heading.textContent = 'Error';
+            description.textContent = 'Service workers are not supported in this browser. File sharing will not work.';
         }
     });
   </script>
