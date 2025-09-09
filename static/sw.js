@@ -1,4 +1,4 @@
-const VERSION = 'v13';
+const VERSION = 'v14'; // Increment version for updates
 const CACHE_NAME = `filevault-cache-${VERSION}`;
 const OFFLINE_URL = '/static/offline.html';
 const APP_SHELL_URLS = [
@@ -32,15 +32,17 @@ async function clearAndStoreFiles(files) {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
+    // Clear any previous files before adding new ones
     const clearRequest = store.clear();
-    await new Promise((resolve, reject) => {
-        clearRequest.onsuccess = resolve;
-        clearRequest.onerror = reject;
-    });
 
+    const addPromises = [];
     for (const file of files) {
-        await store.add(file);
+        addPromises.push(store.add(file));
     }
+
+    // Wait for all add operations to complete
+    await Promise.all(addPromises);
+
     return new Promise((resolve, reject) => {
         tx.oncomplete = () => {
             db.close();
@@ -80,35 +82,38 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
+  // Handle Web Share Target POST requests
   if (event.request.method === 'POST' && url.pathname.endsWith('/share-receiver')) {
     event.respondWith(
       (async () => {
         try {
           const formData = await event.request.formData();
           const files = formData.getAll('files');
-          console.log(`[SW] Intercepted ${files.length} files.`);
-
-          await clearAndStoreFiles(files);
-
-          console.log('[SW] Files stored in IndexedDB. Redirecting to /static/share.html.');
+          if (files.length > 0) {
+            await clearAndStoreFiles(files);
+            console.log(`[SW] Stored ${files.length} files in IndexedDB.`);
+          }
+          // Redirect to the share page regardless of whether files were found,
+          // so the user gets feedback.
           return Response.redirect('/static/share.html', 303);
-
         } catch (error) {
             console.error('[SW] Error handling share:', error);
-            return new Response("Share failed: " + error.message, { status: 500 });
+            // Redirect to an error page or the share page with an error parameter
+            return Response.redirect('/static/share.html?error=true', 303);
         }
       })()
     );
     return;
   }
 
+  // For navigation requests, use a network-first strategy.
   if (event.request.mode === 'navigate') {
     event.respondWith(
       (async () => {
         try {
           const networkResponse = await fetch(event.request);
           const cache = await caches.open(CACHE_NAME);
-          if(networkResponse.ok) {
+          if (networkResponse.ok) {
             cache.put(event.request, networkResponse.clone());
           }
           return networkResponse;
@@ -123,24 +128,12 @@ self.addEventListener('fetch', event => {
         }
       })()
     );
-  }
-  else if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-        fetch(event.request).catch(() => {
-            return new Response(JSON.stringify({ ok: false, error: 'offline' }), {
-                headers: { 'Content-Type': 'application/json' }
-            });
-        })
-    );
-  }
-  else {
+  } else {
+    // For non-navigation requests, use a cache-first strategy.
     event.respondWith(
       caches.open(CACHE_NAME).then(cache => {
         return cache.match(event.request).then(cachedResponse => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          return fetch(event.request).then(networkResponse => {
+          return cachedResponse || fetch(event.request).then(networkResponse => {
             if (networkResponse.ok) {
               cache.put(event.request, networkResponse.clone());
             }

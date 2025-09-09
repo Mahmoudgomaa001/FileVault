@@ -119,9 +119,6 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 # In-memory pending sessions for QR login
 pending_sessions: dict[str, dict] = {}
 
-# In-memory single-use tokens for b64 upload
-upload_tokens: dict[str, dict] = {}
-
 mimetypes.init()
 
 # -----------------------------
@@ -263,6 +260,14 @@ def load_users() -> dict:
 
 def save_users(data: dict):
     _save_json_file(USERS_FILE, data)
+
+UPLOAD_TOKENS_FILE = ROOT_DIR / ".upload_tokens.json"
+
+def load_upload_tokens() -> dict:
+    return _load_json_file(UPLOAD_TOKENS_FILE, {})
+
+def save_upload_tokens(data: dict):
+    _save_json_file(UPLOAD_TOKENS_FILE, data)
 
 def get_user_cfg(folder: str) -> dict:
     users = app.config.setdefault("USERS", load_users())
@@ -879,7 +884,7 @@ BASE_HTML = """
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').then(registration => {
+      navigator.serviceWorker.register('/static/sw.js').then(registration => {
         console.log('ServiceWorker registration successful with scope: ', registration.scope);
       }, err => {
         console.log('ServiceWorker registration failed: ', err);
@@ -3123,40 +3128,6 @@ function removeFileCard(rel){
         }
     }
 
-    function initAppDataHydration() {
-        if (!{{ authed|tojson }}) {
-            return;
-        }
-
-        async function fetchAndStoreAppData() {
-            try {
-                const response = await fetch('/api/app_data');
-                if (!response.ok) {
-                    console.error('Failed to fetch app data for hydration');
-                    return;
-                }
-                const data = await response.json();
-                if (data.ok) {
-                    localStorage.setItem('appData', JSON.stringify({
-                        local_base_url: data.local_base_url,
-                        online_base_url: data.online_base_url,
-                        folder_tree: data.folder_tree,
-                        upload_api_path: data.upload_api_path,
-                        current_folder: data.current_folder,
-                        timestamp: new Date().toISOString()
-                    }));
-                }
-            } catch (error) {
-                console.error('Error hydrating app data:', error);
-            }
-        }
-
-        // Fetch immediately on load
-        fetchAndStoreAppData();
-        // And then periodically
-        setInterval(fetchAndStoreAppData, 5 * 60 * 1000);
-    }
-
     // INIT
     document.addEventListener('DOMContentLoaded', async ()=>{
       window.currentPath = "{{ current_rel|default('', true) }}";
@@ -3194,7 +3165,6 @@ function removeFileCard(rel){
       initPwaInstall();
       initMobileMenu();
       initNotificationState();
-      initAppDataHydration();
     });
 
     // PWA INSTALL
@@ -4030,50 +4000,38 @@ def api_prefs():
 def api_upload():
     if not is_authed():
         return jsonify({"ok": False, "error": "not authed"}), 401
-
     dest_rel = request.form.get("dest", "")
     dest_dir = safe_path(dest_rel)
-
-    # Security Check: Ensure the destination is within the user's own folder
     base_folder = session.get("folder")
     if first_segment(path_rel(dest_dir)) != base_folder and path_rel(dest_dir) != "":
-        return jsonify({"ok": False, "error": "forbidden destination"}), 403
-
+        return jsonify({"ok": False, "error": "forbidden"}), 403
     if not dest_dir.exists() or not dest_dir.is_dir():
         return jsonify({"ok": False, "error": "bad dest"}), 400
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"ok": False, "error": "no file"}), 400
 
-    files = request.files.getlist("file")
-    if not files or not any(f.filename for f in files):
-        return jsonify({"ok": False, "error": "no files"}), 400
+    filename = sanitize_filename(f.filename)
+    if ALLOWED_UPLOAD_EXT:
+      ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+      if ext not in ALLOWED_UPLOAD_EXT:
+        return jsonify({"ok": False, "error": "file type not allowed"}), 400
 
-    results = []
-    for f in files:
-        if not f.filename:
-            continue
+    save_path = dest_dir / filename
+    base, ext = os.path.splitext(filename)
+    i = 1
+    while save_path.exists():
+        save_path = dest_dir / f"{base} ({i}){ext}"
+        i += 1
+    try:
+        f.save(save_path)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"save failed: {e}"}), 500
 
-        filename = sanitize_filename(f.filename)
-        if ALLOWED_UPLOAD_EXT:
-            ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-            if ext not in ALLOWED_UPLOAD_EXT:
-                results.append({"name": filename, "error": "file type not allowed"})
-                continue
-
-        save_path = dest_dir / filename
-        base, ext = os.path.splitext(filename)
-        i = 1
-        while save_path.exists():
-            save_path = dest_dir / f"{base} ({i}){ext}"
-            i += 1
-        try:
-            f.save(save_path)
-            meta = get_file_meta(save_path)
-            parent_rel = path_rel(dest_dir) if dest_dir != ROOT_DIR else ""
-            socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
-            results.append({"name": filename, "meta": meta, "ok": True})
-        except Exception as e:
-            results.append({"name": filename, "error": f"save failed: {e}", "ok": False})
-
-    return jsonify({"ok": True, "results": results}), 201
+    meta = get_file_meta(save_path)
+    parent_rel = path_rel(dest_dir) if dest_dir != ROOT_DIR else ""
+    socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
+    return jsonify({"ok": True, "meta": meta}), 201
 
 @app.route("/api/delete", methods=["POST"])
 def api_delete():
@@ -4230,23 +4188,6 @@ def api_cliptext():
     socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
     return jsonify({"ok": True, "meta": meta})
 
-@app.route("/api/server-status")
-def api_server_status():
-    """
-    Provides the available URLs for the server.
-    This is used by the offline launcher to know where to connect.
-    It does not require authentication.
-    """
-    local_ip = get_local_ip()
-    local_url = f"http://{local_ip}:{PORT}"
-    ngrok_url = get_ngrok_url()
-
-    return jsonify({
-        "ok": True,
-        "local_url": local_url,
-        "ngrok_url": ngrok_url,
-    })
-
 @app.route("/api/app_data")
 def api_app_data():
     """
@@ -4292,10 +4233,14 @@ def api_app_data():
 
     # Generate a single-use token for the b64 upload form
     upload_token = secrets.token_urlsafe(24)
-    upload_tokens[upload_token] = {
+
+    # Use persistent file storage for the token
+    tokens = load_upload_tokens()
+    tokens[upload_token] = {
         "folder": session.get("folder"),
         "created": datetime.utcnow().isoformat() + "Z"
     }
+    save_upload_tokens(tokens)
 
     return jsonify({
         "ok": True,
@@ -4306,18 +4251,36 @@ def api_app_data():
         "current_folder": session.get("folder", "")
     })
 
+
+@app.route("/api/server-status")
+def api_server_status():
+    """
+    Provides the available URLs for the server.
+    This is used by the offline launcher to know where to connect.
+    It does not require authentication.
+    """
+    local_ip = get_local_ip()
+    local_url = f"http://{local_ip}:{PORT}"
+    ngrok_url = get_ngrok_url()
+
+    return jsonify({
+        "ok": True,
+        "local_url": local_url,
+        "ngrok_url": ngrok_url,
+    })
+
+
+
 @app.route("/upload_b64", methods=["POST"])
 def upload_b64():
     token = request.form.get("upload_token")
-    token_data = upload_tokens.pop(token, None) # Consume the token
+
+    tokens = load_upload_tokens()
+    token_data = tokens.pop(token, None) # Consume the token
+    save_upload_tokens(tokens) # Save the consumed state immediately
 
     if not token_data:
         return "Invalid or expired upload token.", 403
-
-    # Optional: Check token expiry
-    # created_time = datetime.fromisoformat(token_data["created"].replace("Z", ""))
-    # if (datetime.utcnow() - created_time).total_seconds() > 3600: # 1 hour expiry
-    #     return "Upload token has expired.", 403
 
     try:
         dest_rel = request.form.get("dest", "")
@@ -4339,16 +4302,13 @@ def upload_b64():
         for name, b64_data in zip(filenames, files_b64):
             sanitized_name = sanitize_filename(name)
 
-            # Decode the base64 string
             try:
                 header, encoded = b64_data.split(",", 1)
                 data = base64.b64decode(encoded)
             except Exception as e:
-                # Skip corrupted files but continue with others
                 print(f"Could not decode base64 for file {name}: {e}")
                 continue
 
-            # Find a unique filename
             save_path = dest_dir / sanitized_name
             base, ext = os.path.splitext(sanitized_name)
             i = 1
@@ -4356,15 +4316,12 @@ def upload_b64():
                 save_path = dest_dir / f"{base} ({i}){ext}"
                 i += 1
 
-            # Save the file
             save_path.write_bytes(data)
 
-            # Emit a socket event for real-time update
             meta = get_file_meta(save_path)
             parent_rel = path_rel(dest_dir) if dest_dir != ROOT_DIR else ""
             socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
 
-        # After processing all files, redirect to the home page
         return redirect(url_for("home"))
 
     except Exception as e:
@@ -4542,16 +4499,6 @@ def api_download_zip():
         mimetype='application/zip'
     )
 
-# -----------------------------
-# -----------------------------
-# Routes: PWA Share Target
-# -----------------------------
-
-@app.route('/sw.js')
-def sw_js():
-    response = make_response(send_from_directory('static', 'sw.js'))
-    response.headers['Content-Type'] = 'application/javascript'
-    return response
 
 # Error handlers: redirect to login on not found/forbidden
 # -----------------------------

@@ -66,7 +66,7 @@
       const toast = document.createElement('div'); toast.className = `toast ${type}`;
       toast.innerHTML = `<div class="toast-message">${message}</div>`;
       container.appendChild(toast);
-      setTimeout(()=>{ toast.style.opacity='0'; setTimeout(()=>toast.remove(), 300); }, 3000);
+      setTimeout(()=>{ toast.style.opacity='0'; setTimeout(()=>toast.remove(), 3000); }, 3000);
   }
 
   function openDB() {
@@ -169,6 +169,10 @@
           showToast('Please select files and a destination folder.', 'error');
           return;
       }
+      if (!appData.upload_token) {
+          showToast('Upload token is missing. Please go back to the main app to refresh.', 'error');
+          return;
+      }
       const destination = selectedFolderEl.dataset.path;
 
       // Disable buttons and show progress
@@ -177,35 +181,30 @@
       progressContainer.innerHTML = ''; // Clear previous progress bars
       const overallProgressEl = createProgressElement(`Preparing ${sharedFiles.length} files...`, 'overall');
       progressContainer.appendChild(overallProgressEl);
-      updateProgress(overallProgressEl, 5); // Initial progress
+      updateProgress(overallProgressEl, 5);
 
       try {
         const b64Promises = sharedFiles.map(fileToBase64);
         const filesAsB64 = await Promise.all(b64Promises);
-        updateProgress(overallProgressEl, 50); // Halfway done after encoding
+        updateProgress(overallProgressEl, 50);
 
-        // Create a dynamic form
         const form = document.createElement('form');
         form.method = 'POST';
-        // The action is now a full, absolute URL
         form.action = `${targetBaseUrl}/upload_b64`;
         form.style.display = 'none';
 
-        // Add destination
         const destInput = document.createElement('input');
         destInput.type = 'hidden';
         destInput.name = 'dest';
         destInput.value = destination;
         form.appendChild(destInput);
 
-        // Add the upload token
         const tokenInput = document.createElement('input');
         tokenInput.type = 'hidden';
         tokenInput.name = 'upload_token';
         tokenInput.value = appData.upload_token;
         form.appendChild(tokenInput);
 
-        // Add file names and data
         for (let i = 0; i < sharedFiles.length; i++) {
             const nameInput = document.createElement('input');
             nameInput.type = 'hidden';
@@ -223,17 +222,14 @@
         document.body.appendChild(form);
         updateProgress(overallProgressEl, 95);
 
-        // Clear IndexedDB before submitting the form
         const db = await openDB();
         const tx = db.transaction(STORE_NAME, 'readwrite');
         tx.objectStore(STORE_NAME).clear();
         tx.oncomplete = () => {
             db.close();
-            // Submit the form, which will cause a full-page navigation
             form.submit();
         };
         tx.onerror = () => {
-            // If clearing fails, still try to submit the form
             db.close();
             console.error("Failed to clear IndexedDB, but proceeding with form submission.");
             form.submit();
@@ -263,7 +259,6 @@
         fileListDiv.innerHTML = sharedFiles.map(file => `<div class="card" style="padding: 0.75rem;">${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)</div>`).join('');
         actionsDiv.style.display = 'block';
 
-        // Render folder tree
         const folderTreeDiv = document.getElementById('folderTree');
         folderTreeDiv.innerHTML = renderFolderTree(appData.folder_tree);
         document.querySelectorAll('#folderTree .folder-tree-item').forEach(item => {
@@ -272,31 +267,25 @@
                 document.querySelectorAll('#folderTree .folder-tree-item').forEach(i => i.classList.remove('selected'));
                 item.classList.add('selected');
                 document.getElementById('localShareBtn').disabled = false;
-                // Also enable the online button if it exists
                 if (document.getElementById('onlineShareBtn')) {
                     document.getElementById('onlineShareBtn').disabled = false;
                 }
             });
         });
 
-        // Setup buttons
         const localBtn = document.getElementById('localShareBtn');
         const onlineBtn = document.getElementById('onlineShareBtn');
         const clearBtn = document.getElementById('clearBtn');
 
         clearBtn.addEventListener('click', clearShareList);
 
-        // Wire up Local Share button
-        if (appData.local_base_url) {
-            localBtn.addEventListener('click', () => doShare(appData.local_base_url));
-        } else {
-            localBtn.disabled = true;
-        }
+        // For local share, we submit to a relative path to ensure we stay on the same origin
+        // and avoid mixed-content warnings. The browser will resolve this to the correct full URL.
+        localBtn.addEventListener('click', () => doShare(''));
 
-        // Wire up Online Share button only if the URL exists
         if (appData.online_base_url) {
             onlineBtn.style.display = 'inline-flex';
-            onlineBtn.disabled = true; // Disabled until a folder is selected
+            onlineBtn.disabled = true;
             onlineBtn.addEventListener('click', () => doShare(appData.online_base_url));
         } else {
             onlineBtn.style.display = 'none';
