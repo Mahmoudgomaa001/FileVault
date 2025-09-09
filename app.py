@@ -1043,6 +1043,7 @@ BASE_HTML = """
     .toast.warning { border-left:3px solid var(--warning); }
     .toast.info { border-left:3px solid var(--primary); }
     @keyframes toastIn { from{opacity:0; transform:translateX(100%);} to{opacity:1; transform:translateX(0);} }
+    @keyframes toastOut { from{opacity:1; transform:translateX(0);} to{opacity:0; transform:translateX(100%);} }
 
     /* Modal */
     .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); z-index:2000; padding:1rem; overflow-y:auto; }
@@ -1721,15 +1722,70 @@ async function changeDhikr() {
     }
   })();
 
+  const DB_NAME = 'file-share-db';
+  const STORE_NAME = 'shared-files';
+
+  function openDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = () => {
+            if (!request.result.objectStoreNames.contains(STORE_NAME)) {
+                request.result.createObjectStore(STORE_NAME, { autoIncrement: true });
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+  }
+
+  async function getStoredFiles() {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const allFiles = await new Promise((resolve, reject) => {
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+    db.close();
+    return allFiles;
+  }
+
      // TOASTS
-    function showToast(message, type='info'){
+    function showToast(message, type='info', duration=3000){
       const container = document.getElementById('toastContainer'); if(!container) return;
-      const toast = document.createElement('div'); toast.className = `toast ${type}`;
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+
       const icon = {success:'fa-check-circle', error:'fa-times-circle', warning:'fa-exclamation-triangle', info:'fa-info-circle'}[type] || 'fa-info-circle';
-      toast.innerHTML = `<i class="fas ${icon}"></i><div class="toast-message">${message}</div>`;
+
+      let closeBtnHtml = '';
+      if (duration === 0) {
+          closeBtnHtml = `<button onclick="this.parentElement.remove()" style="background:transparent;border:none;color:inherit;font-size:1rem;cursor:pointer;margin-left:auto;padding-left:1rem;">&times;</button>`;
+      }
+
+      toast.innerHTML = `<i class="fas ${icon}"></i><div class="toast-message">${message}</div>${closeBtnHtml}`;
       container.appendChild(toast);
-      setTimeout(()=>{ toast.style.opacity='0'; setTimeout(()=>toast.remove(), 300); }, 3000);
+
+      if (duration > 0) {
+        setTimeout(()=>{
+            toast.style.animation = 'toastOut .3s ease forwards';
+            setTimeout(()=>toast.remove(), 300);
+        }, duration);
+      }
       changeDhikr();
+    }
+
+    async function checkForPendingShares() {
+        try {
+            const pendingFiles = await getStoredFiles();
+            if (pendingFiles && pendingFiles.length > 0) {
+                const message = `You have ${pendingFiles.length} file(s) waiting to be shared. <a href="/static/share.html" style="color:white;font-weight:bold;text-decoration:underline;">Click here to view them.</a>`;
+                showToast(message, 'info', 0); // duration 0 makes it persistent
+            }
+        } catch (e) {
+            console.error("Could not check for pending shares:", e);
+        }
     }
 
     // MODALS
@@ -3165,6 +3221,8 @@ function removeFileCard(rel){
       initPwaInstall();
       initMobileMenu();
       initNotificationState();
+      initAppDataHydration();
+      checkForPendingShares();
     });
 
     // PWA INSTALL
