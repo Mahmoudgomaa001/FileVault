@@ -171,7 +171,7 @@ def ensure_favicon_assets():
     manifest = {
         "name": "FileVault",
         "short_name": "FileVault",
-        "start_url": "/static/offline.html",
+        "start_url": "/",
         "scope": "/",
         "display": "standalone",
         "background_color": "#ffe6f2",
@@ -4372,29 +4372,38 @@ def api_download_zip():
 # Routes: PWA Share Target
 # -----------------------------
 SHARE_BODY_HTML = """
-<div class="card" id="mainContainer">
-  <h1>Shared Files</h1>
-  <div id="shareFileList">
-    <p>Loading shared files...</p>
-  </div>
-  <div id="shareControls" style="display: none;">
-    <p><b>Select destination folder:</b></p>
-    <div id="folderTree" style="height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary); margin-bottom: 1rem;">Loading...</div>
-    <div style="display: flex; gap: 0.5rem;">
-        <button class="btn btn-primary" id="confirmShareBtn" disabled><i class="fas fa-save"></i> Save All Files</button>
-        <button class="btn btn-danger" id="clearShareBtn"><i class="fas fa-trash"></i> Clear All</button>
+<div class="card">
+    <div id="mainContainer">
+        <h1>Share Files</h1>
+        <p>The following files are ready to be saved. Please choose a destination folder.</p>
+
+        <div id="shareFileList" style="margin-top: 1rem; margin-bottom: 1rem;">
+            <!-- Files will be listed here by JavaScript -->
+            <p>Loading shared files...</p>
+        </div>
+
+        <div id="shareControls" style="display: none;">
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label for="folderSelect" class="form-label"><b>Destination Folder:</b></label>
+                <select id="folderSelect" class="form-input">
+                    <!-- Options will be populated by JavaScript -->
+                </select>
+            </div>
+
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <button class="btn btn-primary" id="confirmShareBtn" disabled><i class="fas fa-save"></i> Save to Selected Folder</button>
+                <button class="btn btn-danger" id="clearShareBtn"><i class="fas fa-trash"></i> Clear All</button>
+            </div>
+        </div>
+
+        <div id="noFilesMessage" style="display: none; color: var(--text-muted);">
+            <p>No pending files to share. You can close this page.</p>
+        </div>
+
+        <div style="margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1rem; display: flex; gap: .5rem;">
+            <button class="btn btn-secondary" id="onlineToggleBtn"><i class="fas fa-wifi"></i> Switch to Online</button>
+        </div>
     </div>
-  </div>
-  <div id="noFilesMessage" style="display: none;">
-    <p>No pending files to share. You can close this page.</p>
-  </div>
-  <div style="margin-top: 1.5rem; border-top: 1px solid var(--border); padding-top: 1rem; display: flex; gap: .5rem;">
-    {% if is_on_ngrok %}
-      <button class="btn btn-secondary" onclick="goOffline()"><i class="fas fa-network-wired"></i> Switch to Local</button>
-    {% else %}
-      <button class="btn btn-secondary" onclick="goOnline()"><i class="fas fa-wifi"></i> Switch to Online</button>
-    {% endif %}
-  </div>
 </div>
 
 <script>
@@ -4405,6 +4414,12 @@ SHARE_BODY_HTML = """
   function openDB() {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, 1);
+      request.onupgradeneeded = event => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+              db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+          }
+      };
       request.onsuccess = event => resolve(event.target.result);
       request.onerror = event => reject(event.target.error);
     });
@@ -4443,38 +4458,32 @@ SHARE_BODY_HTML = """
       });
   }
 
-  function renderFolderTree(nodes, level = 0) {
+  function renderFolderOptions(nodes, level = 0) {
       let html = '';
       for (const node of nodes) {
-          html += `<div class="folder-tree-item" data-path="${node.path}" style="padding-left: ${level * 20}px;"><i class="fas fa-folder"></i> ${node.name}</div>`;
+          const prefix = '&nbsp;&nbsp;'.repeat(level);
+          html += `<option value="${node.path}">${prefix}${node.name}</option>`;
           if (node.children && node.children.length > 0) {
-              html += renderFolderTree(node.children, level + 1);
+              html += renderFolderOptions(node.children, level + 1);
           }
       }
       return html;
   }
 
   async function loadFolderTree() {
-      const folderTreeDiv = document.getElementById('folderTree');
+      const folderSelect = document.getElementById('folderSelect');
       try {
           const response = await fetch('/api/folders');
           const data = await response.json();
           if (data.ok) {
-              folderTreeDiv.innerHTML = renderFolderTree(data.tree);
-              document.querySelectorAll('#folderTree .folder-tree-item').forEach(item => {
-                  item.addEventListener('click', (e) => {
-                      e.stopPropagation();
-                      document.querySelectorAll('#folderTree .folder-tree-item').forEach(i => i.classList.remove('selected'));
-                      item.classList.add('selected');
-                      selectedShareDestination = item.dataset.path;
-                      document.getElementById('confirmShareBtn').disabled = false;
-                  });
-              });
+              folderSelect.innerHTML = renderFolderOptions(data.tree);
+              selectedShareDestination = folderSelect.value;
+              document.getElementById('confirmShareBtn').disabled = false;
           } else {
-              folderTreeDiv.innerHTML = `Error: ${data.error || 'Could not load folders.'}`;
+              folderSelect.innerHTML = `<option value="">Error: ${data.error || 'Could not load'}</option>`;
           }
       } catch (error) {
-          folderTreeDiv.innerHTML = 'Error loading folders.';
+          folderSelect.innerHTML = '<option value="">Error loading folders</option>';
       }
   }
 
@@ -4503,25 +4512,46 @@ SHARE_BODY_HTML = """
       }
   }
 
+  function setupOnlineToggle() {
+    const btn = document.getElementById('onlineToggleBtn');
+    if(!btn) return;
+
+    function updateButtonState(isOnline) {
+        if(isOnline) {
+            btn.innerHTML = '<i class="fas fa-network-wired"></i> Switch to Local';
+            btn.onclick = goOffline;
+        } else {
+            btn.innerHTML = '<i class="fas fa-wifi"></i> Switch to Online';
+            btn.onclick = goOnline;
+        }
+    }
+
+    const isOnNgrok = {{ is_on_ngrok|tojson }};
+    updateButtonState(isOnNgrok);
+  }
+
   document.addEventListener('DOMContentLoaded', async () => {
     const fileListDiv = document.getElementById('shareFileList');
     const controlsDiv = document.getElementById('shareControls');
     const noFilesDiv = document.getElementById('noFilesMessage');
     const confirmBtn = document.getElementById('confirmShareBtn');
     const clearBtn = document.getElementById('clearShareBtn');
+    const folderSelect = document.getElementById('folderSelect');
 
     const files = await getAllFiles();
 
     if (files && files.length > 0) {
-      let fileListHtml = '';
-      for (const file of files) {
-        fileListHtml += `<div class="card">${file.name}</div>`;
-      }
+      let fileListHtml = files.map(file => `<div class="card" style="padding: 0.5rem;">${file.name}</div>`).join('');
       fileListDiv.innerHTML = fileListHtml;
       controlsDiv.style.display = 'block';
       noFilesDiv.style.display = 'none';
 
       await loadFolderTree();
+      setupOnlineToggle();
+
+      folderSelect.addEventListener('change', () => {
+          selectedShareDestination = folderSelect.value;
+      });
 
       confirmBtn.addEventListener('click', async () => {
         if (selectedShareDestination === '') {
@@ -4557,33 +4587,18 @@ SHARE_BODY_HTML = """
 
 @app.route("/share")
 def share_page():
-    # Re-establish context from device cookie instead of session,
-    # as the session may be lost during the PWA share redirect flow.
+    # This page is now a pure client-side application.
+    # It just needs to be rendered.
+    # We establish auth context here to allow the client-side JS to make API calls.
     device_id, folder = get_or_create_device_folder(request)
-
     if not folder:
-        # This should not happen if get_or_create_device_folder works,
-        # but as a fallback, go to login.
         return redirect(url_for("login"))
 
-    # Set the session variables to ensure this context is "authed"
-    # for subsequent API calls made from the share page's Javascript.
     session["authed"] = True
     session["folder"] = folder
     session["icon"] = get_user_icon(folder)
 
-    pending_dir = safe_path(folder) / ".pending_shares"
-    files = []
-    if pending_dir.exists():
-        for p in sorted(list(pending_dir.iterdir()), key=os.path.getmtime, reverse=True):
-            if p.is_file():
-                try:
-                    uuid_part, name_part = p.name.split("__", 1)
-                    files.append({"id": p.name, "name": name_part})
-                except ValueError:
-                    continue
-
-    # Get ngrok status for the template
+    # The 'is_on_ngrok' status is needed for the online/offline toggle button.
     ngrok_url_str = get_ngrok_url()
     is_on_ngrok = False
     if ngrok_url_str:
@@ -4592,13 +4607,10 @@ def share_page():
         if ngrok_host and ngrok_host == request_host:
             is_on_ngrok = True
 
-    body = render_template_string(
-        SHARE_BODY_HTML,
-        files=files,
-        is_on_ngrok=is_on_ngrok
-    )
+    # The body is now a self-contained HTML/JS app that fetches its own data.
+    body = render_template_string(SHARE_BODY_HTML, is_on_ngrok=is_on_ngrok)
 
-    # Get values for BASE_HTML rendering
+    # Render the base template which provides the header, footer, etc.
     dhikr = get_random_dhikr()
     dhikr_list = [{"dhikr": d} for d in ISLAMIC_DHIKR]
     cfg = get_user_cfg(folder)
@@ -4615,41 +4627,6 @@ def share_page():
         is_admin=is_admin,
         share_page_active=True
     )
-
-@app.route("/share-receiver", methods=["POST"])
-def share_receiver():
-    # This gets the user's root folder for their device.
-    device_id, folder = get_or_create_device_folder(request)
-    dest_dir = safe_path(folder)
-
-    files = request.files.getlist("files")
-    if not files or not any(f.filename for f in files):
-        # Redirect to the main folder view if no files were actually shared.
-        return redirect(url_for("browse", subpath=folder))
-
-    for f in files:
-        if f and f.filename:
-            filename = sanitize_filename(f.filename)
-            save_path = dest_dir / filename
-
-            # Handle name conflicts by appending a number
-            base, ext = os.path.splitext(filename)
-            i = 1
-            while save_path.exists():
-                save_path = dest_dir / f"{base} ({i}){ext}"
-                i += 1
-
-            try:
-                f.save(save_path)
-                # Notify client of the new file for a reactive UI
-                meta = get_file_meta(save_path)
-                parent_rel = path_rel(dest_dir) if dest_dir != ROOT_DIR else ""
-                socketio.emit("file_update", {"action":"added", "dir": parent_rel, "meta": meta})
-            except Exception as e:
-                print(f"[share-receiver] Save failed for {filename}: {e}")
-
-    # Redirect to the folder where the file(s) were saved.
-    return redirect(url_for("browse", subpath=folder))
 
 
 
