@@ -187,13 +187,28 @@
 
           xhr.addEventListener('load', async () => {
               if(xhr.status >= 200 && xhr.status < 300) {
-                document.getElementById('mainContainer').innerHTML = `<h1>Share Complete!</h1><p>${sharedFiles.length} file(s) saved successfully.</p><a href="/" class="btn btn-primary">Back to App</a>`;
+                // On success, clear the database and redirect to the main app.
                 const db = await openDB();
                 const tx = db.transaction(STORE_NAME, 'readwrite');
-                await tx.objectStore(STORE_NAME).clear();
-                db.close();
+                const store = tx.objectStore(STORE_NAME);
+                store.clear();
+                tx.oncomplete = () => {
+                    db.close();
+                    // Redirect after the clear operation is complete.
+                    window.location.href = '/';
+                };
+                tx.onerror = () => {
+                    db.close();
+                    // Still redirect even if clearing fails, to not leave the user stranded.
+                    window.location.href = '/';
+                };
               } else {
-                showToast(`Upload failed. Status: ${xhr.status}`, 'error');
+                try {
+                    const j = JSON.parse(xhr.responseText || '{}');
+                    showToast(j.error || `Upload failed. Status: ${xhr.status}`, 'error');
+                } catch(e) {
+                    showToast(`Upload failed. Status: ${xhr.status}`, 'error');
+                }
                 document.querySelectorAll('#actions button').forEach(b => b.disabled = false);
               }
           });
