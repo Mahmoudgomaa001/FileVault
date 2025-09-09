@@ -1,113 +1,129 @@
-const VERSION = 'v9';
+const VERSION = 'v13';
 const CACHE_NAME = `filevault-cache-${VERSION}`;
-const OFFLINE_URL = 'static/offline.html';
+const OFFLINE_URL = '/static/offline.html';
 const APP_SHELL_URLS = [
   '/',
   '/static/fonts.css',
   '/static/vendor/fontawesome/css/all.min.css',
-  '/static/vendor/fontawesome/css/fa-shims.css',
   '/static/socket.io.min.js',
   '/static/site.webmanifest',
   '/static/favicon.svg',
   '/static/adhkar.json',
-  '/static/vendor/fontawesome/webfonts/fa-brands-400.ttf',
-  '/static/vendor/fontawesome/webfonts/fa-brands-400.woff2',
-  '/static/vendor/fontawesome/webfonts/fa-regular-400.ttf',
-  '/static/vendor/fontawesome/webfonts/fa-regular-400.woff2',
-  '/static/vendor/fontawesome/webfonts/fa-solid-900.ttf',
-  '/static/vendor/fontawesome/webfonts/fa-solid-900.woff2',
-  OFFLINE_URL,
-  '/static/share_chooser.html'
+  OFFLINE_URL
 ];
 
+const DB_NAME = 'file-share-db';
+const STORE_NAME = 'shared-files';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(STORE_NAME)) {
+        request.result.createObjectStore(STORE_NAME, { autoIncrement: true });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function clearAndStoreFiles(files) {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const clearRequest = store.clear();
+    await new Promise((resolve, reject) => {
+        clearRequest.onsuccess = resolve;
+        clearRequest.onerror = reject;
+    });
+
+    for (const file of files) {
+        await store.add(file);
+    }
+    return new Promise((resolve, reject) => {
+        tx.oncomplete = () => {
+            db.close();
+            resolve();
+        };
+        tx.onerror = () => {
+            db.close();
+            reject(tx.error);
+        };
+    });
+}
+
 self.addEventListener('install', event => {
-  console.log('[ServiceWorker] Install event fired');
+  console.log('[SW] Install');
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('[ServiceWorker] Caching app shell and offline page');
-        // Use addAll with a catch to prevent a single failed asset from breaking the entire cache
-        return cache.addAll(APP_SHELL_URLS).catch(error => {
-          console.error('[ServiceWorker] Failed to cache app shell:', error);
-        });
-      })
-      .then(() => {
-        // Force the waiting service worker to become the active service worker.
-        return self.skipWaiting();
-      })
+      .then(cache => cache.addAll(APP_SHELL_URLS))
+      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', event => {
-  console.log('[ServiceWorker] Activate event fired');
+  console.log('[SW] Activate');
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          // Delete old caches
           if (cacheName !== CACHE_NAME) {
-            console.log('[ServiceWorker] Clearing old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => {
-      // Tell the active service worker to take control of the page immediately.
-      return self.clients.claim();
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Handle Web Share Target POST requests
-  if (event.request.method === 'POST' && url.pathname === '/share-receiver') {
-    event.respondWith(Response.redirect('/share'));
-    event.waitUntil(
-      (async function () {
-        const formData = await event.request.formData();
-        const client = await self.clients.get(event.resultingClientId);
-        const files = formData.get('files');
-        client.postMessage({ files });
+  if (event.request.method === 'POST' && url.pathname.endsWith('/share-receiver')) {
+    event.respondWith(
+      (async () => {
+        try {
+          const formData = await event.request.formData();
+          const files = formData.getAll('files');
+          console.log(`[SW] Intercepted ${files.length} files.`);
+
+          await clearAndStoreFiles(files);
+
+          console.log('[SW] Files stored in IndexedDB. Redirecting to /share.');
+          return Response.redirect('/share', 303);
+
+        } catch (error) {
+            console.error('[SW] Error handling share:', error);
+            return new Response("Share failed: " + error.message, { status: 500 });
+        }
       })()
     );
     return;
   }
 
-  // For navigation requests, use a network-first strategy.
   if (event.request.mode === 'navigate') {
     event.respondWith(
       (async () => {
         try {
-          // Try the network first.
           const networkResponse = await fetch(event.request);
-
-          // If successful, cache the response for future offline use.
           const cache = await caches.open(CACHE_NAME);
-          // Do not cache error pages
           if(networkResponse.ok) {
             cache.put(event.request, networkResponse.clone());
           }
-
           return networkResponse;
         } catch (error) {
-          // The network failed.
-          console.log('[ServiceWorker] Fetch failed; returning offline page or cached page.', error);
-
+          console.log('[SW] Fetch failed; returning offline page or cached page.', error);
           const cache = await caches.open(CACHE_NAME);
-          // Try to serve the page from the cache.
           const cachedResponse = await cache.match(event.request);
           if (cachedResponse) {
             return cachedResponse;
           }
-          // If the page is not in the cache, serve the master offline page.
           return await cache.match(OFFLINE_URL);
         }
       })()
     );
   }
-  // For API calls, use a network-first strategy as well, but don't fall back to offline page.
   else if (url.pathname.startsWith('/api/')) {
     event.respondWith(
         fetch(event.request).catch(() => {
@@ -117,17 +133,13 @@ self.addEventListener('fetch', event => {
         })
     );
   }
-  // For all other requests (CSS, JS, images, fonts), use a cache-first strategy.
   else {
     event.respondWith(
       caches.open(CACHE_NAME).then(cache => {
         return cache.match(event.request).then(cachedResponse => {
-          // If we have a cached response, return it.
           if (cachedResponse) {
             return cachedResponse;
           }
-
-          // Otherwise, fetch from the network, cache it, and then return it.
           return fetch(event.request).then(networkResponse => {
             if (networkResponse.ok) {
               cache.put(event.request, networkResponse.clone());
@@ -138,25 +150,4 @@ self.addEventListener('fetch', event => {
       })
     );
   }
-});
-
-self.addEventListener('notificationclick', event => {
-    console.log('[ServiceWorker] Notification click Received.');
-    event.notification.close();
-    event.waitUntil(
-        clients.openWindow('/')
-    );
-});
-
-self.addEventListener('message', event => {
-    if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
-        const { title, body } = event.data;
-        event.waitUntil(
-            self.registration.showNotification(title, {
-                body: body,
-                icon: '/static/favicon.svg',
-                badge: '/static/favicon.svg'
-            })
-        );
-    }
 });

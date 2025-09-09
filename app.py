@@ -180,7 +180,7 @@ def ensure_favicon_assets():
             {"src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml"}
         ],
         "share_target": {
-            "action": "/share-staging",
+            "action": "/share-receiver",
             "method": "POST",
             "enctype": "multipart/form-data",
             "params": {
@@ -876,7 +876,7 @@ BASE_HTML = """
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/static/sw.js').then(registration => {
+      navigator.serviceWorker.register('/sw.js').then(registration => {
         console.log('ServiceWorker registration successful with scope: ', registration.scope);
       }, err => {
         console.log('ServiceWorker registration failed: ', err);
@@ -3999,31 +3999,38 @@ def api_upload():
         return jsonify({"ok": False, "error": "forbidden"}), 403
     if not dest_dir.exists() or not dest_dir.is_dir():
         return jsonify({"ok": False, "error": "bad dest"}), 400
-    f = request.files.get("file")
-    if not f or not f.filename:
-        return jsonify({"ok": False, "error": "no file"}), 400
+    files = request.files.getlist("file")
+    if not files or not any(f.filename for f in files):
+        return jsonify({"ok": False, "error": "no files"}), 400
 
-    filename = sanitize_filename(f.filename)
-    if ALLOWED_UPLOAD_EXT:
-      ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-      if ext not in ALLOWED_UPLOAD_EXT:
-        return jsonify({"ok": False, "error": "file type not allowed"}), 400
+    results = []
+    for f in files:
+        if not f.filename:
+            continue
 
-    save_path = dest_dir / filename
-    base, ext = os.path.splitext(filename)
-    i = 1
-    while save_path.exists():
-        save_path = dest_dir / f"{base} ({i}){ext}"
-        i += 1
-    try:
-        f.save(save_path)
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"save failed: {e}"}), 500
+        filename = sanitize_filename(f.filename)
+        if ALLOWED_UPLOAD_EXT:
+            ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+            if ext not in ALLOWED_UPLOAD_EXT:
+                results.append({"name": filename, "error": "file type not allowed"})
+                continue
 
-    meta = get_file_meta(save_path)
-    parent_rel = path_rel(dest_dir) if dest_dir != ROOT_DIR else ""
-    socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
-    return jsonify({"ok": True, "meta": meta}), 201
+        save_path = dest_dir / filename
+        base, ext = os.path.splitext(filename)
+        i = 1
+        while save_path.exists():
+            save_path = dest_dir / f"{base} ({i}){ext}"
+            i += 1
+        try:
+            f.save(save_path)
+            meta = get_file_meta(save_path)
+            parent_rel = path_rel(dest_dir) if dest_dir != ROOT_DIR else ""
+            socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
+            results.append({"name": filename, "meta": meta, "ok": True})
+        except Exception as e:
+            results.append({"name": filename, "error": f"save failed: {e}", "ok": False})
+
+    return jsonify({"ok": True, "results": results}), 201
 
 @app.route("/api/delete", methods=["POST"])
 def api_delete():
@@ -4196,89 +4203,6 @@ def api_server_status():
         "local_url": local_url,
         "ngrok_url": ngrok_url,
     })
-
-@app.route("/share-staging", methods=["POST"])
-def share_staging():
-    device_id, folder = get_or_create_device_folder(request)
-
-    files = request.files.getlist("files")
-    if not files or not any(f.filename for f in files):
-        return "No files were provided for staging.", 400
-
-    staging_dir = safe_path(folder) / ".staging_shares"
-    staging_dir.mkdir(exist_ok=True)
-
-    staged_files = []
-    for f in files:
-        if f and f.filename:
-            filename = sanitize_filename(f.filename)
-            # Use a UUID to ensure the staged file has a unique, non-conflicting name
-            file_id = str(uuid.uuid4())
-            save_name = f"{file_id}__{filename}"
-            save_path = staging_dir / save_name
-            try:
-                f.save(save_path)
-                staged_files.append({"id": file_id, "name": filename})
-            except Exception as e:
-                print(f"[share-staging] Save failed for {filename}: {e}")
-
-    if not staged_files:
-        return "Failed to save any of the provided files.", 500
-
-    # For simplicity, we handle one file at a time in the chooser.
-    # The user can share multiple files, but the chooser will process the first one.
-    # A more advanced implementation could show a list on the chooser page.
-    first_file_id = staged_files[0]["id"]
-    first_file_name = staged_files[0]["name"]
-
-    local_url = f"http://{get_local_ip()}:{PORT}"
-    ngrok_url = get_ngrok_url() or ""
-
-    # Redirect to the chooser page with all necessary info
-    chooser_url = url_for('static', filename='share_chooser.html',
-                          file_id=first_file_id,
-                          file_name=first_file_name,
-                          local_url=local_url,
-                          ngrok_url=ngrok_url)
-    return redirect(chooser_url)
-
-@app.route("/api/commit_staged_share", methods=["POST"])
-def api_commit_staged_share():
-    # This endpoint can be called from a different origin (e.g., ngrok URL)
-    # so we need to ensure the user context is established correctly.
-    device_id, folder = get_or_create_device_folder(request)
-    session["authed"] = True
-    session["folder"] = folder
-    session["icon"] = get_user_icon(folder)
-
-    data = request.get_json(silent=True) or {}
-    file_id = data.get("file_id")
-
-    if not file_id:
-        return jsonify({"ok": False, "error": "File ID is required"}), 400
-
-    staging_dir = safe_path(folder) / ".staging_shares"
-    pending_dir = safe_path(folder) / ".pending_shares"
-    pending_dir.mkdir(exist_ok=True)
-
-    staged_file = next(staging_dir.glob(f"{file_id}__*"), None)
-
-    if not staged_file or not staged_file.is_file():
-        return jsonify({"ok": False, "error": "Staged file not found"}), 404
-
-    try:
-        # Move the file from staging to the final pending directory
-        final_pending_path = pending_dir / staged_file.name
-        shutil.move(str(staged_file), str(final_pending_path))
-
-        # Notify clients that a new file is ready to be managed
-        socketio.emit("share_ready", {"folder": folder})
-
-        return jsonify({"ok": True, "message": "File committed successfully."})
-    except Exception as e:
-        print(f"[commit-share] Failed to move file {file_id}: {e}")
-        return jsonify({"ok": False, "error": f"Failed to commit file: {e}"}), 500
-
 
 @app.route("/api/go_offline")
 def api_go_offline():
@@ -4454,31 +4378,60 @@ def api_download_zip():
 # -----------------------------
 # Routes: PWA Share Target
 # -----------------------------
+
+@app.route('/sw.js')
+def sw_js():
+    response = make_response(send_from_directory('static', 'sw.js'))
+    response.headers['Content-Type'] = 'application/javascript'
+    return response
+
 SHARE_BODY_HTML = """
 <div class="card" id="mainContainer">
   <h1>Shared Files</h1>
-  {% if files %}
-    <p>You have shared {{ files|length }} file(s). Select a destination and click Save, or clear the list.</p>
-    <div id="shareFileList">
-      {% for file in files %}
-        <div class="card">{{ file.name }}</div>
-      {% endfor %}
-    </div>
-    <p><b>Select destination folder:</b></p>
-    <div id="folderTree" style="height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary); margin-bottom: 1rem;">Loading...</div>
-    <div style="display: flex; gap: 0.5rem;">
-        <button class="btn btn-primary" id="confirmShareBtn" disabled><i class="fas fa-save"></i> Save All Files</button>
-        <button class="btn btn-danger" id="clearShareBtn"><i class="fas fa-trash"></i> Clear All</button>
-    </div>
-  {% else %}
-    <p>No pending files to share. You can close this page.</p>
-  {% endif %}
+  <p id="share-instructions">Loading shared files from your browser...</p>
+  <div id="shareFileList" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
+    <!-- File list will be populated by JavaScript -->
+  </div>
+  <div id="share-actions" style="display: none;">
+      <p><b>Select destination folder:</b></p>
+      <div id="folderTree" style="height: 200px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary); margin-bottom: 1rem;">Loading...</div>
+      <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+          <button class="btn btn-primary" id="confirmShareBtn" disabled><i class="fas fa-save"></i> Save All Files</button>
+          <button class="btn btn-danger" id="clearShareBtn"><i class="fas fa-trash"></i> Clear All</button>
+      </div>
+  </div>
 </div>
 
 <script>
-  // Simplified script for this page
-  let selectedShareDestination = '';
-  const file_ids = {{ files|map(attribute='id')|list|tojson }};
+  const DB_NAME = 'file-share-db';
+  const STORE_NAME = 'shared-files';
+  let sharedFiles = []; // To hold the retrieved File objects
+
+  function openDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = () => {
+            if (!request.result.objectStoreNames.contains(STORE_NAME)) {
+                request.result.createObjectStore(STORE_NAME, { autoIncrement: true });
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+  }
+
+  async function getStoredFiles() {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const allFiles = await new Promise((resolve, reject) => {
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+    db.close();
+    return allFiles;
+  }
 
   function renderFolderTree(nodes, level = 0) {
       let html = '';
@@ -4503,7 +4456,6 @@ SHARE_BODY_HTML = """
                       e.stopPropagation();
                       document.querySelectorAll('#folderTree .folder-tree-item').forEach(i => i.classList.remove('selected'));
                       item.classList.add('selected');
-                      selectedShareDestination = item.dataset.path;
                       document.getElementById('confirmShareBtn').disabled = false;
                   });
               });
@@ -4515,95 +4467,108 @@ SHARE_BODY_HTML = """
       }
   }
 
-  async function confirmShare() {
-      if (file_ids.length === 0 || selectedShareDestination === '') {
-          showToast('Please select a destination folder.', 'error');
-          return;
-      }
-      document.getElementById('confirmShareBtn').disabled = true;
-      document.getElementById('confirmShareBtn').innerHTML = 'Saving...';
-
-      try {
-          const r = await fetch('/api/commit_share', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ids: file_ids, destination: selectedShareDestination })
-          });
-          const j = await r.json();
-          if (j.ok) {
-              document.getElementById('mainContainer').innerHTML = '<h1>Share Complete!</h1><p>' + j.committed.length + ' file(s) saved successfully.</p><a href="/" class="btn btn-primary">Back to App</a>';
-          } else {
-              showToast(j.error || 'Share failed.', 'error');
-              document.getElementById('confirmShareBtn').disabled = false;
-              document.getElementById('confirmShareBtn').innerHTML = '<i class="fas fa-save"></i> Save All Files';
-          }
-      } catch (e) {
-          showToast('An error occurred during the share.', 'error');
-          document.getElementById('confirmShareBtn').disabled = false;
-          document.getElementById('confirmShareBtn').innerHTML = '<i class="fas fa-save"></i> Save All Files';
-      }
-  }
-
   async function clearShareList() {
-      if (!confirm('Are you sure you want to clear all shared files? This cannot be undone.')) {
+      if (!confirm('Are you sure you want to clear all shared files from your browser? This cannot be undone.')) {
         return;
       }
-
       try {
-          const r = await fetch('/api/clear_shares', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-          });
-          const j = await r.json();
-          if (j.ok) {
-              document.getElementById('mainContainer').innerHTML = '<h1>List Cleared</h1><p>' + j.deleted_count + ' file(s) have been removed.</p><a href="/" class="btn btn-primary">Back to App</a>';
-          } else {
-              showToast(j.error || 'Failed to clear list.', 'error');
-          }
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.clear();
+        tx.oncomplete = () => {
+            db.close();
+            document.getElementById('mainContainer').innerHTML = '<h1>List Cleared</h1><p>The shared files have been removed from your browser.</p><a href="/" class="btn btn-primary">Back to App</a>';
+        };
       } catch (e) {
           showToast('An error occurred while clearing the list.', 'error');
       }
   }
 
-  if (file_ids.length > 0) {
-      loadFolderTree();
-      document.getElementById('confirmShareBtn').addEventListener('click', confirmShare);
-      document.getElementById('clearShareBtn').addEventListener('click', clearShareList);
+  document.addEventListener('DOMContentLoaded', async () => {
+    try {
+      sharedFiles = await getStoredFiles();
+      const fileListDiv = document.getElementById('shareFileList');
+      const instructions = document.getElementById('share-instructions');
+      const actionsDiv = document.getElementById('share-actions');
+
+      if (sharedFiles.length > 0) {
+        instructions.textContent = `You have shared ${sharedFiles.length} file(s). Select a destination and click Save, or clear the list.`;
+        fileListDiv.innerHTML = sharedFiles.map(file => `<div class="card">${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)</div>`).join('');
+        actionsDiv.style.display = 'block';
+        loadFolderTree();
+        document.getElementById('clearShareBtn').addEventListener('click', clearShareList);
+        document.getElementById('confirmShareBtn').addEventListener('click', confirmShare);
+      } else {
+        instructions.textContent = 'No pending files to share. You can close this page.';
+      }
+    } catch (error) {
+      console.error('Error retrieving shared files:', error);
+      document.getElementById('share-instructions').textContent = 'Could not retrieve shared files. Please try sharing again.';
+    }
+  });
+
+  async function confirmShare() {
+      const selectedFolderEl = document.querySelector('#folderTree .selected');
+      if (sharedFiles.length === 0 || !selectedFolderEl) {
+          showToast('Please select files and a destination folder.', 'error');
+          return;
+      }
+      const destination = selectedFolderEl.dataset.path;
+
+      const btn = document.getElementById('confirmShareBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+      try {
+          const formData = new FormData();
+          formData.append('dest', destination);
+          for (const file of sharedFiles) {
+              formData.append('file', file, file.name);
+          }
+
+          const r = await fetch('/api/upload', {
+              method: 'POST',
+              body: formData
+          });
+
+          const j = await r.json();
+          if (j.ok) {
+              document.getElementById('mainContainer').innerHTML = `<h1>Share Complete!</h1><p>${j.results.length} file(s) saved successfully.</p><a href="/" class="btn btn-primary">Back to App</a>`;
+              // Clear the DB
+              const db = await openDB();
+              const tx = db.transaction(STORE_NAME, 'readwrite');
+              await tx.objectStore(STORE_NAME).clear();
+              db.close();
+          } else {
+              showToast(j.error || 'Share failed.', 'error');
+              btn.disabled = false;
+              btn.innerHTML = '<i class="fas fa-save"></i> Save All Files';
+          }
+      } catch (e) {
+          showToast('An error occurred during the upload.', 'error');
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-save"></i> Save All Files';
+      }
   }
 </script>
 """
 
 @app.route("/share")
 def share_page():
-    # Re-establish context from device cookie instead of session,
-    # as the session may be lost during the PWA share redirect flow.
+    # This route no longer needs to query the filesystem.
+    # It just serves the page, and the client-side JS handles getting files.
     device_id, folder = get_or_create_device_folder(request)
-
     if not folder:
-        # This should not happen if get_or_create_device_folder works,
-        # but as a fallback, go to login.
         return redirect(url_for("login"))
 
-    # Set the session variables to ensure this context is "authed"
-    # for subsequent API calls made from the share page's Javascript.
     session["authed"] = True
     session["folder"] = folder
     session["icon"] = get_user_icon(folder)
 
-    pending_dir = safe_path(folder) / ".pending_shares"
-    files = []
-    if pending_dir.exists():
-        for p in sorted(list(pending_dir.iterdir()), key=os.path.getmtime, reverse=True):
-            if p.is_file():
-                try:
-                    uuid_part, name_part = p.name.split("__", 1)
-                    files.append({"id": p.name, "name": name_part})
-                except ValueError:
-                    continue
+    # The 'files' variable is no longer needed here, the template is fully dynamic.
+    body = render_template_string(SHARE_BODY_HTML, files=[])
 
-    body = render_template_string(SHARE_BODY_HTML, files=files)
-
-    # Get values for BASE_HTML rendering
     dhikr = get_random_dhikr()
     dhikr_list = [{"dhikr": d} for d in ISLAMIC_DHIKR]
     cfg = get_user_cfg(folder)
@@ -4620,94 +4585,6 @@ def share_page():
         is_admin=is_admin,
         share_page_active=True
     )
-
-# This route is now handled by the service worker and is no longer needed.
-# If a request hits this, it means the service worker failed, and it will 404.
-
-@app.route("/api/commit_share", methods=["POST"])
-def api_commit_share():
-    if not is_authed():
-        return jsonify({"ok": False, "error": "not authed"}), 401
-
-    data = request.get_json(silent=True) or {}
-    pending_ids = data.get("ids", [])
-    destination_rel = data.get("destination")
-
-    if not pending_ids or destination_rel is None:
-        return jsonify({"ok": False, "error": "ids and destination required"}), 400
-
-    base_folder = session.get("folder")
-    if first_segment(destination_rel) != base_folder and destination_rel != base_folder:
-        return jsonify({"ok": False, "error": "forbidden destination"}), 403
-
-    pending_dir = safe_path(base_folder) / ".pending_shares"
-    committed = []
-    errors = []
-
-    for pending_id in pending_ids:
-        pending_file = pending_dir / pending_id
-        if not pending_file.exists() or not pending_file.is_file():
-            errors.append({"id": pending_id, "error": "not found"})
-            continue
-
-        try:
-            _, original_filename = pending_id.split("__", 1)
-        except ValueError:
-            original_filename = pending_id
-
-        dest_dir = safe_path(destination_rel)
-        save_path = dest_dir / original_filename
-
-        base, ext = os.path.splitext(original_filename)
-        i = 1
-        while save_path.exists():
-            save_path = dest_dir / f"{base} ({i}){ext}"
-            i += 1
-
-        try:
-            shutil.move(str(pending_file), str(save_path))
-            meta = get_file_meta(save_path)
-            socketio.emit("file_update", {"action":"added", "dir": destination_rel, "meta": meta})
-            committed.append(meta)
-        except Exception as e:
-            errors.append({"id": pending_id, "error": str(e)})
-
-    return jsonify({"ok": True, "committed": committed, "errors": errors})
-
-@app.route("/api/clear_shares", methods=["POST"])
-def api_clear_shares():
-    if not is_authed():
-        return jsonify({"ok": False, "error": "not authed"}), 401
-
-    base_folder = session.get("folder")
-    pending_dir = safe_path(base_folder) / ".pending_shares"
-
-    if not pending_dir.exists():
-        return jsonify({"ok": True, "deleted_count": 0})
-
-    deleted_count = 0
-    errors = []
-    for item in pending_dir.iterdir():
-        try:
-            if item.is_file():
-                item.unlink()
-                deleted_count += 1
-            elif item.is_dir():
-                shutil.rmtree(item)
-                deleted_count += 1
-        except Exception as e:
-            errors.append({"name": item.name, "error": str(e)})
-            print(f"Error deleting {item.name}: {e}")
-
-    if not errors:
-        try:
-            pending_dir.rmdir()
-        except Exception as e:
-            print(f"Error deleting .pending_shares directory: {e}")
-
-
-    return jsonify({"ok": True, "deleted_count": deleted_count, "errors": errors})
-
 
 # Error handlers: redirect to login on not found/forbidden
 # -----------------------------
