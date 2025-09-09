@@ -154,7 +154,16 @@
       element.querySelector('.progress-percent').textContent = `${Math.round(percent)}%`;
   }
 
-  async function doShare(uploadUrl) {
+  function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = error => reject(error);
+      });
+  }
+
+  async function doShare(targetBaseUrl) {
       const selectedFolderEl = document.querySelector('#folderTree .selected');
       if (sharedFiles.length === 0 || !selectedFolderEl) {
           showToast('Please select files and a destination folder.', 'error');
@@ -162,65 +171,69 @@
       }
       const destination = selectedFolderEl.dataset.path;
 
+      // Disable buttons and show progress
       document.querySelectorAll('#actions button').forEach(b => b.disabled = true);
       const progressContainer = document.getElementById('progressContainer');
-      progressContainer.innerHTML = '';
-      const progressEl = createProgressElement(`Uploading ${sharedFiles.length} files...`, 'total-progress');
-      progressContainer.appendChild(progressEl);
+      progressContainer.innerHTML = ''; // Clear previous progress bars
+      const overallProgressEl = createProgressElement(`Preparing ${sharedFiles.length} files...`, 'overall');
+      progressContainer.appendChild(overallProgressEl);
+      updateProgress(overallProgressEl, 5); // Initial progress
 
       try {
-          const formData = new FormData();
-          formData.append('dest', destination);
-          for (const file of sharedFiles) {
-              formData.append('file', file, file.name);
-          }
+        const b64Promises = sharedFiles.map(fileToBase64);
+        const filesAsB64 = await Promise.all(b64Promises);
+        updateProgress(overallProgressEl, 50); // Halfway done after encoding
 
-          const xhr = new XMLHttpRequest();
-          xhr.open('POST', uploadUrl);
+        // Create a dynamic form
+        const form = document.createElement('form');
+        form.method = 'POST';
+        // The action is now a full, absolute URL
+        form.action = `${targetBaseUrl}/upload_b64`;
+        form.style.display = 'none';
 
-          xhr.upload.addEventListener('progress', e => {
-              if (e.lengthComputable) {
-                  const percent = (e.loaded / e.total) * 100;
-                  updateProgress(progressEl, percent);
-              }
-          });
+        // Add destination
+        const destInput = document.createElement('input');
+        destInput.type = 'hidden';
+        destInput.name = 'dest';
+        destInput.value = destination;
+        form.appendChild(destInput);
 
-          xhr.addEventListener('load', async () => {
-              if(xhr.status >= 200 && xhr.status < 300) {
-                // On success, clear the database and redirect to the main app.
-                const db = await openDB();
-                const tx = db.transaction(STORE_NAME, 'readwrite');
-                const store = tx.objectStore(STORE_NAME);
-                store.clear();
-                tx.oncomplete = () => {
-                    db.close();
-                    // Redirect after the clear operation is complete.
-                    window.location.href = '/';
-                };
-                tx.onerror = () => {
-                    db.close();
-                    // Still redirect even if clearing fails, to not leave the user stranded.
-                    window.location.href = '/';
-                };
-              } else {
-                try {
-                    const j = JSON.parse(xhr.responseText || '{}');
-                    showToast(j.error || `Upload failed. Status: ${xhr.status}`, 'error');
-                } catch(e) {
-                    showToast(`Upload failed. Status: ${xhr.status}`, 'error');
-                }
-                document.querySelectorAll('#actions button').forEach(b => b.disabled = false);
-              }
-          });
-          xhr.addEventListener('error', () => {
-              showToast('An network error occurred during the upload.', 'error');
-              document.querySelectorAll('#actions button').forEach(b => b.disabled = false);
-          });
+        // Add file names and data
+        for (let i = 0; i < sharedFiles.length; i++) {
+            const nameInput = document.createElement('input');
+            nameInput.type = 'hidden';
+            nameInput.name = 'filenames';
+            nameInput.value = sharedFiles[i].name;
+            form.appendChild(nameInput);
 
-          xhr.send(formData);
+            const dataInput = document.createElement('input');
+            dataInput.type = 'hidden';
+            dataInput.name = 'files_b64';
+            dataInput.value = filesAsB64[i];
+            form.appendChild(dataInput);
+        }
+
+        document.body.appendChild(form);
+        updateProgress(overallProgressEl, 95);
+
+        // Clear IndexedDB before submitting the form
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).clear();
+        tx.oncomplete = () => {
+            db.close();
+            // Submit the form, which will cause a full-page navigation
+            form.submit();
+        };
+        tx.onerror = () => {
+            // If clearing fails, still try to submit the form
+            db.close();
+            console.error("Failed to clear IndexedDB, but proceeding with form submission.");
+            form.submit();
+        };
 
       } catch (e) {
-          showToast('An error occurred during the upload.', 'error');
+          showToast('An error occurred while preparing the files for upload.', 'error');
           document.querySelectorAll('#actions button').forEach(b => b.disabled = false);
       }
   }
@@ -258,20 +271,18 @@
 
         // Setup buttons
         const localBtn = document.getElementById('localShareBtn');
-        const onlineBtn = document.getElementById('onlineShareBtn');
         const clearBtn = document.getElementById('clearBtn');
 
         clearBtn.addEventListener('click', clearShareList);
 
-        const uploadUrlLocal = `${appData.local_base_url}${appData.upload_api_path}`;
-        localBtn.addEventListener('click', () => doShare(uploadUrlLocal));
-
-        if(appData.online_base_url) {
-            onlineBtn.style.display = 'inline-flex';
-            onlineBtn.disabled = true;
-            const uploadUrlOnline = `${appData.online_base_url}${appData.upload_api_path}`;
-            onlineBtn.addEventListener('click', () => doShare(uploadUrlOnline));
-        }
+        // The new doShare function handles everything, so both buttons call it directly.
+        // The server will handle the session cookie to know if the user is logged in.
+        // The concept of a separate "local" or "online" URL is removed in this model,
+        // The new doShare function handles everything, so the local button calls it directly.
+        // The server will handle the session cookie to know if the user is logged in.
+        // The concept of a separate "online" URL is removed in this model,
+        // as the form submission will always go to the server's relative path.
+        localBtn.addEventListener('click', doShare);
 
       } else {
         instructions.textContent = 'No pending files to share. You can close this page.';

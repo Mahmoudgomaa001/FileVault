@@ -1974,7 +1974,7 @@ async function changeDhikr() {
         row.remove();
       });
 
-      xhr.open('POST', '{{ url_for("uploadapi") }}');
+      xhr.open('POST', '{{ url_for("api_upload") }}');
       xhr.send(form);
     }
 
@@ -4023,17 +4023,22 @@ def api_prefs():
     save_pref(folder, key, value)
     return jsonify({"ok": True})
 
-@app.route("/uploadapi", methods=["POST"])
-def uploadapi():
+@app.route("/api/upload", methods=["POST"])
+def api_upload():
     if not is_authed():
         return jsonify({"ok": False, "error": "not authed"}), 401
+
     dest_rel = request.form.get("dest", "")
     dest_dir = safe_path(dest_rel)
+
+    # Security Check: Ensure the destination is within the user's own folder
     base_folder = session.get("folder")
     if first_segment(path_rel(dest_dir)) != base_folder and path_rel(dest_dir) != "":
-        return jsonify({"ok": False, "error": "forbidden"}), 403
+        return jsonify({"ok": False, "error": "forbidden destination"}), 403
+
     if not dest_dir.exists() or not dest_dir.is_dir():
         return jsonify({"ok": False, "error": "bad dest"}), 400
+
     files = request.files.getlist("file")
     if not files or not any(f.filename for f in files):
         return jsonify({"ok": False, "error": "no files"}), 400
@@ -4287,9 +4292,67 @@ def api_app_data():
         "local_base_url": local_base_url,
         "online_base_url": online_base_url,
         "folder_tree": folder_tree,
-        "upload_api_path": url_for("uploadapi"),
+        "upload_api_path": url_for("api_upload"),
         "current_folder": session.get("folder", "")
     })
+
+@app.route("/upload_b64", methods=["POST"])
+def upload_b64():
+    if not is_authed():
+        return "You must be logged in to upload files.", 401
+
+    try:
+        dest_rel = request.form.get("dest", "")
+        filenames = request.form.getlist("filenames")
+        files_b64 = request.form.getlist("files_b64")
+
+        if not dest_rel or not filenames or not files_b64 or len(filenames) != len(files_b64):
+            return "Invalid upload data.", 400
+
+        # Security Check: Ensure the destination is within the user's own folder
+        base_folder = session.get("folder")
+        dest_dir = safe_path(dest_rel)
+        if first_segment(path_rel(dest_dir)) != base_folder and path_rel(dest_dir) != "":
+             return "Forbidden destination.", 403
+
+        if not dest_dir.exists() or not dest_dir.is_dir():
+            return "Destination directory does not exist.", 400
+
+        for name, b64_data in zip(filenames, files_b64):
+            sanitized_name = sanitize_filename(name)
+
+            # Decode the base64 string
+            try:
+                header, encoded = b64_data.split(",", 1)
+                data = base64.b64decode(encoded)
+            except Exception as e:
+                # Skip corrupted files but continue with others
+                print(f"Could not decode base64 for file {name}: {e}")
+                continue
+
+            # Find a unique filename
+            save_path = dest_dir / sanitized_name
+            base, ext = os.path.splitext(sanitized_name)
+            i = 1
+            while save_path.exists():
+                save_path = dest_dir / f"{base} ({i}){ext}"
+                i += 1
+
+            # Save the file
+            save_path.write_bytes(data)
+
+            # Emit a socket event for real-time update
+            meta = get_file_meta(save_path)
+            parent_rel = path_rel(dest_dir) if dest_dir != ROOT_DIR else ""
+            socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
+
+        # After processing all files, redirect to the home page
+        return redirect(url_for("home"))
+
+    except Exception as e:
+        print(f"An error occurred during b64 upload: {e}")
+        return "An internal error occurred.", 500
+
 
 @app.route("/api/go_offline")
 def api_go_offline():
