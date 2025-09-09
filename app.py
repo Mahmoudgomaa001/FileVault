@@ -4587,16 +4587,22 @@ SHARE_BODY_HTML = """
 
 @app.route("/share")
 def share_page():
-    # This page is now a pure client-side application.
-    # It just needs to be rendered.
-    # We establish auth context here to allow the client-side JS to make API calls.
-    device_id, folder = get_or_create_device_folder(request)
-    if not folder:
-        return redirect(url_for("login"))
+    # The share page can be accessed without a session.
+    # We establish an auth context here to allow the client-side JS to make API calls.
+    # If the user is already logged in, we use their session.
+    # Otherwise, we create a new session for them based on their device cookie or a new device ID.
+    if not is_authed():
+        device_id, folder = get_or_create_device_folder(request)
+        if not folder:
+            return redirect(url_for("login")) # Fallback
 
-    session["authed"] = True
-    session["folder"] = folder
-    session["icon"] = get_user_icon(folder)
+        session["authed"] = True
+        session["folder"] = folder
+        session["icon"] = get_user_icon(folder)
+
+    # Now we are authenticated, either from before or from the logic above.
+    folder = session.get("folder")
+    device_id = request.cookies.get(DEVICE_COOKIE_NAME) # This might be None if it's a new device
 
     # The 'is_on_ngrok' status is needed for the online/offline toggle button.
     ngrok_url_str = get_ngrok_url()
