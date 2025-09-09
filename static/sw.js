@@ -95,18 +95,36 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
   if (event.request.method === 'POST' && url.pathname === '/share-receiver') {
+    console.log('[ServiceWorker] Intercepted share POST request.');
     event.respondWith(
       (async () => {
-        const formData = await event.request.formData();
-        const files = formData.getAll('files');
+        try {
+          console.log('[ServiceWorker] Processing form data...');
+          const formData = await event.request.formData();
+          const files = formData.getAll('files');
+          console.log(`[ServiceWorker] Found ${files.length} files to save.`);
 
-        // Save each file to IndexedDB
-        for (const file of files) {
-          await saveFileToDB(file);
+          if (files.length === 0) {
+            console.warn('[ServiceWorker] Share request contained no files.');
+            return Response.redirect('/share', 303);
+          }
+
+          // Save each file to IndexedDB
+          for (const file of files) {
+            console.log(`[ServiceWorker] Saving file to IndexedDB: ${file.name}`);
+            await saveFileToDB(file);
+            console.log(`[ServiceWorker] Successfully saved ${file.name}`);
+          }
+
+          console.log('[ServiceWorker] All files saved. Redirecting to /share.');
+          // Redirect to the share page to manage the files
+          return Response.redirect('/share', 303);
+        } catch (error) {
+          console.error('[ServiceWorker] Error handling share POST:', error);
+          // IMPORTANT: As a fallback, always redirect to the share page.
+          // This prevents the browser from making a direct network request.
+          return Response.redirect('/share', 303);
         }
-
-        // Redirect to the share page to manage the files
-        return Response.redirect('/share', 303);
       })()
     );
     return;
