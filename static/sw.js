@@ -22,18 +22,23 @@ const APP_SHELL_URLS = [
 self.addEventListener('install', event => {
   console.log('[ServiceWorker] Install event fired');
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('[ServiceWorker] Caching app shell and offline page');
-        // Use addAll with a catch to prevent a single failed asset from breaking the entire cache
+    Promise.all([
+      caches.open(CACHE_NAME).then(cache => {
+        console.log('[ServiceWorker] Caching app shell');
         return cache.addAll(APP_SHELL_URLS).catch(error => {
-          console.error('[ServiceWorker] Failed to cache app shell:', error);
+          console.error('[ServiceWorker] App shell caching failed:', error);
         });
+      }),
+      openDB().then(db => {
+        console.log('[ServiceWorker] IndexedDB opened successfully during install.');
+        db.close();
+      }).catch(error => {
+        console.error('[ServiceWorker] IndexedDB could not be opened during install:', error);
       })
-      .then(() => {
-        // Force the waiting service worker to become the active service worker.
-        return self.skipWaiting();
-      })
+    ]).then(() => {
+      // Force the waiting service worker to become the active service worker.
+      return self.skipWaiting();
+    })
   );
 });
 
