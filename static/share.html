@@ -198,6 +198,13 @@
         destInput.value = destination;
         form.appendChild(destInput);
 
+        // Add the upload token
+        const tokenInput = document.createElement('input');
+        tokenInput.type = 'hidden';
+        tokenInput.name = 'upload_token';
+        tokenInput.value = appData.upload_token;
+        form.appendChild(tokenInput);
+
         // Add file names and data
         for (let i = 0; i < sharedFiles.length; i++) {
             const nameInput = document.createElement('input');

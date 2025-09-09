@@ -119,6 +119,9 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 # In-memory pending sessions for QR login
 pending_sessions: dict[str, dict] = {}
 
+# In-memory single-use tokens for b64 upload
+upload_tokens: dict[str, dict] = {}
+
 mimetypes.init()
 
 # -----------------------------
@@ -4287,19 +4290,34 @@ def api_app_data():
             "children": get_dir_structure(base_folder_path)
         }]
 
+    # Generate a single-use token for the b64 upload form
+    upload_token = secrets.token_urlsafe(24)
+    upload_tokens[upload_token] = {
+        "folder": session.get("folder"),
+        "created": datetime.utcnow().isoformat() + "Z"
+    }
+
     return jsonify({
         "ok": True,
         "local_base_url": local_base_url,
         "online_base_url": online_base_url,
         "folder_tree": folder_tree,
-        "upload_api_path": url_for("api_upload"),
+        "upload_token": upload_token,
         "current_folder": session.get("folder", "")
     })
 
 @app.route("/upload_b64", methods=["POST"])
 def upload_b64():
-    if not is_authed():
-        return "You must be logged in to upload files.", 401
+    token = request.form.get("upload_token")
+    token_data = upload_tokens.pop(token, None) # Consume the token
+
+    if not token_data:
+        return "Invalid or expired upload token.", 403
+
+    # Optional: Check token expiry
+    # created_time = datetime.fromisoformat(token_data["created"].replace("Z", ""))
+    # if (datetime.utcnow() - created_time).total_seconds() > 3600: # 1 hour expiry
+    #     return "Upload token has expired.", 403
 
     try:
         dest_rel = request.form.get("dest", "")
@@ -4309,8 +4327,8 @@ def upload_b64():
         if not dest_rel or not filenames or not files_b64 or len(filenames) != len(files_b64):
             return "Invalid upload data.", 400
 
-        # Security Check: Ensure the destination is within the user's own folder
-        base_folder = session.get("folder")
+        # Security Check: Use the folder from the validated token data
+        base_folder = token_data["folder"]
         dest_dir = safe_path(dest_rel)
         if first_segment(path_rel(dest_dir)) != base_folder and path_rel(dest_dir) != "":
              return "Forbidden destination.", 403
