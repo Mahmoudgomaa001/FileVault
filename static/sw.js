@@ -63,16 +63,13 @@ self.addEventListener('fetch', event => {
 
   // Handle Web Share Target POST requests
   if (event.request.method === 'POST' && url.pathname === '/share-receiver') {
-    event.respondWith(Response.redirect('/static/share_chooser.html'));
+    event.respondWith(Response.redirect('/share'));
     event.waitUntil(
       (async function () {
         const formData = await event.request.formData();
         const client = await self.clients.get(event.resultingClientId);
-        // Use getAll to handle multiple files
-        const files = formData.getAll('files');
-        if (client) {
-            client.postMessage({ files });
-        }
+        const files = formData.get('files');
+        client.postMessage({ files });
       })()
     );
     return;
