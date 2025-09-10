@@ -83,7 +83,7 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
   // Handle Web Share Target POST requests
-  if (event.request.method === 'POST' && url.pathname.endsWith('/share-receiver')) {
+  if (event.request.method === 'POST' && url.pathname.endsWith('/share-staging')) {
     event.respondWith(
       (async () => {
         try {
