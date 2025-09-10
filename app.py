@@ -167,40 +167,6 @@ def ensure_favicon_assets():
         except Exception as e:
             print("[assets] favicon write failed:", e)
 
-    # Minimal PWA manifest using SVG icons (offline-friendly)
-    manifest = {
-        "name": "FileVault",
-        "short_name": "FileVault",
-        "start_url": "/static/offline.html",
-        "scope": "/",
-        "display": "standalone",
-        "background_color": "#ffe6f2",
-        "theme_color": "#ff4fa3",
-        "icons": [
-            {"src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml"}
-        ],
-        "share_target": {
-            "action": "/share-receiver",
-            "method": "POST",
-            "enctype": "multipart/form-data",
-            "params": {
-                "files": [
-                    {
-                        "name": "files",
-                        "accept": ["*/*"]
-                    }
-                ]
-            }
-        }
-    }
-    manifest_path = base / "site.webmanifest"
-    try:
-        tmp = manifest_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(manifest_path)
-        print(f"[assets] Wrote site.webmanifest -> {manifest_path}")
-    except Exception as e:
-        print("[assets] manifest write failed:", e)
 
 # Call this during startup (after ensure_static_assets)
 try:
@@ -4334,8 +4300,7 @@ def upload_b64():
     token = request.form.get("upload_token")
 
     tokens = load_upload_tokens()
-    token_data = tokens.pop(token, None) # Consume the token
-    save_upload_tokens(tokens) # Save the consumed state immediately
+    token_data = tokens.get(token) # Just get the token data
 
     if not token_data:
         return "Invalid or expired upload token.", 403
