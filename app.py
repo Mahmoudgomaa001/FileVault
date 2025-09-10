@@ -235,6 +235,14 @@ def load_upload_tokens() -> dict:
 def save_upload_tokens(data: dict):
     _save_json_file(UPLOAD_TOKENS_FILE, data)
 
+SHARE_TOKENS_FILE = ROOT_DIR / ".share_tokens.json"
+
+def load_share_tokens() -> dict:
+    return _load_json_file(SHARE_TOKENS_FILE, {})
+
+def save_share_tokens(data: dict):
+    _save_json_file(SHARE_TOKENS_FILE, data)
+
 def get_user_cfg(folder: str) -> dict:
     users = app.config.setdefault("USERS", load_users())
     if folder not in users:
@@ -3040,18 +3048,40 @@ function removeFileCard(rel){
       }
     }
 
-    async function goOffline() {
+    async function cacheServerStatus() {
         try {
-            const r = await fetch('/api/go_offline?next=' + encodeURIComponent(window.location.pathname + window.location.search));
+            const r = await fetch('/api/server-status');
             const j = await r.json();
-            if (j.ok && j.url) {
-                showToast('Switching to local address...', 'info');
-                window.location.href = j.url;
-            } else {
-                showToast(j.error || 'Failed to switch to local mode.', 'error');
+            if (j.ok && j.local_url) {
+                localStorage.setItem('local_url', j.local_url);
             }
         } catch (e) {
-            showToast('Error switching to local mode.', 'error');
+            console.error('Could not cache server status:', e);
+        }
+    }
+
+    async function goOffline() {
+        if (navigator.onLine) {
+            try {
+                const r = await fetch('/api/go_offline?next=' + encodeURIComponent(window.location.pathname + window.location.search));
+                const j = await r.json();
+                if (j.ok && j.url) {
+                    showToast('Switching to local address...', 'info');
+                    window.location.href = j.url;
+                } else {
+                    showToast(j.error || 'Failed to switch to local mode.', 'error');
+                }
+            } catch (e) {
+                showToast('Error switching to local mode.', 'error');
+            }
+        } else {
+            const localUrl = localStorage.getItem('local_url');
+            if (localUrl) {
+                showToast('Switching to cached local address...', 'info');
+                window.location.href = localUrl;
+            } else {
+                showToast('Offline and no cached local address found.', 'error');
+            }
         }
     }
 
@@ -3150,8 +3180,28 @@ function removeFileCard(rel){
         }
     }
 
+    async function ensureShareToken() {
+        // Only run this for authenticated users on the main app page
+        if (!{{ authed|tojson }}) return;
+
+        let token = localStorage.getItem('share_token');
+        if (!token) {
+            try {
+                const r = await fetch('/api/get_share_token', {cache: 'no-store'});
+                const j = await r.json();
+                if (j.ok && j.token) {
+                    localStorage.setItem('share_token', j.token);
+                    console.log('Share token obtained and stored.');
+                }
+            } catch (e) {
+                console.error('Could not get share token:', e);
+            }
+        }
+    }
+
     // INIT
     document.addEventListener('DOMContentLoaded', async ()=>{
+      await ensureShareToken();
       window.currentPath = "{{ current_rel|default('', true) }}";
       try {
         const r = await fetch('/api/prefs'); const j = await r.json();
@@ -3189,6 +3239,7 @@ function removeFileCard(rel){
       initNotificationState();
       initAppDataHydration();
       checkForPendingShares();
+      cacheServerStatus();
     });
 
     // PWA INSTALL
@@ -4212,12 +4263,37 @@ def api_cliptext():
     socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
     return jsonify({"ok": True, "meta": meta})
 
+@app.route("/api/get_share_token")
+def api_get_share_token():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    token = secrets.token_urlsafe(24)
+    tokens = load_share_tokens()
+    tokens[token] = {
+        "folder": session.get("folder"),
+        "created": datetime.utcnow().isoformat() + "Z"
+    }
+    save_share_tokens(tokens)
+    return jsonify({"ok": True, "token": token})
+
+
 @app.route("/api/app_data")
 def api_app_data():
     """
     Provides essential data for the frontend, especially for hydrating
-    the static share page. Requires auth.
+    the static share page. Requires auth. Can be auth'd via session or token.
     """
+    share_token = request.args.get('share_token')
+    if share_token:
+        share_tokens = load_share_tokens()
+        token_data = share_tokens.get(share_token)
+        if token_data:
+            # For now, tokens don't expire, but we could add expiry logic here
+            session['authed'] = True
+            session['folder'] = token_data.get("folder")
+            session['icon'] = get_user_icon(token_data.get("folder"))
+
     if not is_authed():
         return jsonify({"ok": False, "error": "not authed"}), 401
 

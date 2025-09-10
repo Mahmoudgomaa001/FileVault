@@ -243,13 +243,22 @@
 
   document.addEventListener('DOMContentLoaded', async () => {
     const instructions = document.getElementById('instructions');
-    appData = loadAppData();
-    if (!appData) {
-        instructions.innerHTML = 'Required data not found. Please <a href="/" style="color:var(--primary)">open the main application</a> at least once to sync settings before using the share feature.';
+    const shareToken = localStorage.getItem('share_token');
+
+    if (!shareToken) {
+        instructions.innerHTML = 'Required authentication token not found. Please <a href="/" style="color:var(--primary);text-decoration:underline;">open the main application</a> at least once to sync settings before using the share feature.';
         return;
     }
 
     try {
+      const response = await fetch(`/api/app_data?share_token=${shareToken}`);
+      appData = await response.json();
+
+      if (!appData || !appData.ok) {
+          instructions.innerHTML = 'Could not load application data. Please ensure you are logged in on the main application, or try opening it again.';
+          return;
+      }
+
       sharedFiles = await getStoredFiles();
       const fileListDiv = document.getElementById('fileList');
       const actionsDiv = document.getElementById('actions');
