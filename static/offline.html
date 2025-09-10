@@ -158,8 +158,15 @@
         }
       } catch (error) {
         console.error('Error checking server status:', error);
-        statusEl.innerHTML = 'Server not found. <a href="javascript:void(0)" onclick="checkServerStatus()" style="color:var(--primary)">Retry?</a>';
-        localBtn.textContent = 'Connect Local (Offline)';
+        statusEl.innerHTML = 'Server not found. <a href="javascript:void(0)" onclick="checkServerStatus()" style="color:var(--primary); text-decoration:underline;">Retry?</a>';
+
+        const cachedLocalUrl = localStorage.getItem('local_url');
+        if (cachedLocalUrl) {
+            setButtonState(localBtn, cachedLocalUrl, 'Connect Local (Cached)');
+        } else {
+            localBtn.textContent = 'Connect Local (Offline)';
+        }
+
         onlineBtn.textContent = 'Connect Online (Offline)';
       }
     }

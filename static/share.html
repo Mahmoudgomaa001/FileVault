@@ -245,7 +245,7 @@
     const instructions = document.getElementById('instructions');
     appData = loadAppData();
     if (!appData) {
-        instructions.innerHTML = 'Required data not found. Please <a href="/" style="color:var(--primary)">open the main application</a> at least once to sync settings before using the share feature.';
+        instructions.innerHTML = '<strong>Data not synced.</strong><br>Please open the main FileVault app to sync your folders, then come back to this page to share your files.';
         return;
     }
 

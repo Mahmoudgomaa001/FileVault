@@ -3190,6 +3190,7 @@ function removeFileCard(rel){
     // INIT
     document.addEventListener('DOMContentLoaded', async ()=>{
       await initAppDataHydration();
+      setInterval(initAppDataHydration, 30000); // Refresh data every 30 seconds
       window.currentPath = "{{ current_rel|default('', true) }}";
       try {
         const r = await fetch('/api/prefs'); const j = await r.json();
