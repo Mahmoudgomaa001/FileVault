@@ -1,4 +1,4 @@
-const VERSION = 'v14'; // Increment version for updates
+const VERSION = 'v15'; // Increment version for updates
 const CACHE_NAME = `filevault-cache-${VERSION}`;
 const OFFLINE_URL = '/static/offline.html';
 const APP_SHELL_URLS = [
