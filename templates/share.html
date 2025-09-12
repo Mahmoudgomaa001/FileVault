@@ -1,3 +1,6 @@
+{% extends "base.html" %}
+
+{% block content %}
 <div class="card" id="mainContainer">
   <h1>Shared Files</h1>
   {% if files %}
@@ -17,7 +20,9 @@
     <p>No pending files to share. You can close this page.</p>
   {% endif %}
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
   // Simplified script for this page
   let selectedShareDestination = '';
@@ -114,3 +119,4 @@
       document.getElementById('clearShareBtn').addEventListener('click', clearShareList);
   }
 </script>
+{% endblock %}

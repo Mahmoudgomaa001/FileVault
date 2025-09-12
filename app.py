@@ -944,7 +944,7 @@ def login():
     if ngrok_available:
         message = "Choose local (same network) or online (anywhere) and scan the QR."
 
-    body = render_template("login.html",
+    return render_template("login.html",
                                    qr_b64=qr_b64,
                                    qr_url=qr_url,
                                    token=token,
@@ -952,9 +952,14 @@ def login():
                                    message=message,
                                    login_code=login_code,
                                    error=error,
-                                   is_on_ngrok=is_on_ngrok)
-    # On login page, no dhikr banner
-    return render_template("base.html", body=body, authed=is_authed(), icon=None, user_label="", current_rel="", dhikr="", dhikr_list=[], is_admin=False, token=token)
+                                   is_on_ngrok=is_on_ngrok,
+                                   authed=is_authed(),
+                                   icon=None,
+                                   user_label="",
+                                   current_rel="",
+                                   dhikr="",
+                                   dhikr_list=[],
+                                   is_admin=False)
 
 @app.route("/login_with_default")
 def login_with_default():
@@ -1034,8 +1039,7 @@ def unlock():
             return redirect(next_url)
         else:
             error = "Wrong password"
-    body = render_template("unlock.html", error=error, next_url=next_url)
-    return render_template("base.html", body=body, authed=False, icon=None, user_label="", current_rel="", dhikr="", dhikr_list=[], is_admin=False, token=None)
+    return render_template("unlock.html", error=error, next_url=next_url, authed=False, icon=None, user_label="", current_rel="", dhikr="", dhikr_list=[], is_admin=False, token=None)
 
 @app.route("/check/<token>")
 def check_login(token: str):
@@ -1216,16 +1220,18 @@ def browse(subpath: Optional[str] = None):
         users = app.config.setdefault("USERS", load_users())
         accounts_count = sum(1 for f, c in users.items() if c.get("admin_device") == device_id)
 
-    body = render_template("browse.html", entries=items, stats=stats, since=since, accounts_count=accounts_count)
-
     return render_template(
-        "base.html",
-        body=body,
+        "browse.html",
+        entries=items,
+        stats=stats,
+        since=since,
+        accounts_count=accounts_count,
         authed=True,
         icon=session.get("icon"),
         user_label=session.get("folder",""),
         current_rel=(path_rel(dest) if dest != ROOT_DIR else ""),
-        dhikr=dhikr, dhikr_list=dhikr_list,
+        dhikr=dhikr,
+        dhikr_list=dhikr_list,
         is_admin=is_admin,
         share_page_active=False
     )
@@ -1710,8 +1716,6 @@ def share_page():
                 except ValueError:
                     continue
 
-    body = render_template("share.html", files=files)
-
     # Get values for BASE_HTML rendering
     dhikr = get_random_dhikr()
     dhikr_list = [{"dhikr": d} for d in ISLAMIC_DHIKR]
@@ -1719,13 +1723,14 @@ def share_page():
     is_admin = bool(device_id and device_id == cfg.get("admin_device"))
 
     return render_template(
-        "base.html",
-        body=body,
+        "share.html",
+        files=files,
         authed=True,
         icon=session.get("icon"),
         user_label=session.get("folder",""),
         current_rel="share",
-        dhikr=dhikr, dhikr_list=dhikr_list,
+        dhikr=dhikr,
+        dhikr_list=dhikr_list,
         is_admin=is_admin,
         share_page_active=True,
         token=None
