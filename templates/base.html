@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+
+<script>
+  (function(){try{var t=localStorage.getItem('theme')||''; if(t&&t!=='dark') document.documentElement.classList.add(t);}catch(e){}})();
+</script>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <title>FileVault</title>
+
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+<link rel="manifest" href="/static/site.webmanifest" />
+<meta name="theme-color" content="#0F172A" id="themeColorMeta" />
+<link rel="stylesheet" href="/static/fonts.css" />
+<link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
+<link rel="stylesheet" href="/static/vendor/fontawesome/css/fa-shims.css" />
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/static/sw.js').then(registration => {
+        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+      }, err => {
+        console.log('ServiceWorker registration failed: ', err);
+      });
+    });
+  }
+</script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="{% if authed and not share_page_active %}with-dhikr{% endif %}">
+  <header class="header">
+    <div class="header-content">
+      <a class="logo" href="{{ url_for('home') }}" title="My Files">
+        <i class="fas fa-shield-alt"></i><span>FileVault</span>
+      </a>
+      <nav class="nav-menu">
+        <a class="btn btn-secondary" href="{{ url_for('home') }}" title="My Files"><i class="fas fa-home"></i></a>
+        <div class="user-badge">{{ icon or "📁" }} {{ user_label }}</div>
+        {% if authed %}
+          <!-- Desktop-only buttons -->
+          <div class="nav-items-desktop">
+              {% if is_on_ngrok %}
+                <button class="btn btn-primary" id="goOfflineBtn" title="Switch to Local IP"><i class="fas fa-network-wired"></i><span class="btn-text"> Local</span></button>
+              {% elif is_on_local_with_ngrok_available %}
+                <button class="btn btn-secondary" id="goOnlineBtn" title="Switch to Online URL"><i class="fas fa-wifi"></i><span class="btn-text"> Online</span></button>
+              {% endif %}
+              <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
+              {% if is_admin %}
+              <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
+              <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
+              {% endif %}
+              <button class="btn btn-secondary btn-icon" id="installBtn" title="Install App" style="display: none;"><i class="fas fa-mobile-screen-button"></i></button>
+              <button id="themeBtn" class="btn btn-secondary btn-icon" title="Toggle theme"><i class="fas fa-moon"></i></button>
+              <a href="{{ url_for('logout') }}" class="btn btn-danger btn-icon" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
+          </div>
+
+          <!-- Mobile-only dropdown menu -->
+          <div class="nav-menu-mobile">
+              {% if is_on_ngrok %}
+                <button class="btn btn-primary btn-icon" id="goOfflineBtnMobile" onclick="document.getElementById('goOfflineBtn').click()" title="Switch to Local IP"><i class="fas fa-network-wired"></i></button>
+              {% elif is_on_local_with_ngrok_available %}
+                <button class="btn btn-secondary btn-icon" id="goOnlineBtnMobile" onclick="document.getElementById('goOnlineBtn').click()" title="Switch to Online URL"><i class="fas fa-wifi"></i></button>
+              {% endif %}
+              <button class="btn btn-secondary btn-icon" id="mobileMenuBtn" title="More actions"><i class="fas fa-ellipsis-v"></i></button>
+              <div class="dropdown-menu" id="mobileDropdown">
+                  <button class="dropdown-item" onclick="document.getElementById('myQRBtn').click()"><i class="fas fa-qrcode"></i><span>My QR</span></button>
+                  <hr class="dropdown-divider">
+                  {% if is_admin %}
+                  <button class="dropdown-item" onclick="document.getElementById('accountsBtn').click()"><i class="fas fa-user-gear"></i><span>Accounts</span></button>
+                  <button class="dropdown-item" onclick="document.getElementById('settingsBtn').click()"><i class="fas fa-gear"></i><span>Settings</span></button>
+                  {% endif %}
+                  <button class="dropdown-item" id="installBtnMobile" onclick="document.getElementById('installBtn').click()" style="display:none;"><i class="fas fa-mobile-screen-button"></i><span>Install App</span></button>
+                  <button class="dropdown-item" onclick="document.getElementById('themeBtn').click()"><i class="fas fa-moon"></i><span>Toggle Theme</span></button>
+                  <hr class="dropdown-divider">
+                  <a href="{{ url_for('logout') }}" class="dropdown-item dropdown-item-danger"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+              </div>
+          </div>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  {% if authed and not share_page_active %}
+  <div class="dhikr-banner" id="dhikrBanner">
+    <div class="dhikr-content">
+      <span class="dhikr-icon">✨</span>
+      <span class="dhikr-arabic" id="dhikrArabic">{{ dhikr }}</span>
+      <span class="dhikr-icon">🌟</span>
+    </div>
+    <button class="dhikr-refresh" onclick="changeDhikr()" title="Change Dhikr">
+      <i class="fas fa-sync-alt"></i>
+    </button>
+  </div>
+  {% endif %}
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <div class="container">
+    {{ body|safe }}
+  </div>
+
+  <!-- Preview Modal -->
+  <div class="modal" id="previewModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title" id="pvTitle">Preview</div>
+        <button class="modal-close" onclick="closeModal('previewModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="preview-container" style="position:relative;">
+          <div class="preview-holder" id="pvMedia">Loading…</div>
+          <button class="nav-arrow nav-prev" id="pvPrevBtn" aria-label="Previous file" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i class="fas fa-chevron-left"></i></button>
+          <button class="nav-arrow nav-next" id="pvNextBtn" aria-label="Next file" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center; cursor:pointer;"><i class="fas fa-chevron-right"></i></button>
+        </div>
+        <div class="row" style="gap:.5rem; align-items:center; margin-top:10px;">
+          <button class="btn btn-primary" id="pvOpenBtn"><i class="fas fa-up-right-from-square"></i> Open</button>
+          <a class="btn btn-secondary" id="pvDownloadBtn"><i class="fas fa-download"></i> Download</a>
+          <button class="btn btn-secondary" id="pvCopyBtn" style="display:none;"><i class="fas fa-copy"></i> Copy Text</button>
+          <button class="btn btn-secondary" id="pvShareBtn"><i class="fas fa-share"></i> Share</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal" id="settingsModal">
+    <div class="modal-content" style="max-width:520px;">
+      <div class="modal-header">
+        <div class="modal-title">Settings</div>
+        <button class="modal-close" onclick="closeModal('settingsModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="settingsBody">
+        <div class="toggle-container">
+          <span class="toggle-label">Public</span>
+          <div class="toggle-switch" id="privacyToggle">
+            <div class="slider"></div>
+          </div>
+          <span class="toggle-label">Private</span>
+        </div>
+        <div style="margin-top:.75rem;">
+          <label class="form-label" for="privacyPassword">Password (set/change when switching to Private)</label>
+          <input type="password" id="privacyPassword" name="privacyPassword" class="form-input" placeholder="New password">
+        </div>
+        <div class="toggle-container" style="margin-top: 1rem;">
+          <span class="toggle-label" title="If enabled, anyone with access can delete files.">Anyone can delete</span>
+          <div class="toggle-switch" id="allowDeleteToggle">
+            <div class="slider"></div>
+          </div>
+        </div>
+        <div style="margin-top: 1.5rem;">
+            <button class="btn btn-primary" id="subscribeBtn"><i class="fas fa-bell"></i> Enable Notifications</button>
+            <div id="pushStatus" style="margin-top:.5rem; color:var(--text-muted); font-size:.85rem;"></div>
+        </div>
+        <div style="margin-top:1.5rem;">
+          <label class="form-label" for="apiTokenInput">API Token</label>
+          <div class="row" style="gap:.5rem; margin-top:.5rem;">
+            <input type="text" id="apiTokenInput" name="apiTokenInput" class="form-input" placeholder="Token will appear here" readonly style="flex:1;">
+            <button class="btn btn-secondary" id="regenerateTokenBtn" title="Deletes the old token and creates a new one."><i class="fas fa-sync-alt"></i> Regenerate</button>
+            <button class="btn btn-primary" id="generateTokenBtn"><i class="fas fa-key"></i> Generate</button>
+            <button class="btn btn-secondary" id="shareTokenBtn" style="display:none;"><i class="fas fa-share"></i> Share</button>
+          </div>
+          <div style="margin-top:.5rem; color:var(--text-muted); font-size:.85rem;">Generate a non-expiring token for API access.</div>
+        </div>
+        <div style="margin-top:.75rem;">
+          <label class="form-label" for="permanentCodeInput">Permanent Login Code</label>
+          <div class="row" style="gap:.5rem; margin-top:.5rem;">
+            <input type="text" id="permanentCodeInput" name="permanentCodeInput" class="form-input" placeholder="Generate token to see code" readonly style="flex:1; text-align: center; font-size: 1.2rem; letter-spacing: 0.2em; background-color: var(--bg-primary);">
+          </div>
+          <div style="margin-top:.5rem; color:var(--text-muted); font-size:.85rem;">Use this code on the login page for permanent access. It is generated with your token.</div>
+        </div>
+        <div style="margin-top:.75rem; color:var(--text-muted); font-size:.85rem;">Only the first device (admin) can change privacy.</div>
+      </div>
+      <div class="modal-footer" style="justify-content: space-between; align-items: center;">
+        <span style="font-size: 0.75rem; color: var(--text-muted);">Version 1.2.0</span>
+        <div>
+          <button class="btn btn-secondary" onclick="closeModal('settingsModal')">Close</button>
+          <button class="btn btn-primary" id="saveSettingsBtn"><i class="fas fa-save"></i> Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Token Share Modal -->
+  <div class="modal" id="tokenShareModal">
+    <div class="modal-content" style="max-width:520px;">
+      <div class="modal-header">
+        <div class="modal-title">Share Access Token</div>
+        <button class="modal-close" onclick="closeModal('tokenShareModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="tokenShareBody">
+        <div class="qr-box"><div style="color:#222;">Loading…</div></div>
+        <div class="row" style="justify-content:space-between; margin-top:.75rem;">
+          <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all;" id="tokenShareLink"></div>
+          <button class="btn btn-secondary" id="copyTokenShareBtn"><i class="fas fa-link"></i> Copy</button>
+        </div>
+        <div style="margin-top:1rem; color:var(--text-muted); font-size:.85rem;">
+          <p>Scan this QR code or share the link to allow others to access your server even after restarts.</p>
+          <p>This token does not expire and provides full access to your files.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- My QR Modal -->
+  <div class="modal" id="myQRModal">
+    <div class="modal-content" style="max-width:400px;">
+      <div class="modal-header">
+        <div class="modal-title">My QR</div>
+        <button class="modal-close" onclick="closeModal('myQRModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="myQRBody">
+        <div class="qr-box"><div style="color:#222;">Loading…</div></div>
+        <div class="row" style="justify-content:space-between; margin-top:.75rem;">
+          <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all;" id="myQRLink"></div>
+          <button class="btn btn-secondary" id="copyQRBtn"><i class="fas fa-link"></i> Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<!-- Move Modal -->
+<div class="modal" id="moveModal">
+  <div class="modal-content" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">Move Items</div>
+      <button class="modal-close" onclick="closeModal('moveModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p>Select destination folder:</p>
+      <div id="folderTree" style="height: 300px; overflow-y: auto; border: 1px solid var(--border); padding: .5rem; border-radius: .5rem; background: var(--bg-primary);">
+        Loading...
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('moveModal')">Cancel</button>
+      <button class="btn btn-primary" id="confirmMoveBtn"><i class="fas fa-folder-tree"></i> Move Here</button>
+    </div>
+  </div>
+</div>
+
+<!-- Accounts Modal -->
+<div class="modal" id="accountsModal">
+  <div class="modal-content" style="max-width:620px;">
+    <div class="modal-header">
+      <div class="modal-title">Accounts</div>
+      <button class="modal-close" onclick="closeModal('accountsModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="accountsBody">Loading…</div>
+    <div class="modal-footer" style="flex-wrap:wrap; gap:.5rem;">
+      <label for="accCreateNameInput" style="position:absolute;width:1px;height:1px;overflow:hidden;">Custom account name</label>
+      <input type="text" id="accCreateNameInput" name="accCreateNameInput" class="form-input" placeholder="Custom name (optional) e.g. lucky-duck-042" style="flex:1; min-width:220px;">
+      <button class="btn btn-primary" id="accCreateBtn"><i class="fas fa-user-plus"></i> Create & Switch</button>
+    </div>
+  </div>
+</div>
+
+<!-- Transfer Admin Modal -->
+<div class="modal" id="transferAdminModal">
+  <div class="modal-content" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title" id="transferTitle">Transfer Admin</div>
+      <button class="modal-close" onclick="closeModal('transferAdminModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="transferBody">
+      <div class="qr-box"><div style="color:#222;">Generating…</div></div>
+      <div class="row" style="justify-content:space-between; margin-top:.75rem;">
+        <div style="font-size:.85rem; color:var(--text-secondary); word-break:break-all;" id="transferLink"></div>
+        <button class="btn btn-secondary" id="transferCopyBtn"><i class="fas fa-link"></i> Copy</button>
+      </div>
+      <div style="margin-top:.5rem; color:var(--text-muted); font-size:.85rem;">
+        Scan this QR from the new device to become the admin of this account. The scanning device will be logged into the account and set as default.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('transferAdminModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rename Account Modal -->
+<div class="modal" id="renameAccountModal">
+  <div class="modal-content" style="max-width:520px;">
+    <div class="modal-header">
+      <h3 class="modal-title">Rename Account</h3>
+      <button class="modal-close" onclick="closeModal('renameAccountModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p>Renaming account: <strong id="renameAccountOldName"></strong></p>
+      <div class="form-group">
+        <label class="form-label" for="renameAccountInput">New Account Name</label>
+        <input type="text" id="renameAccountInput" name="renameAccountInput" class="form-input" placeholder="Enter new name" autocomplete="off">
+        <input type="hidden" id="renameAccountHiddenOldName">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('renameAccountModal')">Cancel</button>
+      <button class="btn btn-primary" id="confirmRenameBtn"><i class="fas fa-save"></i> Rename</button>
+    </div>
+  </div>
+</div>
+
+</div>
+
+  <script src="/static/socket.io.min.js"></script>
+  <script>
+    if (typeof io === 'undefined') {
+      var s = document.createElement('script');
+      s.src = '/socket.io/socket.io.js';
+      document.head.appendChild(s);
+    }
+  </script>
+<script>
+  const URLS = {
+    api_delete: "{{ url_for('api_delete') }}",
+    api_mkdir: "{{ url_for('api_mkdir') }}",
+    api_cliptext: "{{ url_for('api_cliptext') }}",
+    api_my_qr: "{{ url_for('api_my_qr') }}",
+    api_accounts_rename: "{{ url_for('api_accounts_rename') }}",
+    api_accounts_switch: "{{ url_for('api_accounts_switch') }}",
+    api_accounts_create: "{{ url_for('api_accounts_create') }}",
+    api_accounts: "{{ url_for('api_accounts_list') }}",
+    api_accounts_transfer_admin_start: "{{ url_for('api_accounts_transfer_admin_start') }}",
+    api_prefs: "{{ url_for('api_prefs') }}",
+    api_privacy: "{{ url_for('api_privacy') }}",
+    api_accounts_token: "{{ url_for('api_accounts_token') }}",
+    api_accounts_token_regenerate: "{{ url_for('api_accounts_token_regenerate') }}",
+    api_go_offline: "{{ url_for('api_go_offline') }}",
+    api_go_online: "{{ url_for('api_go_online') }}",
+    api_folders: "{{ url_for('api_folders') }}",
+    api_move: "{{ url_for('api_move') }}",
+    api_download_zip: "{{ url_for('api_download_zip') }}",
+    api_commit_share: "{{ url_for('api_commit_share') }}",
+    api_clear_shares: "{{ url_for('api_clear_shares') }}",
+    check_login: "{{ url_for('check_login', token=token) if token else '' }}",
+    login_with_code: "{{ url_for('login_with_code') }}",
+    browse: "{{ url_for('browse') }}",
+  };
+  const currentFolder = "{{ session.get('folder', '')|tojson }}";
+  const dhikrList = {{ dhikr_list|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
