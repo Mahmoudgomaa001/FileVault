@@ -336,12 +336,18 @@
     api_download_zip: "{{ url_for('api_download_zip') }}",
     api_commit_share: "{{ url_for('api_commit_share') }}",
     api_clear_shares: "{{ url_for('api_clear_shares') }}",
-    check_login: "{{ url_for('check_login', token=token) if token else '' }}",
+    check_login: "{{ url_for('check_login', token='_TOKEN_') }}",
     login_with_code: "{{ url_for('login_with_code') }}",
     browse: "{{ url_for('browse') }}",
+    api_upload: "{{ url_for('api_upload') }}",
+    raw: "{{ url_for('raw') }}"
   };
-  const currentFolder = "{{ session.get('folder', '')|tojson }}";
-  const dhikrList = {{ dhikr_list|tojson }};
+
+  const APP_CONFIG = {
+    current_rel: "{{ current_rel|default('', true) }}",
+    current_folder: {{ session.get('folder', '')|tojson|default('""') }},
+    dhikr_list: {{ dhikr_list|tojson|default('[]') }}
+  };
 </script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>

@@ -137,7 +137,7 @@
                 showToast('Account renamed!', 'success');
                 closeModal('renameAccountModal');
                 openAccounts();
-                if (currentFolder === oldName) {
+                if (APP_CONFIG.current_folder === oldName) {
                     setTimeout(()=> window.location.href = window.location.pathname.replace('/b/' + oldName, '/b/' + newName), 300);
                 }
             } else {
@@ -216,8 +216,8 @@ async function changeDhikr() {
       }
     }
   } catch (e) {
-    if (Array.isArray(dhikrList) && dhikrList.length > 0) {
-      const randomDhikr = dhikrList[Math.floor(Math.random() * dhikrList.length)];
+    if (Array.isArray(APP_CONFIG.dhikr_list) && APP_CONFIG.dhikr_list.length > 0) {
+      const randomDhikr = APP_CONFIG.dhikr_list[Math.floor(Math.random() * APP_CONFIG.dhikr_list.length)];
       const dhikrEl = document.getElementById('dhikrArabic');
       if (dhikrEl) {
         dhikrEl.textContent = randomDhikr.dhikr;
@@ -545,7 +545,7 @@ async function changeDhikr() {
         row.remove();
       });
 
-      xhr.open('POST', '{{ url_for("api_upload") }}');
+      xhr.open('POST', URLS.api_upload);
       xhr.send(form);
     }
 
@@ -558,7 +558,7 @@ async function changeDhikr() {
 
     // SHARE / COPY
     function shareFile(rel){
-      const rawUrl = `${window.location.origin}{{ url_for('raw') }}?path=${encodeURIComponent(rel)}`;
+      const rawUrl = `${window.location.origin}${URLS.raw}?path=${encodeURIComponent(rel)}`;
       if(navigator.share && /mobile|android|iphone/i.test(navigator.userAgent)){
         navigator.share({title:'Shared File', url:rawUrl}).catch(()=> copyLink(rawUrl));
       } else {
@@ -1203,7 +1203,7 @@ function initSocket(){
     });
 
     socket.on('share_ready', (msg)=> {
-        if(msg && msg.folder === currentFolder){
+        if(msg && msg.folder === APP_CONFIG.current_folder){
             showToast('Received a shared file!', 'info');
             checkForPendingShares();
         }
@@ -1692,7 +1692,7 @@ function removeFileCard(rel){
 
     // INIT
     document.addEventListener('DOMContentLoaded', async ()=>{
-      window.currentPath = "{{ current_rel|default('', true) }}";
+      window.currentPath = APP_CONFIG.current_rel;
       try {
         const r = await fetch('/api/prefs'); const j = await r.json();
         const v = j?.prefs?.view || localStorage.getItem('fileView') || 'grid';
