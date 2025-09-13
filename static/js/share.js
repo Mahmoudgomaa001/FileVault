@@ -212,6 +212,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Init ---
     await window.fileDB.initDB();
     await renderFileList();
+
+    // --- Diagnostic code for share target ---
+    const urlParams = new URLSearchParams(window.location.search);
+    const savedCount = urlParams.get('saved');
+    if (savedCount) {
+        if (savedCount === 'error') {
+            showToast('Service worker encountered an error saving files.', 'error');
+        } else {
+            showToast(`Service worker handled share action, reporting ${savedCount} file(s) saved.`, 'info');
+        }
+        // Clean up the URL so the message doesn't appear on reload
+        history.replaceState(null, '', window.location.pathname);
+    }
 });
 
 // --- Progress UI (copied from main.js and adapted) ---

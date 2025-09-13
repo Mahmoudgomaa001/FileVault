@@ -85,20 +85,23 @@ self.addEventListener('fetch', event => {
       (async () => {
         try {
             const formData = await event.request.formData();
+            const formData = await event.request.formData();
             const files = formData.getAll('files');
+            let savedCount = 0;
             if (files && files.length > 0) {
               await initDB();
               for (const file of files) {
                 await saveFileInDB(file);
               }
-              console.log('[ServiceWorker] Shared files saved to IndexedDB.');
+              savedCount = files.length;
+              console.log(`[ServiceWorker] Saved ${savedCount} shared files to IndexedDB.`);
             }
             // After saving files, redirect to the share page to view them.
-            return Response.redirect('/static/share.html', 303);
+            return Response.redirect(`/static/share.html?saved=${savedCount}`, 303);
         } catch (err) {
             console.error('[ServiceWorker] Error handling share POST:', err);
             // Even if there's an error, redirect.
-            return Response.redirect('/static/share.html', 303);
+            return Response.redirect('/static/share.html?saved=error', 303);
         }
       })()
     );
