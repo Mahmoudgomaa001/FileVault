@@ -880,7 +880,6 @@ async function changeDhikr() {
 
       document.getElementById('pvOpenBtn').onclick = ()=> window.open(rawUrl, '_blank');
       const dl = document.getElementById('pvDownloadBtn'); dl.href = downloadUrl; dl.setAttribute('download', name);
-      document.getElementById('pvShareBtn').onclick = ()=> shareFile(rel);
 
       // Update navigation buttons visibility
       updateNavButtons();
