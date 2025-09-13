@@ -1,4 +1,4 @@
-const VERSION = 'v11'; // Updated version
+const VERSION = 'v12'; // Updated version to force update
 const CACHE_NAME = `filevault-cache-${VERSION}`;
 const OFFLINE_URL = '/static/offline.html';
 const CONFIG_URL = '/api/config';
@@ -12,13 +12,16 @@ let db;
 function initDB() {
   return new Promise((resolve, reject) => {
     if (db) return resolve(db);
-    const request = self.indexedDB.open(DB_NAME, 1);
+    const request = self.indexedDB.open(DB_NAME, 2); // Version 2 for config store
     request.onerror = e => { console.error('SW DB error:', e.target.error); reject('SW DB error'); };
     request.onsuccess = e => { db = e.target.result; resolve(db); };
     request.onupgradeneeded = e => {
       const dbInstance = e.target.result;
-      if (!dbInstance.objectStoreNames.contains(STORE_NAME)) {
-        dbInstance.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+      if (!dbInstance.objectStoreNames.contains('files')) {
+        dbInstance.createObjectStore('files', { keyPath: 'id', autoIncrement: true });
+      }
+      if (!dbInstance.objectStoreNames.contains('config')) {
+        dbInstance.createObjectStore('config', { keyPath: 'key' });
       }
     };
   });
@@ -51,8 +54,10 @@ self.addEventListener('install', event => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      console.log('[ServiceWorker] Caching app shell...');
-      await cache.addAll(APP_SHELL_URLS).catch(error => console.error('[ServiceWorker] App shell cache failed:', error));
+      console.log('[ServiceWorker] Caching app shell with cache-busting...');
+      // **FIX:** Use 'reload' to bypass the HTTP cache for all app shell files.
+      const requests = APP_SHELL_URLS.map(url => new Request(url, { cache: 'reload' }));
+      await cache.addAll(requests).catch(error => console.error('[ServiceWorker] App shell cache failed:', error));
       await self.skipWaiting();
     })()
   );
@@ -85,7 +90,6 @@ self.addEventListener('fetch', event => {
       (async () => {
         try {
             const formData = await event.request.formData();
-            const formData = await event.request.formData();
             const files = formData.getAll('files');
             let savedCount = 0;
             if (files && files.length > 0) {
@@ -96,11 +100,9 @@ self.addEventListener('fetch', event => {
               savedCount = files.length;
               console.log(`[ServiceWorker] Saved ${savedCount} shared files to IndexedDB.`);
             }
-            // After saving files, redirect to the share page to view them.
             return Response.redirect(`/static/share.html?saved=${savedCount}`, 303);
         } catch (err) {
             console.error('[ServiceWorker] Error handling share POST:', err);
-            // Even if there's an error, redirect.
             return Response.redirect('/static/share.html?saved=error', 303);
         }
       })()
@@ -126,7 +128,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // **FIXED**: Cache-first strategy for navigation for a true offline experience.
+  // Cache-first strategy for navigation
   if (event.request.mode === 'navigate') {
     event.respondWith(
       caches.open(CACHE_NAME).then(async cache => {
@@ -135,7 +137,6 @@ self.addEventListener('fetch', event => {
           if (cachedResponse) {
             return cachedResponse;
           }
-          // If not in cache, go to network
           const networkResponse = await fetch(event.request);
           if (networkResponse.ok) {
             cache.put(event.request, networkResponse.clone());
@@ -150,15 +151,9 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Network-first for API calls, fallback to offline response
+  // Network-only for API calls
   if (url.pathname.startsWith('/api/')) {
-      event.respondWith(
-          fetch(event.request).catch(() => {
-              return new Response(JSON.stringify({ ok: false, error: 'offline' }), {
-                  headers: { 'Content-Type': 'application/json' }
-              });
-          })
-      );
+      event.respondWith(fetch(event.request));
       return;
   }
 
