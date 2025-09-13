@@ -59,33 +59,52 @@
     .dhikr-refresh { position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.2); border: none; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s ease; color: white; }
     .dhikr-refresh:hover { background: rgba(255,255,255,0.3); transform: translateY(-50%) rotate(180deg); }
 
-    .dhikr-close {
+    .dhikr-toggle {
       position: absolute;
-      top: 0.5rem;
-      right: 0.5rem;
+      top: 50%;
+      right: 4rem; /* Next to the refresh button */
+      transform: translateY(-50%);
       background: rgba(0,0,0,0.2);
       border: none;
       border-radius: 50%;
-      width: 24px;
-      height: 24px;
+      width: 28px;
+      height: 28px;
       color: white;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      line-height: 1;
-      font-size: 14px;
+      transition: all 0.3s ease;
     }
-    .dhikr-close:hover { background: rgba(0,0,0,0.4); }
+    .dhikr-toggle:hover {
+      background: rgba(0,0,0,0.4);
+    }
 
     @keyframes fadeInText {
       from { opacity: 0; transform: translateY(5px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .hidden { display: none !important; }
+    /* Collapsed state */
+    .dhikr-banner.collapsed {
+      height: 28px;
+      padding-top: 0;
+      padding-bottom: 0;
+      cursor: default;
+    }
+    .dhikr-banner.collapsed .dhikr-content,
+    .dhikr-banner.collapsed .dhikr-refresh {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .dhikr-banner.collapsed .dhikr-toggle {
+      right: 1rem;
+    }
 
-    body.with-dhikr .container { padding-top: calc(var(--header-height) + 60px + var(--mobile-padding)); }
+    body.with-dhikr .container { padding-top: calc(var(--header-height) + 70px + var(--mobile-padding)); }
+    body.with-dhikr.dhikr-collapsed .container {
+      padding-top: calc(var(--header-height) + 28px + var(--mobile-padding));
+    }
 
     .header { background:rgba(30,41,59,.98); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); border-bottom:1px solid var(--border); position:fixed; top:0; left:0; right:0; z-index:1000; height:var(--header-height); }
     :root.light .header { background:rgba(255,255,255,.98); }

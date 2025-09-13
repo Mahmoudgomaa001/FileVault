@@ -96,7 +96,7 @@
     <button class="dhikr-refresh" onclick="changeDhikr()" title="Change Dhikr">
       <i class="fas fa-sync-alt"></i>
     </button>
-    <button class="dhikr-close" id="dhikrCloseBtn" title="Close Banner">&times;</button>
+    <button class="dhikr-toggle" id="dhikrToggleBtn" title="Collapse Banner"><i class="fas fa-chevron-up"></i></button>
   </div>
   {% endif %}
 
@@ -150,12 +150,6 @@
         <div class="toggle-container" style="margin-top: 1rem;">
           <span class="toggle-label" title="If enabled, anyone with access can delete files.">Anyone can delete</span>
           <div class="toggle-switch" id="allowDeleteToggle">
-            <div class="slider"></div>
-          </div>
-        </div>
-        <div class="toggle-container" style="margin-top: 1rem;">
-          <span class="toggle-label" title="Show the remembrance banner at the top of the page.">Show Dhikr Banner</span>
-          <div class="toggle-switch" id="dhikrBannerToggle">
             <div class="slider"></div>
           </div>
         </div>
