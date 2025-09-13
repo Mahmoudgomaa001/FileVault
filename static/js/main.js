@@ -1774,8 +1774,9 @@ function removeFileCard(rel){
 
     // --- PENDING SHARE UPLOADS ---
     async function uploadPendingFiles(destinationType) {
-        const config = window.appConfigManager.getConfig();
-        const url = destinationType === 'local' ? config.local_url : config.server_url;
+        // When on the local instance, we get the URLs from the APP_CONFIG object
+        // that was populated via the redirect from the launcher.
+        const url = destinationType === 'local' ? APP_CONFIG.local_url : APP_CONFIG.remote_server_url;
         const localBtn = document.getElementById('pendingUploadLocalBtn');
         const serverBtn = document.getElementById('pendingUploadServerBtn');
         const dismissBtn = document.getElementById('pendingDismissBtn');

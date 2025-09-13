@@ -357,7 +357,8 @@
     current_folder: {{ session.get('folder', '')|tojson|default('""') }},
     dhikr_list: {{ dhikr_list|tojson|default('[]') }},
     remote_server_url: "{{ request.args.get('remote_server_url') or '' }}",
-    remote_api_token: "{{ request.args.get('remote_api_token') or '' }}"
+    remote_api_token: "{{ request.args.get('remote_api_token') or '' }}",
+    local_url: "{{ request.args.get('local_url') or '' }}"
   };
 </script>
 <script src="{{ url_for('static', filename='js/db.js') }}?v=final"></script>

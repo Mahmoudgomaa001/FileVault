@@ -14,21 +14,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             showToast('API Token not found. Please set one up in the main app settings.', 'warning');
         }
 
-        // The "Connect to Server" button is a simple link.
+        // The "Connect to Server" button is a simple link, but we can also use the token for a seamless login.
         if (config.server_url) {
-            goServerBtn.href = config.server_url;
+            const loginUrl = new URL('/login', config.server_url);
+            if (apiToken) loginUrl.searchParams.set('token', apiToken);
+            goServerBtn.href = loginUrl.href;
             goServerBtn.disabled = false;
         } else {
             goServerBtn.href = '#';
             goServerBtn.disabled = true;
         }
 
-        // The "Connect to Local" button is special. It passes the config and token
-        // to the local instance so it can fetch pending files from the server origin.
+        // The "Connect to Local" button passes all the necessary config and tokens.
         if (config.local_url) {
-            const remoteConfig = `&remote_server_url=${encodeURIComponent(config.server_url)}&remote_api_token=${encodeURIComponent(apiToken)}`;
             const loginUrl = new URL('/login_and_sync', config.local_url);
-            loginUrl.search = `?token=${encodeURIComponent(apiToken)}${remoteConfig}`;
+            if (apiToken) loginUrl.searchParams.set('token', apiToken);
+            if (config.server_url) loginUrl.searchParams.set('remote_server_url', config.server_url);
+            // Pass the local URL itself so the main app knows its own address
+            loginUrl.searchParams.set('local_url', config.local_url);
 
             goLocalBtn.href = loginUrl.href;
             goLocalBtn.disabled = !apiToken;

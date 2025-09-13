@@ -1716,6 +1716,7 @@ def login_and_sync():
     # so it can fetch pending files from the remote origin's queue.
     api_token = request.args.get('token')
     remote_server_url = request.args.get('remote_server_url')
+    local_url = request.args.get('local_url')
 
     user = get_user_by_token(api_token)
     if not user:
@@ -1731,7 +1732,8 @@ def login_and_sync():
     return redirect(url_for("browse",
                             subpath=session.get("folder", ""),
                             remote_server_url=remote_server_url,
-                            remote_api_token=api_token))
+                            remote_api_token=api_token,
+                            local_url=local_url))
 
 
 # Error handlers: redirect to login on not found/forbidden
