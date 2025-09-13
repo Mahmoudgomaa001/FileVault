@@ -1,8 +1,6 @@
-const VERSION = 'v12'; // Updated version to force update
+const VERSION = 'v13'; // Updated version to force update
 const CACHE_NAME = `filevault-cache-${VERSION}`;
 const OFFLINE_URL = '/static/offline.html';
-const CONFIG_URL = '/api/config';
-const CONFIG_CACHE_KEY = '/config.json';
 
 // --- IndexedDB for File Storage (copied from db.js for SW context) ---
 const DB_NAME = 'pwa-file-storage';
@@ -112,23 +110,8 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Special handling for the configuration file
-  if (url.pathname === CONFIG_CACHE_KEY) {
-    event.respondWith(
-      caches.open(CACHE_NAME).then(cache =>
-        cache.match(CONFIG_CACHE_KEY).then(cachedResponse => {
-          const networkFetch = fetch(CONFIG_URL).then(networkResponse => {
-            if (networkResponse.ok) {
-              cache.put(CONFIG_CACHE_KEY, networkResponse.clone());
-            }
-            return networkResponse;
-          });
-          return cachedResponse || networkFetch;
-        })
-      )
-    );
-    return;
-  }
+  // The special handling for /config.json has been removed, as configuration
+  // is now managed entirely in the client via IndexedDB.
 
   // Cache-first strategy for navigation
   if (event.request.mode === 'navigate') {

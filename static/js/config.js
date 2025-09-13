@@ -1,43 +1,40 @@
-// --- Configuration Management ---
+// --- Configuration Management using IndexedDB ---
 
-const CONFIG_CACHE_KEY = '/config.json';
+// In-memory cache of the config
 let appConfig = {
   local_url: '',
   server_url: ''
 };
 
 /**
- * Fetches the configuration, prioritizing the cached version.
- * If not cached, fetches from the network and caches it via the service worker.
+ * Loads configuration (local_url, server_url) from IndexedDB.
+ * This is the single source of truth for PWA configuration.
  * @returns {Promise<object>} A promise that resolves with the configuration object.
  */
 async function loadConfig() {
   try {
-    // We request '/config.json', which is intercepted by the service worker.
-    const response = await fetch(CONFIG_CACHE_KEY, { cache: 'no-store' });
-    if (!response.ok) {
-      throw new Error(`Failed to fetch config, status: ${response.status}`);
-    }
-    const config = await response.json();
-    if (config.ok) {
-        appConfig = {
-            local_url: config.local_url,
-            server_url: config.server_url
-        };
-        console.log('Configuration loaded:', appConfig);
-        return appConfig;
-    } else {
-        throw new Error('Config response was not ok');
-    }
+    // db.js must be loaded before this file.
+    if (!window.fileDB) throw new Error("fileDB is not available.");
+
+    await window.fileDB.initDB();
+    const local_url = await window.fileDB.getConfigValue('local_url');
+    const server_url = await window.fileDB.getConfigValue('server_url');
+
+    appConfig = {
+        local_url: local_url || '',
+        server_url: server_url || ''
+    };
+    console.log('Configuration loaded from IndexedDB:', appConfig);
+    return appConfig;
   } catch (error) {
-    console.error('Could not load configuration:', error);
+    console.error('Could not load configuration from IndexedDB:', error);
     // Return default empty config on failure
     return appConfig;
   }
 }
 
 /**
- * Returns the currently loaded configuration.
+ * Returns the currently loaded configuration from the in-memory cache.
  * @returns {object} The application configuration.
  */
 function getConfig() {
@@ -45,30 +42,31 @@ function getConfig() {
 }
 
 /**
- * Updates the configuration and messages the service worker to cache the new version.
- * @param {object} newConfig - The new configuration object to save.
+ * Saves the configuration object to IndexedDB.
+ * @param {object} newConfig - The configuration object to save. Must have local_url and server_url.
  * @returns {Promise<void>}
  */
 async function saveConfig(newConfig) {
-    appConfig = { ...appConfig, ...newConfig };
-    console.log('Saving new configuration:', appConfig);
-
-    // To "save" the config, we create a new Response object with the updated config
-    // and put it into the cache, overwriting the old /config.json.
-    // This is a client-side only operation; we are not talking to the server here.
     try {
-        const cache = await caches.open('filevault-cache-v9'); // Ensure this matches SW cache name
-        const configResponse = new Response(JSON.stringify({ ok: true, ...appConfig }), {
-            headers: { 'Content-Type': 'application/json' }
-        });
-        await cache.put(CONFIG_CACHE_KEY, configResponse);
-        console.log('Configuration updated in cache.');
+        if (!window.fileDB) throw new Error("fileDB is not available.");
+        await window.fileDB.initDB();
+
+        // Use Promise.all to save both values concurrently.
+        await Promise.all([
+            window.fileDB.saveConfigValue('local_url', newConfig.local_url || ''),
+            window.fileDB.saveConfigValue('server_url', newConfig.server_url || '')
+        ]);
+
+        // Update the in-memory config object
+        appConfig = { ...appConfig, ...newConfig };
+        console.log('Configuration saved to IndexedDB:', appConfig);
     } catch (error) {
-        console.error('Failed to update config in cache:', error);
+        console.error('Failed to save config to IndexedDB:', error);
+        throw error; // Re-throw so the caller knows it failed
     }
 }
 
-// Expose functions to the global scope if needed, or use as a module.
+// Expose functions to the global scope
 window.appConfigManager = {
   loadConfig,
   getConfig,

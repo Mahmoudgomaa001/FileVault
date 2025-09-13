@@ -1200,18 +1200,6 @@ def api_dhikr():
     dhikr = get_random_dhikr()
     return jsonify({"dhikr": dhikr})
 
-@app.route("/api/config")
-def api_config():
-    local_ip = get_local_ip()
-    server_url = get_ngrok_url()
-    local_url_full = f"http://{local_ip}:{PORT}"
-
-    return jsonify({
-        "ok": True,
-        "local_url": local_url_full,
-        "server_url": server_url or "" # Return empty string if no ngrok URL
-    })
-
 @app.route("/api/me")
 def api_me():
     if not is_authed():
