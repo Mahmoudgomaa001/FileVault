@@ -5,3 +5,4 @@ qrcode
 gunicorn
 eventlet
 Pillow
+Flask-Cors
