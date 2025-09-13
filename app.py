@@ -1648,15 +1648,23 @@ def api_download_zip():
 
 @app.route("/share-receiver", methods=["POST"])
 def share_receiver():
+    # This endpoint is hit from the online origin. It needs to know which user
+    # this share belongs to. It uses the existing session cookie for that.
+    if not is_authed():
+        # If user isn't logged into the main app, we can't associate the share.
+        # Redirect to login and ask them to try again after logging in.
+        return redirect(url_for("login", error="Please log in before sharing files."))
+
+    user_folder = session.get("folder")
+    if not user_folder:
+        return "Could not determine user folder.", 400
+
     files = request.files.getlist("files")
     if not files or not any(f.filename for f in files):
-        # No files, just redirect to the share page to show an empty queue
         return redirect(url_for("static", filename="share.html"))
 
-    pending_id = str(uuid.uuid4())
-
-    # Store files in memory as base64 encoded strings
-    stored_files = []
+    # Store files in memory as base64 encoded strings, keyed by the user's folder
+    stored_files = pending_file_shares.get(user_folder, [])
     for f in files:
         if f and f.filename:
             try:
@@ -1673,25 +1681,57 @@ def share_receiver():
     if not stored_files:
          return redirect(url_for("static", filename="share.html"))
 
-    pending_file_shares[pending_id] = stored_files
+    pending_file_shares[user_folder] = stored_files
 
-    # Redirect to the static share page with the pending ID
-    redirect_url = url_for("static", filename="share.html", pending_id=pending_id)
-    return redirect(redirect_url)
+    # Redirect to the static share page. The page itself will notify the user.
+    return redirect(url_for("static", filename="share.html"))
 
 @app.route("/api/get-pending-files")
 def api_get_pending_files():
-    pending_id = request.args.get("id")
-    if not pending_id:
-        return jsonify({"ok": False, "error": "Missing ID"}), 400
+    # This endpoint is now authenticated by the API token of the user making the request
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify({"ok": False, "error": "Missing auth token"}), 401
 
-    # Pop the files from memory. This is a one-time retrieval.
-    files_data = pending_file_shares.pop(pending_id, None)
+    token = auth_header.split(" ", 1)[1]
+    user = get_user_by_token(token)
+    if not user:
+        return jsonify({"ok": False, "error": "Invalid auth token"}), 401
+
+    user_folder = user.get("folder")
+
+    # Pop the files from memory for this user. This is a one-time retrieval.
+    files_data = pending_file_shares.pop(user_folder, None)
 
     if files_data is None:
-        return jsonify({"ok": False, "error": "Invalid or expired ID"}), 404
+        # It's not an error to have no pending files. Return an empty list.
+        return jsonify({"ok": True, "files": []})
 
     return jsonify({"ok": True, "files": files_data})
+
+@app.route('/login_and_sync')
+def login_and_sync():
+    # This special login route is for the local server instance.
+    # It receives the API token for login and the remote server's details
+    # so it can fetch pending files from the remote origin's queue.
+    api_token = request.args.get('token')
+    remote_server_url = request.args.get('remote_server_url')
+
+    user = get_user_by_token(api_token)
+    if not user:
+        return redirect(url_for("login", error="Invalid token provided for sync."))
+
+    # Log the user in and set up the session for this origin
+    session["authed"] = True
+    session["folder"] = user.get("folder")
+    session["icon"] = user.get("icon") or get_user_icon(user.get("folder"))
+
+    # Redirect to the main browse page, passing the remote details along
+    # The browse page template will then pick these up and pass to main.js
+    return redirect(url_for("browse",
+                            subpath=session.get("folder", ""),
+                            remote_server_url=remote_server_url,
+                            remote_api_token=api_token))
 
 
 # Error handlers: redirect to login on not found/forbidden

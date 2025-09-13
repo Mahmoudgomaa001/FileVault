@@ -7,28 +7,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     const serverUrlInput = document.getElementById('serverUrlInput');
 
     let apiToken = null;
+    let config = {};
 
-    async function updateButtonLinks(config) {
+    async function updateButtonLinks() {
         if (!apiToken) {
             showToast('API Token not found. Please set one up in the main app settings.', 'warning');
         }
 
-        const loginUrlSuffix = apiToken ? `/login?token=${encodeURIComponent(apiToken)}` : '';
+        // The "Connect to Server" button is a simple link.
+        if (config.server_url) {
+            goServerBtn.href = config.server_url;
+            goServerBtn.disabled = false;
+        } else {
+            goServerBtn.href = '#';
+            goServerBtn.disabled = true;
+        }
 
+        // The "Connect to Local" button is special. It passes the config and token
+        // to the local instance so it can fetch pending files from the server origin.
         if (config.local_url) {
-            goLocalBtn.href = new URL(loginUrlSuffix, config.local_url).href;
+            const remoteConfig = `&remote_server_url=${encodeURIComponent(config.server_url)}&remote_api_token=${encodeURIComponent(apiToken)}`;
+            const loginUrl = new URL('/login_and_sync', config.local_url);
+            loginUrl.search = `?token=${encodeURIComponent(apiToken)}${remoteConfig}`;
+
+            goLocalBtn.href = loginUrl.href;
             goLocalBtn.disabled = !apiToken;
         } else {
             goLocalBtn.href = '#';
             goLocalBtn.disabled = true;
-        }
-
-        if (config.server_url) {
-            goServerBtn.href = new URL(loginUrlSuffix, config.server_url).href;
-            goServerBtn.disabled = !apiToken;
-        } else {
-            goServerBtn.href = '#';
-            goServerBtn.disabled = true;
         }
     }
 
@@ -36,20 +42,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             await window.fileDB.initDB();
             apiToken = await window.fileDB.getConfigValue('api_token');
-            const config = await window.appConfigManager.loadConfig();
-            await updateButtonLinks(config);
+            config = await window.appConfigManager.loadConfig();
+            await updateButtonLinks();
         } catch (e) {
             console.error("Failed to initialize launcher:", e);
             showToast('Could not load configuration or token.', 'error');
         }
     }
 
-    // Settings modal logic
     if (settingsBtn) {
         settingsBtn.addEventListener('click', () => {
-            const config = window.appConfigManager.getConfig();
-            if (localUrlInput) localUrlInput.value = config.local_url;
-            if (serverUrlInput) serverUrlInput.value = config.server_url;
+            const currentConfig = window.appConfigManager.getConfig();
+            if (localUrlInput) localUrlInput.value = currentConfig.local_url;
+            if (serverUrlInput) serverUrlInput.value = currentConfig.server_url;
             openModal('appSettingsModal');
         });
     }
@@ -61,7 +66,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 server_url: serverUrlInput ? serverUrlInput.value.trim() : ''
             };
             await window.appConfigManager.saveConfig(newConfig);
-            await updateButtonLinks(newConfig);
+            config = newConfig; // Update in-memory config
+            await updateButtonLinks();
             showToast('Settings saved!', 'success');
             closeModal('appSettingsModal');
         });

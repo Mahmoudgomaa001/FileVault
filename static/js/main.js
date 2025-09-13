@@ -1826,9 +1826,35 @@ function removeFileCard(rel){
     async function checkForPendingShares() {
         if (!window.fileDB) { return; }
         await window.fileDB.initDB();
-        const pendingFiles = await window.fileDB.getFiles();
 
-        showToast(`DEBUG: Main page loaded, found ${pendingFiles.length} files in DB.`, 'info');
+        // If this page was loaded with remote details, it means we are the "local"
+        // instance and need to fetch the pending file list from the remote server.
+        if (APP_CONFIG.remote_server_url && APP_CONFIG.remote_api_token) {
+            showToast('Checking for remotely shared files...', 'info');
+            try {
+                const response = await fetch(new URL('/api/get-pending-files', APP_CONFIG.remote_server_url).href, {
+                    headers: { 'Authorization': `Bearer ${APP_CONFIG.remote_api_token}` }
+                });
+                const data = await response.json();
+                if (data.ok && data.files && data.files.length > 0) {
+                    showToast(`Found ${data.files.length} remote files. Saving locally...`, 'success');
+                    for (const fileData of data.files) {
+                        const byteString = atob(fileData.data);
+                        const ab = new ArrayBuffer(byteString.length);
+                        const ia = new Uint8Array(ab);
+                        for (let i = 0; i < byteString.length; i++) { ia[i] = byteString.charCodeAt(i); }
+                        const blob = new Blob([ab], { type: fileData.mimetype });
+                        const file = new File([blob], fileData.name, { type: fileData.mimetype });
+                        await window.fileDB.saveFile(file);
+                    }
+                }
+            } catch (e) {
+                showToast('Failed to sync remote files.', 'error');
+                console.error('Remote sync failed:', e);
+            }
+        }
+
+        const pendingFiles = await window.fileDB.getFiles();
 
         const banner = document.getElementById('pendingUploadBanner');
         const bannerText = document.getElementById('pendingUploadText');

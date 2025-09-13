@@ -355,7 +355,9 @@
   const APP_CONFIG = {
     current_rel: "{{ current_rel|default('', true) }}",
     current_folder: {{ session.get('folder', '')|tojson|default('""') }},
-    dhikr_list: {{ dhikr_list|tojson|default('[]') }}
+    dhikr_list: {{ dhikr_list|tojson|default('[]') }},
+    remote_server_url: "{{ request.args.get('remote_server_url') or '' }}",
+    remote_api_token: "{{ request.args.get('remote_api_token') or '' }}"
   };
 </script>
 <script src="{{ url_for('static', filename='js/db.js') }}?v=final"></script>
