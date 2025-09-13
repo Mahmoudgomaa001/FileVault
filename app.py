@@ -1097,8 +1097,9 @@ def logout():
 # -----------------------------
 @app.route("/")
 def home():
-    # The root now serves the static launcher page.
-    return send_from_directory('static', 'index.html')
+    if not is_authed():
+        return redirect(url_for("login"))
+    return redirect(url_for("browse", subpath=session.get("folder", "")))
 
 @app.route("/b/")
 @app.route("/b/<path:subpath>")
