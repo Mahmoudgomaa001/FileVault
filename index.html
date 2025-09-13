@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PWA Uploader</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+</head>
+<body>
+
+    <header>
+        <h1>PWA Uploader</h1>
+        <button id="settings-btn" title="Settings">⚙️</button>
+    </header>
+
+    <main id="main-content">
+        <p>Loading configuration...</p>
+    </main>
+
+    <div id="setup-modal" class="modal" hidden>
+        <div class="modal-content">
+            <h2>Initial Setup</h2>
+            <p>Please provide the URLs for your local and server endpoints.</p>
+            <form id="setup-form">
+                <label for="local-ip">Local IP Address:</label>
+                <input type="text" id="local-ip" placeholder="e.g., http://192.168.1.100" required>
+
+                <label for="server-url">Server URL:</label>
+                <input type="text" id="server-url" placeholder="e.g., https://your-server.com" required>
+
+                <button type="submit">Save</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+{
+    "name": "PWA Uploader",
+    "short_name": "PWA Uploader",
+    "start_url": "/index.html",
+    "display": "standalone",
+    "background_color": "#f0f0f0",
+    "theme_color": "#007bff",
+    "icons": [
+        {
+            "src": "icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml"
+        }
+    ],
+    "share_target": {
+        "action": "/share.html",
+        "method": "POST",
+        "enctype": "multipart/form-data",
+        "params": {
+            "title": "title",
+            "text": "text",
+            "url": "url",
+            "files": [
+                {
+                    "name": "files",
+                    "accept": ["*/*"]
+                }
+            ]
+        }
+    }
+}
