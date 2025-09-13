@@ -1290,26 +1290,53 @@ def api_upload():
         return jsonify({"ok": False, "error": "forbidden"}), 403
     if not dest_dir.exists() or not dest_dir.is_dir():
         return jsonify({"ok": False, "error": "bad dest"}), 400
-    f = request.files.get("file")
-    if not f or not f.filename:
-        return jsonify({"ok": False, "error": "no file"}), 400
 
-    filename = sanitize_filename(f.filename)
-    if ALLOWED_UPLOAD_EXT:
-      ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-      if ext not in ALLOWED_UPLOAD_EXT:
-        return jsonify({"ok": False, "error": "file type not allowed"}), 400
+    save_path = None
 
-    save_path = dest_dir / filename
-    base, ext = os.path.splitext(filename)
-    i = 1
-    while save_path.exists():
-        save_path = dest_dir / f"{base} ({i}){ext}"
-        i += 1
-    try:
-        f.save(save_path)
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"save failed: {e}"}), 500
+    # Handle standard multipart form upload
+    if 'file' in request.files:
+        f = request.files.get("file")
+        if not f or not f.filename:
+            return jsonify({"ok": False, "error": "no file"}), 400
+
+        filename = sanitize_filename(f.filename)
+        if ALLOWED_UPLOAD_EXT:
+            ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+            if ext not in ALLOWED_UPLOAD_EXT:
+                return jsonify({"ok": False, "error": "file type not allowed"}), 400
+
+        save_path = dest_dir / filename
+        base, ext = os.path.splitext(filename)
+        i = 1
+        while save_path.exists():
+            save_path = dest_dir / f"{base} ({i}){ext}"
+            i += 1
+        try:
+            f.save(save_path)
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"save failed: {e}"}), 500
+
+    # Handle raw binary data upload
+    elif request.content_type == 'application/octet-stream':
+        raw_data = request.get_data()
+        filename = sanitize_filename(request.headers.get('X-File-Name', 'raw-upload'))
+        if not raw_data:
+            return jsonify({"ok": False, "error": "no raw data"}), 400
+
+        save_path = dest_dir / filename
+        base, ext = os.path.splitext(filename)
+        i = 1
+        while save_path.exists():
+            save_path = dest_dir / f"{base} ({i}){ext}"
+            i += 1
+        try:
+            with open(save_path, 'wb') as f:
+                f.write(raw_data)
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"raw save failed: {e}"}), 500
+
+    else:
+        return jsonify({"ok": False, "error": "unsupported upload type"}), 400
 
     meta = get_file_meta(save_path)
     parent_rel = path_rel(dest_dir) if dest_dir != ROOT_DIR else ""
