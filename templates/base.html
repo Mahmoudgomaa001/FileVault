@@ -153,6 +153,12 @@
             <div class="slider"></div>
           </div>
         </div>
+        <div class="toggle-container" style="margin-top: 1rem;">
+          <span class="toggle-label" title="Show the remembrance banner at the top of the page.">Show Dhikr Banner</span>
+          <div class="toggle-switch" id="dhikrBannerToggle">
+            <div class="slider"></div>
+          </div>
+        </div>
         <div style="margin-top: 1.5rem;">
             <button class="btn btn-primary" id="subscribeBtn"><i class="fas fa-bell"></i> Enable Notifications</button>
             <div id="pushStatus" style="margin-top:.5rem; color:var(--text-muted); font-size:.85rem;"></div>
@@ -327,6 +333,7 @@
     api_accounts: "{{ url_for('api_accounts_list') }}",
     api_accounts_transfer_admin_start: "{{ url_for('api_accounts_transfer_admin_start') }}",
     api_prefs: "{{ url_for('api_prefs') }}",
+    api_me: "{{ url_for('api_me') }}",
     api_privacy: "{{ url_for('api_privacy') }}",
     api_accounts_token: "{{ url_for('api_accounts_token') }}",
     api_accounts_token_regenerate: "{{ url_for('api_accounts_token_regenerate') }}",

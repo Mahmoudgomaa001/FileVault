@@ -1389,6 +1389,16 @@ function removeFileCard(rel){
         // This requires a new endpoint or modifying /api/me to return the token, which is a security risk.
         // Let's stick to showing the code only, and the token on generation.
 
+    const dhikrBannerToggle = document.getElementById('dhikrBannerToggle');
+    if (dhikrBannerToggle) {
+      const dhikrBannerClosed = localStorage.getItem('dhikrBannerClosed') === 'true';
+      if (dhikrBannerClosed) {
+        dhikrBannerToggle.classList.remove('active');
+      } else {
+        dhikrBannerToggle.classList.add('active');
+      }
+    }
+
         openModal('settingsModal');
       } catch(e){ openModal('settingsModal'); }
     }
@@ -1400,6 +1410,23 @@ function removeFileCard(rel){
     document.getElementById('regenerateTokenBtn')?.addEventListener('click', regenerateToken);
     document.getElementById('shareTokenBtn')?.addEventListener('click', showTokenShare);
     document.getElementById('saveSettingsBtn')?.addEventListener('click', async ()=>{
+      const dhikrBannerToggle = document.getElementById('dhikrBannerToggle');
+      if (dhikrBannerToggle) {
+        const showDhikr = dhikrBannerToggle.classList.contains('active');
+        const dhikrBanner = document.getElementById('dhikrBanner');
+        if (showDhikr) {
+          localStorage.removeItem('dhikrBannerClosed');
+          if (dhikrBanner) {
+            dhikrBanner.classList.remove('hidden');
+          }
+        } else {
+          localStorage.setItem('dhikrBannerClosed', 'true');
+          if (dhikrBanner) {
+            dhikrBanner.classList.add('hidden');
+          }
+        }
+      }
+
       const priv = document.getElementById('privacyToggle').classList.contains('active'); // true => private
       const pwd = document.getElementById('privacyPassword').value || '';
       const allowDelete = document.getElementById('allowDeleteToggle').classList.contains('active');
