@@ -309,38 +309,8 @@ def inject_ngrok_status():
         is_on_local_with_ngrok_available=(is_on_local and bool(ngrok_url_str))
     )
 
-@app.route("/api/go_online")
-def api_go_online():
-    if not is_authed():
-        return jsonify({"ok": False, "error": "not authed"}), 401
-
-    folder = session.get("folder")
-    if not folder:
-        return jsonify({"ok": False, "error": "no folder in session"}), 400
-
-    device_id = request.cookies.get(DEVICE_COOKIE_NAME)
-    if not device_id:
-        device_id, _ = get_or_create_device_folder(request)
-
-    next_path = request.args.get('next')
-    if not next_path and request.referrer:
-        ref = urlparse(request.referrer)
-        next_path = ref.path
-        if ref.query:
-            next_path += '?' + ref.query
-    if not next_path:
-        next_path = url_for('browse')
-
-    pc_token = secrets.token_urlsafe(16)
-    app.config["LOGIN_TOKENS"][pc_token] = {"folder": folder, "device_id": device_id, "next_url": next_path}
-
-    ngrok_url = get_ngrok_url()
-    if not ngrok_url:
-        return jsonify({"ok": False, "error": "ngrok not available"}), 400
-
-    online_url = f"{ngrok_url.rstrip('/')}{url_for('pc_login', token=pc_token)}"
-
-    return jsonify({"ok": True, "url": online_url})
+# The /api/go_online and /api/go_offline routes are no longer needed,
+# as this functionality is now handled by the launcher page (index.html).
 
 @app.route("/api/accounts", methods=["GET"])
 def api_accounts_list():
@@ -1127,9 +1097,8 @@ def logout():
 # -----------------------------
 @app.route("/")
 def home():
-    if not is_authed():
-        return redirect(url_for("login"))
-    return redirect(url_for("browse", subpath=session.get("folder", "")))
+    # The root now serves the static launcher page.
+    return send_from_directory('static', 'index.html')
 
 @app.route("/b/")
 @app.route("/b/<path:subpath>")
@@ -1483,35 +1452,6 @@ def api_cliptext():
     socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
     return jsonify({"ok": True, "meta": meta})
 
-@app.route("/api/go_offline")
-def api_go_offline():
-    if not is_authed():
-        return jsonify({"ok": False, "error": "not authed"}), 401
-
-    folder = session.get("folder")
-    if not folder:
-        return jsonify({"ok": False, "error": "no folder in session"}), 400
-
-    device_id = request.cookies.get(DEVICE_COOKIE_NAME)
-    if not device_id:
-        device_id, _ = get_or_create_device_folder(request)
-
-    next_path = request.args.get('next')
-    if not next_path and request.referrer:
-        ref = urlparse(request.referrer)
-        next_path = ref.path
-        if ref.query:
-            next_path += '?' + ref.query
-    if not next_path:
-        next_path = url_for('browse')
-
-    pc_token = secrets.token_urlsafe(16)
-    app.config["LOGIN_TOKENS"][pc_token] = {"folder": folder, "device_id": device_id, "next_url": next_path}
-
-    local_ip = get_local_ip()
-    local_url = f"http://{local_ip}:{PORT}{url_for('pc_login', token=pc_token)}"
-
-    return jsonify({"ok": True, "url": local_url})
 
 @app.route("/api/folders")
 def api_folders():

@@ -38,8 +38,8 @@ function saveFileInDB(file) {
 // --- End of DB Logic ---
 
 const APP_SHELL_URLS = [
-  '/', '/b/', '/share', '/login',
-  '/static/css/style.css', '/static/js/main.js', '/static/js/config.js', '/static/js/db.js', '/static/js/share.js',
+  '/index.html', '/', '/b/', '/share', '/login',
+  '/static/css/style.css', '/static/js/main.js', '/static/js/config.js', '/static/js/db.js', '/static/js/share.js', '/static/js/index.js',
   '/static/fonts.css', '/static/vendor/fontawesome/css/all.min.css', '/static/vendor/fontawesome/css/fa-shims.css',
   '/static/socket.io.min.js', '/static/site.webmanifest', '/static/favicon.svg', '/static/adhkar.json',
   '/static/vendor/fontawesome/webfonts/fa-brands-400.woff2', '/static/vendor/fontawesome/webfonts/fa-regular-400.woff2', '/static/vendor/fontawesome/webfonts/fa-solid-900.woff2',

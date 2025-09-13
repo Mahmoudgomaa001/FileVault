@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FileVault Launcher</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="manifest" href="/static/site.webmanifest" />
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+        .launcher {
+            text-align: center;
+        }
+        .launcher h1 {
+            font-size: 2.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .btn-launcher {
+            display: block;
+            width: 100%;
+            padding: 1.5rem;
+            font-size: 1.5rem;
+            margin-top: 1.5rem;
+            border-radius: 0.75rem;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-launcher.local {
+            background-color: var(--primary);
+            color: white;
+        }
+        .btn-launcher.server {
+            background-color: var(--secondary);
+            color: white;
+        }
+        .btn-launcher:disabled {
+            background-color: var(--bg-secondary);
+            color: var(--text-muted);
+            cursor: not-allowed;
+        }
+        #settingsBtn {
+            margin-top: 2rem;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="launcher">
+        <h1><img src="/static/favicon.svg" alt="FileVault Logo" width="64" height="64"> FileVault</h1>
+        <a href="#" id="goLocalBtn" class="btn btn-launcher local" disabled>Connect to Local</a>
+        <a href="#" id="goServerBtn" class="btn btn-launcher server" disabled>Connect to Server</a>
+        <button id="settingsBtn"><i class="fas fa-cog"></i> Settings</button>
+    </div>
+
+    <!-- App Settings Modal (copied from base.html) -->
+    <div class="modal" id="appSettingsModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">App Settings</h3>
+          <button class="modal-close" onclick="closeModal('appSettingsModal')" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p>Manually set the URLs used by the application.</p>
+          <div class="form-group">
+            <label class="form-label" for="localUrlInput">Local IP URL</label>
+            <input type="text" id="localUrlInput" class="form-input" placeholder="e.g., http://192.168.1.10:5000">
+          </div>
+          <div class="form-group" style="margin-top: 1rem;">
+            <label class="form-label" for="serverUrlInput">Server URL</label>
+            <input type="text" id="serverUrlInput" class="form-input" placeholder="e.g., https://your-server.com">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('appSettingsModal')">Cancel</button>
+          <button class="btn btn-primary" id="saveAppSettingsBtn">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toastContainer"></div>
+    <script>
+        // Minimal modal/toast logic for this page
+        function openModal(id){ document.getElementById(id).classList.add('active'); }
+        function closeModal(id){ document.getElementById(id).classList.remove('active'); }
+        function showToast(message, type = 'info') { const c = document.getElementById('toastContainer'); if (!c) return; const t = document.createElement('div'); t.className = `toast ${type}`; t.innerHTML = `<div class="toast-message">${message}</div>`; c.appendChild(t); setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000); }
+    </script>
+    <script src="/static/js/config.js"></script>
+    <script src="/static/js/index.js"></script>
+</body>
+</html>
