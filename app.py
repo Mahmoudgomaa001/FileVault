@@ -877,10 +877,18 @@ def login():
     ngrok_available = bool(ngrok_url)
 
     is_on_ngrok = False
+    is_on_local = False
     if ngrok_available:
         ngrok_host = urlparse(ngrok_url).hostname
-        if ngrok_host and ngrok_host == request.host.split(':')[0]:
+        request_host = request.host.split(':')[0]
+        if ngrok_host and ngrok_host == request_host:
             is_on_ngrok = True
+        else:
+            local_ip = get_local_ip()
+            if request_host == local_ip or request_host in ['127.0.0.1', 'localhost']:
+                is_on_local = True
+
+    is_on_local_with_ngrok_available = is_on_local and ngrok_available
 
     # The qr_url generation correctly uses the request context, so it will be an
     # ngrok url if accessed via ngrok, and a local url otherwise.
@@ -901,6 +909,7 @@ def login():
                                    login_code=login_code,
                                    error=error,
                                    is_on_ngrok=is_on_ngrok,
+                                   is_on_local_with_ngrok_available=is_on_local_with_ngrok_available,
                                    authed=is_authed(),
                                    icon=None,
                                    user_label="",
