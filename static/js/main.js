@@ -1774,59 +1774,78 @@ function removeFileCard(rel){
     });
 
     // --- PENDING SHARE UPLOADS ---
+    async function uploadPendingFiles(destinationType) {
+        const config = window.appConfigManager.getConfig();
+        const url = destinationType === 'local' ? config.local_url : config.server_url;
+        const localBtn = document.getElementById('pendingUploadLocalBtn');
+        const serverBtn = document.getElementById('pendingUploadServerBtn');
+        const dismissBtn = document.getElementById('pendingDismissBtn');
+
+        if (!url) {
+            showToast(`Upload failed: ${destinationType} URL is not configured.`, 'error');
+            return;
+        }
+
+        const pendingFiles = await window.fileDB.getFiles();
+        if (pendingFiles.length === 0) return;
+
+        showToast(`Uploading ${pendingFiles.length} shared file(s) to ${destinationType}...`, 'info');
+        localBtn.disabled = true;
+        serverBtn.disabled = true;
+        dismissBtn.disabled = true;
+
+        const container = document.getElementById('progressContainer');
+        if(container) container.innerHTML = '';
+
+        let allSucceeded = true;
+        for (const fileData of pendingFiles) {
+            try {
+                // The original uploader uses `window.currentPath`. We must override it
+                // to send to the user's root folder.
+                await uploadSingleFile({ file: fileData.file, id: `pending-${fileData.id}` }, '');
+            } catch (e) {
+                allSucceeded = false;
+                showToast(`Upload failed for ${fileData.name}.`, 'error');
+                break;
+            }
+        }
+
+        if (allSucceeded) {
+            await window.fileDB.clearFiles();
+            showToast('All pending files uploaded successfully!', 'success');
+            document.getElementById('pendingUploadBanner').style.display = 'none';
+        } else {
+            showToast('Some files could not be uploaded. Please try again.', 'warning');
+        }
+
+        localBtn.disabled = false;
+        serverBtn.disabled = false;
+        dismissBtn.disabled = false;
+        checkForPendingShares();
+    }
+
     async function checkForPendingShares() {
-        if (!window.fileDB) return;
+        if (!window.fileDB) { return; }
         await window.fileDB.initDB();
         const pendingFiles = await window.fileDB.getFiles();
 
+        showToast(`DEBUG: Main page loaded, found ${pendingFiles.length} files in DB.`, 'info');
+
         const banner = document.getElementById('pendingUploadBanner');
         const bannerText = document.getElementById('pendingUploadText');
-        const uploadBtn = document.getElementById('pendingUploadBtn');
+        const localBtn = document.getElementById('pendingUploadLocalBtn');
+        const serverBtn = document.getElementById('pendingUploadServerBtn');
         const dismissBtn = document.getElementById('pendingDismissBtn');
 
-        if (!banner || !bannerText || !uploadBtn || !dismissBtn) return;
+        if (!banner || !bannerText || !localBtn || !serverBtn || !dismissBtn) return;
 
         if (pendingFiles.length > 0) {
             bannerText.textContent = `You have ${pendingFiles.length} file(s) ready to upload.`;
             banner.style.display = 'flex';
 
-            uploadBtn.onclick = async () => {
-                showToast(`Uploading ${pendingFiles.length} shared file(s)...`, 'info');
-                uploadBtn.disabled = true;
-                dismissBtn.disabled = true;
-                uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
-
-                const container = document.getElementById('progressContainer');
-                if(container) container.innerHTML = '';
-
-                let allSucceeded = true;
-                for (const fileData of pendingFiles) {
-                    try {
-                        await uploadSingleFile({ file: fileData.file, id: `pending-${fileData.id}` });
-                    } catch (e) {
-                        allSucceeded = false;
-                        showToast(`Upload failed for ${fileData.name}.`, 'error');
-                        break;
-                    }
-                }
-
-                if (allSucceeded) {
-                    await window.fileDB.clearFiles();
-                    showToast('All pending files uploaded successfully!', 'success');
-                    banner.style.display = 'none';
-                } else {
-                    showToast('Some files could not be uploaded. Please try again.', 'warning');
-                }
-
-                uploadBtn.disabled = false;
-                dismissBtn.disabled = false;
-                uploadBtn.innerHTML = 'Upload Now';
-                checkForPendingShares();
-            };
-
-            dismissBtn.onclick = () => {
-                banner.style.display = 'none';
-            };
+            localBtn.onclick = () => uploadPendingFiles('local');
+            serverBtn.onclick = () => uploadPendingFiles('server');
+            dismissBtn.onclick = () => { banner.style.display = 'none'; };
         } else {
             banner.style.display = 'none';
         }

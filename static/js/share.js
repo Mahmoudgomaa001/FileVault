@@ -14,17 +14,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Renders the list of files from IndexedDB into the UI.
      */
-    async function renderFileList() {
+    async function renderFileList(files) {
         if (!window.fileDB) return;
-        const files = await window.fileDB.getFiles();
+        // Allow passing files directly to prevent re-querying the DB
+        const filesToRender = files || await window.fileDB.getFiles();
         fileListContainer.innerHTML = ''; // Clear existing list
 
-        if (files.length === 0) {
+        if (filesToRender.length === 0) {
             if (noFilesMessage) noFilesMessage.style.display = 'block';
             fileListContainer.appendChild(noFilesMessage);
         } else {
             if (noFilesMessage) noFilesMessage.style.display = 'none';
-            files.forEach(fileData => {
+            filesToRender.forEach(fileData => {
                 const fileCard = document.createElement('div');
                 fileCard.className = 'card file-list-item';
                 fileCard.innerHTML = `
@@ -45,8 +46,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        if(fileCountSpan) fileCountSpan.textContent = files.length;
-        if (clearAllBtn) clearAllBtn.disabled = files.length === 0;
+        if(fileCountSpan) fileCountSpan.textContent = filesToRender.length;
+        if (clearAllBtn) clearAllBtn.disabled = filesToRender.length === 0;
     }
 
     /**
@@ -82,7 +83,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Init ---
     if (window.fileDB) {
         await window.fileDB.initDB();
-        await renderFileList();
+        const files = await window.fileDB.getFiles();
+        showToast(`DEBUG: Share page loaded, found ${files.length} files in DB.`, 'info');
+        await renderFileList(files); // Pass files to avoid re-querying
     }
 
     if (window.appConfigManager) {
@@ -105,9 +108,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const savedCount = urlParams.get('saved');
     if (savedCount) {
         if (savedCount === 'error') {
-            showToast('Service worker encountered an error saving files.', 'error');
+            showToast('DEBUG: SW reported an error saving files.', 'error');
         } else {
-            showToast(`${savedCount} file(s) received and saved locally.`, 'info');
+            showToast(`DEBUG: SW reported saving ${savedCount} file(s).`, 'info');
         }
         history.replaceState(null, '', window.location.pathname);
     }

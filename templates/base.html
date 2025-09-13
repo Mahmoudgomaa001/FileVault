@@ -104,8 +104,11 @@
     <div class="pending-upload-content">
       <i class="fas fa-inbox"></i>
       <span id="pendingUploadText">You have pending files to upload.</span>
-      <button class="btn btn-success" id="pendingUploadBtn">Upload Now</button>
-      <button class="btn btn-secondary" id="pendingDismissBtn">Later</button>
+      <div class="pending-upload-actions">
+        <button class="btn btn-success" id="pendingUploadLocalBtn"><i class="fas fa-network-wired"></i> To Local</button>
+        <button class="btn btn-primary" id="pendingUploadServerBtn"><i class="fas fa-server"></i> To Server</button>
+        <button class="btn btn-secondary" id="pendingDismissBtn">Later</button>
+      </div>
     </div>
   </div>
 
