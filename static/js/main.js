@@ -1456,7 +1456,8 @@ function removeFileCard(rel){
           showToast(j.error || 'Failed to generate token', 'error');
         }
       } catch (e) {
-        showToast('Failed to generate token', 'error');
+        console.error('Token generation failed:', e);
+        showToast(`Failed to generate token: ${e.message || e}`, 'error');
       }
     }
 
@@ -1494,7 +1495,8 @@ function removeFileCard(rel){
           showToast(j.error || 'Failed to regenerate token', 'error');
         }
       } catch (e) {
-        showToast('Failed to regenerate token', 'error');
+        console.error('Token regeneration failed:', e);
+        showToast(`Failed to regenerate token: ${e.message || e}`, 'error');
       }
     }
 
