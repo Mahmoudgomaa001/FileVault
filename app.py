@@ -1285,10 +1285,15 @@ def api_upload():
         return jsonify({"ok": False, "error": "not authed"}), 401
 
     dest_rel = request.form.get("dest", "")
+    # If dest_rel is empty (e.g., from the token-based share page),
+    # default to the user's base folder.
+    if not dest_rel:
+        dest_rel = base_folder
+
     dest_dir = safe_path(dest_rel)
 
     # Ensure the destination is within the authenticated user's folder
-    if first_segment(path_rel(dest_dir)) != base_folder and path_rel(dest_dir) != "":
+    if first_segment(path_rel(dest_dir)) != base_folder:
         return jsonify({"ok": False, "error": "forbidden"}), 403
     if not dest_dir.exists() or not dest_dir.is_dir():
         return jsonify({"ok": False, "error": "bad dest"}), 400
