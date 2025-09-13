@@ -493,7 +493,7 @@ setInterval(changeDhikr, 30000);
       setTimeout(()=>{ element.remove(); }, 900);
     }
 
-    function uploadSingleFile(item, destOverride = null){
+    function uploadSingleFile(item, destOverride = null, baseUrl = null){
       const {file, id} = item;
       const container = document.getElementById('progressContainer');
       const row = createProgressElement(file.name, id);
@@ -547,7 +547,8 @@ setInterval(changeDhikr, 30000);
         row.remove();
       });
 
-      xhr.open('POST', URLS.api_upload);
+      const uploadUrl = baseUrl ? new URL('/api/upload', baseUrl).href : URLS.api_upload;
+      xhr.open('POST', uploadUrl);
       xhr.send(form);
     }
 
@@ -1799,8 +1800,8 @@ function removeFileCard(rel){
         for (const fileData of pendingFiles) {
             try {
                 // The original uploader uses `window.currentPath`. We must override it
-                // to send to the user's root folder.
-                await uploadSingleFile({ file: fileData.file, id: `pending-${fileData.id}` }, '');
+                // to send to the user's root folder, and provide the correct base URL.
+                await uploadSingleFile({ file: fileData.file, id: `pending-${fileData.id}` }, '', url);
             } catch (e) {
                 allSucceeded = false;
                 showToast(`Upload failed for ${fileData.name}.`, 'error');
