@@ -80,7 +80,7 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
   // Robustly handle Web Share Target POST requests
-  if (event.request.method === 'POST' && url.pathname === '/share') {
+  if (event.request.method === 'POST' && url.pathname === '/share.html') {
     event.respondWith(
       (async () => {
         try {
@@ -94,12 +94,12 @@ self.addEventListener('fetch', event => {
               console.log('[ServiceWorker] Shared files saved to IndexedDB.');
             }
             // After saving files (or if there are no files), redirect to the share page.
-            return Response.redirect('/share', 303);
+            return Response.redirect('/share.html', 303);
         } catch (err) {
             console.error('[ServiceWorker] Error handling share POST:', err);
             // Even if there's an error, redirect to the share page so the user sees something.
             // This prevents the request from ever hitting the server.
-            return Response.redirect('/share', 303);
+            return Response.redirect('/share.html', 303);
         }
       })()
     );

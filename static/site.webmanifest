@@ -1,6 +1,7 @@
 {
   "name": "FileVault",
   "short_name": "FileVault",
+  "scope": "/",
   "start_url": "/static/launcher.html",
   "display": "standalone",
   "background_color": "#ffe6f2",
@@ -13,7 +14,7 @@
     }
   ],
   "share_target": {
-    "action": "/share",
+    "action": "/share.html",
     "method": "POST",
     "enctype": "multipart/form-data",
     "params": {
