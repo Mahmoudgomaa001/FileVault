@@ -1770,7 +1770,67 @@ function removeFileCard(rel){
       initPwaInstall();
       initMobileMenu();
       initNotificationState();
+      checkForPendingShares();
     });
+
+    // --- PENDING SHARE UPLOADS ---
+    async function checkForPendingShares() {
+        if (!window.fileDB) return;
+        await window.fileDB.initDB();
+        const pendingFiles = await window.fileDB.getFiles();
+
+        const banner = document.getElementById('pendingUploadBanner');
+        const bannerText = document.getElementById('pendingUploadText');
+        const uploadBtn = document.getElementById('pendingUploadBtn');
+        const dismissBtn = document.getElementById('pendingDismissBtn');
+
+        if (!banner || !bannerText || !uploadBtn || !dismissBtn) return;
+
+        if (pendingFiles.length > 0) {
+            bannerText.textContent = `You have ${pendingFiles.length} file(s) ready to upload.`;
+            banner.style.display = 'flex';
+
+            uploadBtn.onclick = async () => {
+                showToast(`Uploading ${pendingFiles.length} shared file(s)...`, 'info');
+                uploadBtn.disabled = true;
+                dismissBtn.disabled = true;
+                uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+
+                const container = document.getElementById('progressContainer');
+                if(container) container.innerHTML = '';
+
+                let allSucceeded = true;
+                for (const fileData of pendingFiles) {
+                    try {
+                        await uploadSingleFile({ file: fileData.file, id: `pending-${fileData.id}` });
+                    } catch (e) {
+                        allSucceeded = false;
+                        showToast(`Upload failed for ${fileData.name}.`, 'error');
+                        break;
+                    }
+                }
+
+                if (allSucceeded) {
+                    await window.fileDB.clearFiles();
+                    showToast('All pending files uploaded successfully!', 'success');
+                    banner.style.display = 'none';
+                } else {
+                    showToast('Some files could not be uploaded. Please try again.', 'warning');
+                }
+
+                uploadBtn.disabled = false;
+                dismissBtn.disabled = false;
+                uploadBtn.innerHTML = 'Upload Now';
+                checkForPendingShares();
+            };
+
+            dismissBtn.onclick = () => {
+                banner.style.display = 'none';
+            };
+        } else {
+            banner.style.display = 'none';
+        }
+    }
 
     // PWA INSTALL
     function initPwaInstall() {

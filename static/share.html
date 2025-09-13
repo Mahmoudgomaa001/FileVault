@@ -13,10 +13,10 @@
     <div class="container" style="padding-top: 2rem;">
         <div class="card" id="mainContainer">
             <h1 style="display: flex; align-items: center; gap: .75rem;"><img src="/static/favicon.svg" alt="" width="40" height="40"> Shared Files</h1>
-            <p>Files shared or uploaded to the app are stored locally on your device. Use the buttons below to upload them to your desired destination.</p>
+            <p>Files shared or uploaded to the app are stored locally on your device. You can now close this page and open the main FileVault application to upload them.</p>
 
             <!-- Manual File Upload -->
-            <div class="upload-section" style="margin-top: 1rem;">
+            <div class="upload-section" style="margin-top: 1rem; border-style: dashed;">
                 <div class="upload-area" id="uploadArea">
                 <input type="file" id="manualUploadInput" class="upload-input" multiple>
                 <div class="upload-icon"><i class="fas fa-file-upload"></i></div>
@@ -32,13 +32,9 @@
 
             <!-- Action Buttons -->
             <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.5rem;">
-                <button class="btn btn-primary" id="send-local-btn" disabled><i class="fas fa-network-wired"></i> Send to Local</button>
-                <button class="btn btn-secondary" id="send-server-btn" disabled><i class="fas fa-server"></i> Send to Server</button>
+                <a href="/static/launcher.html" class="btn btn-primary"><i class="fas fa-rocket"></i> Open Launcher</a>
                 <button class="btn btn-danger" id="clear-all-btn" disabled><i class="fas fa-trash"></i> Clear All</button>
             </div>
-
-            <!-- Upload Progress -->
-            <div id="progress-container" class="progress-container-share" style="margin-top: 1rem;"></div>
         </div>
     </div>
 

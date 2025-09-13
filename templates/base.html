@@ -99,6 +99,16 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
+  <!-- Pending Share Upload Banner -->
+  <div class="pending-upload-banner" id="pendingUploadBanner" style="display: none;">
+    <div class="pending-upload-content">
+      <i class="fas fa-inbox"></i>
+      <span id="pendingUploadText">You have pending files to upload.</span>
+      <button class="btn btn-success" id="pendingUploadBtn">Upload Now</button>
+      <button class="btn btn-secondary" id="pendingDismissBtn">Later</button>
+    </div>
+  </div>
+
   <div class="container">
     {% block content %}{% endblock %}
   </div>

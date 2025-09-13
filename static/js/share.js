@@ -1,29 +1,23 @@
-// --- Share Page Logic ---
+// --- Share Page Logic (Simplified) ---
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Ensure config is loaded before we do anything else
-    if (window.appConfigManager) {
-        await window.appConfigManager.loadConfig();
-    }
+    // This page is now only for viewing and managing the local file queue.
+    // The actual upload happens inside the main application.
 
     const fileListContainer = document.getElementById('file-list');
     const noFilesMessage = document.getElementById('no-files-message');
     const fileCountSpan = document.getElementById('file-count');
-    const sendLocalBtn = document.getElementById('send-local-btn');
-    const sendServerBtn = document.getElementById('send-server-btn');
     const clearAllBtn = document.getElementById('clear-all-btn');
     const manualUploadInput = document.getElementById('manualUploadInput');
     const uploadArea = document.getElementById('uploadArea');
-    const progressContainer = document.getElementById('progress-container');
-
-    let activeXHRs = new Map();
 
     /**
      * Renders the list of files from IndexedDB into the UI.
      */
     async function renderFileList() {
+        if (!window.fileDB) return;
         const files = await window.fileDB.getFiles();
-        fileListContainer.innerHTML = '';
+        fileListContainer.innerHTML = ''; // Clear existing list
 
         if (files.length === 0) {
             if (noFilesMessage) noFilesMessage.style.display = 'block';
@@ -52,10 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if(fileCountSpan) fileCountSpan.textContent = files.length;
-        const hasFiles = files.length > 0;
-        if (sendLocalBtn) sendLocalBtn.disabled = !hasFiles;
-        if (sendServerBtn) sendServerBtn.disabled = !hasFiles;
-        if (clearAllBtn) clearAllBtn.disabled = !hasFiles;
+        if (clearAllBtn) clearAllBtn.disabled = files.length === 0;
     }
 
     /**
@@ -63,131 +54,12 @@ document.addEventListener('DOMContentLoaded', async () => {
      */
     async function handleNewFiles(files) {
         if (!files || files.length === 0) return;
-        showToast(`Adding ${files.length} file(s) to the queue...`, 'info');
+        showToast(`Adding ${files.length} file(s) to the local queue...`, 'info');
         for (const file of files) {
             await window.fileDB.saveFile(file);
         }
-        showToast('Files are saved locally and ready to send.', 'success');
+        showToast('Files are saved locally and ready to upload from the main app.', 'success');
         renderFileList();
-    }
-
-    /**
-     * Uploader logic adapted from main.js
-     */
-    function uploadSingleFile(item, baseUrl, apiToken) {
-        const { id, file } = item;
-        const uploadId = `up-${id}`;
-
-        const row = createProgressElement(file.name, uploadId);
-        if(progressContainer) progressContainer.appendChild(row);
-
-        const form = new FormData();
-        // The destination on the server is the root of the user's folder.
-        // We no longer have APP_CONFIG here, so we send to the root. The server-side
-        // auth logic will place it in the correct user folder based on the token.
-        form.append('dest', '');
-        form.append('file', file, file.name);
-
-        const xhr = new XMLHttpRequest();
-        activeXHRs.set(uploadId, xhr);
-
-        const start = Date.now();
-        xhr.upload.addEventListener('progress', e => {
-            if (e.lengthComputable) {
-                const percent = (e.loaded / e.total) * 100;
-                const seconds = Math.max(0.25, (Date.now() - start) / 1000);
-                const speed = e.loaded / seconds;
-                const eta = (e.total - e.loaded) / Math.max(speed, 1);
-                updateProgress(row, { percent, speed, eta });
-            }
-        });
-
-        return new Promise((resolve, reject) => {
-            xhr.addEventListener('load', () => {
-                activeXHRs.delete(uploadId);
-                try {
-                    if (xhr.status >= 200 && xhr.status < 300) {
-                        markProgressComplete(row, true);
-                        resolve({ success: true, id });
-                    } else {
-                        const j = JSON.parse(xhr.responseText || '{}');
-                        markProgressComplete(row, false);
-                        showToast(`Upload failed for ${file.name}: ${j.error || 'Unknown error'}`, 'error');
-                        reject({ success: false, error: j.error || `HTTP ${xhr.status}` });
-                    }
-                } catch (e) {
-                    markProgressComplete(row, false);
-                    showToast(`Upload failed for ${file.name}`, 'error');
-                    reject({ success: false, error: 'Parse error' });
-                }
-            });
-            xhr.addEventListener('error', () => {
-                activeXHRs.delete(uploadId);
-                markProgressComplete(row, false);
-                showToast(`Network error during upload of ${file.name}`, 'error');
-                reject({ success: false, error: 'Network error' });
-            });
-            xhr.addEventListener('abort', () => {
-                activeXHRs.delete(uploadId);
-                row.remove();
-                reject({ success: false, error: 'Aborted' });
-            });
-
-            // Construct the full URL for the upload
-            // The URLS object is not available here, so we hardcode the path.
-            const uploadUrl = new URL('/api/upload', baseUrl).href;
-            xhr.open('POST', uploadUrl);
-            // Add the Authorization header for token-based auth
-            xhr.setRequestHeader('Authorization', `Bearer ${apiToken}`);
-            xhr.send(form);
-        });
-    }
-
-    async function startUpload(destinationType) {
-        const config = window.appConfigManager.getConfig();
-        const url = destinationType === 'local' ? config.local_url : config.server_url;
-        const btn = destinationType === 'local' ? sendLocalBtn : sendServerBtn;
-
-        if (!url) {
-            showToast(`${destinationType === 'local' ? 'Local' : 'Server'} URL is not configured.`, 'error');
-            return;
-        }
-
-        const apiToken = await window.fileDB.getConfigValue('api_token');
-        if (!apiToken) {
-            showToast('API Token not set up. Please set it up from the main application settings.', 'error');
-            return;
-        }
-
-        const filesToUpload = await window.fileDB.getFiles();
-        if (filesToUpload.length === 0) return;
-
-        if(btn) btn.disabled = true;
-        if(progressContainer) progressContainer.innerHTML = '';
-
-        let successfulUploads = 0;
-        for (const fileData of filesToUpload) {
-            try {
-                // The object from DB has {id, name, size, file}
-                await uploadSingleFile({id: fileData.id, file: fileData.file}, url, apiToken);
-                successfulUploads++;
-            } catch (uploadError) {
-                console.error('An upload failed, stopping queue.', uploadError);
-                showToast('An error occurred. Some files were not uploaded.', 'error');
-                break; // Stop on first error
-            }
-        }
-
-        // Clear only if all files were uploaded successfully
-        if (successfulUploads === filesToUpload.length) {
-            showToast('All files uploaded successfully!', 'success');
-            await window.fileDB.clearFiles();
-        } else {
-            showToast(`${successfulUploads} of ${filesToUpload.length} files uploaded. Please try again.`, 'warning');
-        }
-
-        renderFileList(); // Re-render the list (will be empty if all succeeded)
-        if(btn) btn.disabled = false;
     }
 
     // --- Event Listeners ---
@@ -200,43 +72,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         uploadArea.addEventListener('click', () => manualUploadInput.click());
     }
     if (clearAllBtn) clearAllBtn.addEventListener('click', async () => {
-        if (confirm('Are you sure you want to clear all pending files?')) {
+        if (confirm('Are you sure you want to clear all pending files? This cannot be undone.')) {
             await window.fileDB.clearFiles();
             renderFileList();
             showToast('All pending files have been cleared.', 'success');
         }
     });
-    if (sendLocalBtn) sendLocalBtn.addEventListener('click', () => startUpload('local'));
-    if (sendServerBtn) sendServerBtn.addEventListener('click', () => startUpload('server'));
 
     // --- Init ---
-    await window.fileDB.initDB();
-    await renderFileList();
+    if (window.fileDB) {
+        await window.fileDB.initDB();
+        await renderFileList();
+    }
 
-    // --- Diagnostic code for share target ---
+    // Diagnostic code for share target
     const urlParams = new URLSearchParams(window.location.search);
     const savedCount = urlParams.get('saved');
     if (savedCount) {
         if (savedCount === 'error') {
             showToast('Service worker encountered an error saving files.', 'error');
         } else {
-            showToast(`Service worker handled share action, reporting ${savedCount} file(s) saved.`, 'info');
+            showToast(`${savedCount} file(s) received and saved locally.`, 'info');
         }
-        // Clean up the URL so the message doesn't appear on reload
         history.replaceState(null, '', window.location.pathname);
     }
 });
 
-// --- Progress UI (copied from main.js and adapted) ---
-function createProgressElement(filename, id) {
-    const div = document.createElement('div');
-    div.className = 'progress-item';
-    div.dataset.uploadId = id;
-    div.innerHTML = `<div class="progress-header"><div class="progress-info"><div class="progress-filename">${filename}</div><div class="progress-stats"><span class="stat-speed">0 B/s</span><span class="stat-eta">Starting…</span></div></div><div class="progress-actions"><span class="progress-percent">0%</span></div></div><div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>`;
-    return div;
-}
-function formatSpeed(bps) { if (!bps || !isFinite(bps)) return "0 B/s"; const u = ['B/s', 'KB/s', 'MB/s', 'GB/s']; let i = 0, s = bps; while (s >= 1024 && i < u.length - 1) { s /= 1024; i++; } return `${s.toFixed(i ? 1 : 0)} ${u[i]}`; }
-function formatETA(sec) { if (!isFinite(sec) || sec <= 0) return '...'; if (sec < 60) return `${Math.round(sec)}s`; const m = Math.floor(sec / 60), s = Math.round(sec % 60); return `${m}m ${s}s`; }
-function updateProgress(element, data) { if (!element) return; element.querySelector('.progress-fill').style.width = `${data.percent}%`; element.querySelector('.progress-percent').textContent = `${Math.round(data.percent)}%`; element.querySelector('.stat-speed').textContent = formatSpeed(data.speed); element.querySelector('.stat-eta').textContent = data.percent >= 100 ? 'Done' : formatETA(data.eta); }
-function markProgressComplete(element, success) { if (!element) return; element.classList.add(success ? 'completed' : 'error'); setTimeout(() => { element.style.opacity = '0'; setTimeout(() => element.remove(), 300); }, 1500); }
 function showToast(message, type = 'info') { const c = document.getElementById('toastContainer'); if (!c) return; const t = document.createElement('div'); t.className = `toast ${type}`; const i = { success: 'fa-check-circle', error: 'fa-times-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' }[type] || 'fa-info-circle'; t.innerHTML = `<i class="fas ${i}"></i><div class="toast-message">${message}</div>`; c.appendChild(t); setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000); }
