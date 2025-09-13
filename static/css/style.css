@@ -154,7 +154,7 @@
     .modal-content { background:var(--bg-secondary); border-radius:1rem; max-width:900px; width:100%; max-height:90vh; overflow:hidden; display:flex; flex-direction:column; animation:modalSlide .25s ease; }
     @keyframes modalSlide { from{opacity:0; transform:translateY(20px);} to{opacity:1; transform:translateY(0);} }
     .modal-header { padding:1rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
-    .modal-title { font-size:1rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.modal-title { font-size:1rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
     .modal-close { width:28px; height:28px; border-radius:50%; background:var(--bg-tertiary); border:none; color:var(--text-primary); cursor:pointer; display:flex; align-items:center; justify-content:center; transition: transform 0.3s ease, background 0.3s ease;}
     .modal-close:hover { background: var(--danger); transform: rotate(90deg); }
     .modal-body { padding:1rem; overflow:auto; display:flex; flex-direction:column; gap:.75rem; }
