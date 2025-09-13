@@ -56,13 +56,11 @@
     .dhikr-translation { font-size: 0.9rem; color: rgba(255,255,255,0.9); font-style: italic; }
     .dhikr-icon { font-size: 1.2rem; color: rgba(255,255,255,0.8); animation: rotate 4s linear infinite; }
     @keyframes rotate { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
-    .dhikr-refresh { position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.2); border: none; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s ease; color: white; }
-    .dhikr-refresh:hover { background: rgba(255,255,255,0.3); transform: translateY(-50%) rotate(180deg); }
 
     .dhikr-toggle {
       position: absolute;
       top: 50%;
-      right: 4rem; /* Next to the refresh button */
+      right: 1rem;
       transform: translateY(-50%);
       background: rgba(0,0,0,0.2);
       border: none;
@@ -92,8 +90,7 @@
       padding-bottom: 0;
       cursor: default;
     }
-    .dhikr-banner.collapsed .dhikr-content,
-    .dhikr-banner.collapsed .dhikr-refresh {
+    .dhikr-banner.collapsed .dhikr-content {
       opacity: 0;
       pointer-events: none;
     }
