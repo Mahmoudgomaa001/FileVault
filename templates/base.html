@@ -22,15 +22,15 @@
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/static/sw.js').then(registration => {
-        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+      navigator.serviceWorker.register('/static/sw-v2.js').then(registration => {
+        console.log('ServiceWorker v2 registration successful with scope: ', registration.scope);
       }, err => {
-        console.log('ServiceWorker registration failed: ', err);
+        console.log('ServiceWorker v2 registration failed: ', err);
       });
     });
   }
 </script>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=final">
 {% block head %}{% endblock %}
 </head>
 <body class="{% if authed and not share_page_active %}with-dhikr{% endif %}">
@@ -355,9 +355,9 @@
     dhikr_list: {{ dhikr_list|tojson|default('[]') }}
   };
 </script>
-<script src="{{ url_for('static', filename='js/config.js') }}"></script>
-<script src="{{ url_for('static', filename='js/db.js') }}"></script>
-<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<script src="{{ url_for('static', filename='js/config.js') }}?v=final"></script>
+<script src="{{ url_for('static', filename='js/db.js') }}?v=final"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}?v=final"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
