@@ -112,7 +112,8 @@ USERS_FILE = ROOT_DIR / ".users.json"  # folder -> {public, admin_device, salt, 
 ROOT_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__, static_folder="static", template_folder="templates", static_url_path="/static")
-CORS(app) # Initialize CORS to allow cross-origin requests
+# Allow all origins, and specifically allow the Authorization and X-File-Name headers.
+CORS(app, allow_headers=['Content-Type', 'Authorization', 'X-File-Name'])
 app.secret_key = APP_SECRET
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 app.config["SESSION_COOKIE_NAME"] = SESSION_COOKIE_NAME
