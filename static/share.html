@@ -1,40 +1,51 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Share Files - FileVault</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css" />
+    <link rel="manifest" href="/static/site.webmanifest" />
+    <meta name="theme-color" content="#0F172A" />
+</head>
+<body>
+    <div class="container" style="padding-top: 2rem;">
+        <div class="card" id="mainContainer">
+            <h1 style="display: flex; align-items: center; gap: .75rem;"><img src="/static/favicon.svg" alt="" width="40" height="40"> Shared Files</h1>
+            <p>Files shared or uploaded to the app are stored locally on your device. Use the buttons below to upload them to your desired destination.</p>
 
-{% block content %}
-<div class="card" id="mainContainer">
-  <h1>Shared Files</h1>
-  <p>Files shared or uploaded to the app are stored locally on your device until you send them. Use the buttons below to upload them to your desired destination.</p>
+            <!-- Manual File Upload -->
+            <div class="upload-section" style="margin-top: 1rem;">
+                <div class="upload-area" id="uploadArea">
+                <input type="file" id="manualUploadInput" class="upload-input" multiple>
+                <div class="upload-icon"><i class="fas fa-file-upload"></i></div>
+                <div class="upload-text">Drop files or tap here to add to the queue</div>
+                </div>
+            </div>
 
-  <!-- Manual File Upload -->
-  <div class="upload-section" style="margin-top: 1rem;">
-    <div class="upload-area" id="uploadArea">
-      <input type="file" id="manualUploadInput" class="upload-input" multiple>
-      <div class="upload-icon"><i class="fas fa-file-upload"></i></div>
-      <div class="upload-text">Drop files or tap here to add to the queue</div>
+            <!-- File List -->
+            <h2 style="margin-top: 2rem;">Pending Files (<span id="file-count">0</span>)</h2>
+            <div id="file-list" class="file-list-container" style="margin-top: 1rem;">
+                <div id="no-files-message" class="card" style="text-align:center; color:var(--text-muted);">No files are currently pending.</div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.5rem;">
+                <button class="btn btn-primary" id="send-local-btn" disabled><i class="fas fa-network-wired"></i> Send to Local</button>
+                <button class="btn btn-secondary" id="send-server-btn" disabled><i class="fas fa-server"></i> Send to Server</button>
+                <button class="btn btn-danger" id="clear-all-btn" disabled><i class="fas fa-trash"></i> Clear All</button>
+            </div>
+
+            <!-- Upload Progress -->
+            <div id="progress-container" class="progress-container-share" style="margin-top: 1rem;"></div>
+        </div>
     </div>
-  </div>
 
-  <!-- File List -->
-  <h2 style="margin-top: 2rem;">Pending Files (<span id="file-count">0</span>)</h2>
-  <div id="file-list" class="file-list-container" style="margin-top: 1rem;">
-    <!-- Files will be dynamically rendered here by share.js -->
-    <div id="no-files-message" class="card" style="text-align:center; color:var(--text-muted);">No files are currently pending.</div>
-  </div>
+    <div id="toastContainer"></div>
 
-  <!-- Action Buttons -->
-  <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
-      <button class="btn btn-primary" id="send-local-btn" disabled><i class="fas fa-network-wired"></i> Send to Local</button>
-      <button class="btn btn-secondary" id="send-server-btn" disabled><i class="fas fa-server"></i> Send to Server</button>
-      <button class="btn btn-danger" id="clear-all-btn" disabled><i class="fas fa-trash"></i> Clear All</button>
-  </div>
-
-  <!-- Upload Progress -->
-  <div id="progress-container" class="progress-container-share" style="margin-top: 1rem;"></div>
-
-</div>
-{% endblock %}
-
-{% block scripts %}
-<script src="{{ url_for('static', filename='js/db.js') }}"></script>
-<script src="{{ url_for('static', filename='js/share.js') }}"></script>
-{% endblock %}
+    <script src="/static/js/config.js"></script>
+    <script src="/static/js/db.js"></script>
+    <script src="/static/js/share.js"></script>
+</body>
+</html>
