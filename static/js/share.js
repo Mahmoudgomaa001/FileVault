@@ -102,10 +102,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Init ---
     await window.fileDB.initDB();
-    // First, render what's already in the DB
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const error = urlParams.get('error');
+    const success = urlParams.get('success');
+
+    if (error) {
+        if (error === 'login_required') {
+            showToast('Please log into the main app first, then try sharing again.', 'error');
+        } else {
+            showToast('An account error occurred. Please log in again.', 'error');
+        }
+    } else if (success) {
+        // If the redirect from the server was successful, we now fetch the files
+        fetchAndSaveMyPendingFiles();
+    }
+
+    // Always render whatever is currently in the DB
     await renderFileList();
-    // Then, check if the server has any new files for us from a recent share action
-    fetchAndSaveMyPendingFiles();
+
+    // Clean up the URL
+    history.replaceState(null, '', window.location.pathname);
 });
 
 function showToast(message, type = 'info') { const c = document.getElementById('toastContainer'); if (!c) return; const t = document.createElement('div'); t.className = `toast ${type}`; const i = { success: 'fa-check-circle', error: 'fa-times-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' }[type] || 'fa-info-circle'; t.innerHTML = `<i class="fas ${i}"></i><div class="toast-message">${message}</div>`; c.appendChild(t); setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000); }

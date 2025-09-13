@@ -1652,13 +1652,14 @@ def share_receiver():
     # This endpoint is hit from the online origin. It needs to know which user
     # this share belongs to. It uses the existing session cookie for that.
     if not is_authed():
-        # If user isn't logged into the main app, we can't associate the share.
-        # Redirect to login and ask them to try again after logging in.
-        return redirect(url_for("login", error="Please log in before sharing files."))
+        # If user isn't logged in, we can't associate the share.
+        # Redirect to the share page with an error flag.
+        return redirect(url_for("static", filename="share.html", error="login_required"))
 
     user_folder = session.get("folder")
     if not user_folder:
-        return "Could not determine user folder.", 400
+        # This case should not happen if is_authed() is true, but as a fallback:
+        return redirect(url_for("static", filename="share.html", error="account_error"))
 
     files = request.files.getlist("files")
     if not files or not any(f.filename for f in files):
@@ -1684,8 +1685,8 @@ def share_receiver():
 
     pending_file_shares[user_folder] = stored_files
 
-    # Redirect to the static share page. The page itself will notify the user.
-    return redirect(url_for("static", filename="share.html"))
+    # Redirect to the static share page. The JS on that page will fetch the files.
+    return redirect(url_for("static", filename="share.html", success="true"))
 
 @app.route("/api/get-pending-files")
 def api_get_pending_files():
