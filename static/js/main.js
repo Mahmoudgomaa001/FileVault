@@ -1760,6 +1760,59 @@ function removeFileCard(rel){
       initNotificationState();
     });
 
+    // APP SETTINGS
+    function initAppSettings() {
+      const goLocalBtn = document.getElementById('goLocalBtn');
+      const goServerBtn = document.getElementById('goServerBtn');
+      const appSettingsBtn = document.getElementById('appSettingsBtn');
+      const saveAppSettingsBtn = document.getElementById('saveAppSettingsBtn');
+      const localUrlInput = document.getElementById('localUrlInput');
+      const serverUrlInput = document.getElementById('serverUrlInput');
+
+      if (goLocalBtn) {
+        goLocalBtn.addEventListener('click', () => {
+          const config = window.appConfigManager.getConfig();
+          if (config.local_url) {
+            window.location.href = config.local_url;
+          } else {
+            showToast('Local URL not set.', 'warning');
+          }
+        });
+      }
+
+      if (goServerBtn) {
+        goServerBtn.addEventListener('click', () => {
+          const config = window.appConfigManager.getConfig();
+          if (config.server_url) {
+            window.location.href = config.server_url;
+          } else {
+            showToast('Server URL not set.', 'warning');
+          }
+        });
+      }
+
+      if (appSettingsBtn) {
+        appSettingsBtn.addEventListener('click', () => {
+          const config = window.appConfigManager.getConfig();
+          if (localUrlInput) localUrlInput.value = config.local_url;
+          if (serverUrlInput) serverUrlInput.value = config.server_url;
+          openModal('appSettingsModal');
+        });
+      }
+
+      if (saveAppSettingsBtn) {
+        saveAppSettingsBtn.addEventListener('click', async () => {
+          const newConfig = {
+            local_url: localUrlInput ? localUrlInput.value.trim() : '',
+            server_url: serverUrlInput ? serverUrlInput.value.trim() : ''
+          };
+          await window.appConfigManager.saveConfig(newConfig);
+          showToast('Settings saved!', 'success');
+          closeModal('appSettingsModal');
+        });
+      }
+    }
+
     // PWA INSTALL
     function initPwaInstall() {
       const installBtn = document.getElementById('installBtn');

@@ -144,60 +144,8 @@ FAVICON_SVG = """<?xml version="1.0" encoding="UTF-8"?>
 
 """
 
-def ensure_favicon_assets():
-    base = Path(__file__).parent.resolve() / "static"
-    base.mkdir(parents=True, exist_ok=True)
-
-    fav_svg = base / "favicon.svg"
-    if not fav_svg.exists():
-        try:
-            tmp = fav_svg.with_suffix(".svg.tmp")
-            tmp.write_text(FAVICON_SVG, encoding="utf-8")
-            tmp.replace(fav_svg)
-            print(f"[assets] Wrote favicon.svg -> {fav_svg}")
-        except Exception as e:
-            print("[assets] favicon write failed:", e)
-
-    # Minimal PWA manifest using SVG icons (offline-friendly)
-    manifest = {
-        "name": "FileVault",
-        "short_name": "FileVault",
-        "start_url": "/",
-        "display": "standalone",
-        "background_color": "#ffe6f2",
-        "theme_color": "#ff4fa3",
-        "icons": [
-            {"src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml"}
-        ],
-        "share_target": {
-            "action": "/share-receiver",
-            "method": "POST",
-            "enctype": "multipart/form-data",
-            "params": {
-                "files": [
-                    {
-                        "name": "files",
-                        "accept": ["*/*"]
-                    }
-                ]
-            }
-        }
-    }
-    manifest_path = base / "site.webmanifest"
-    try:
-        tmp = manifest_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(manifest_path)
-        print(f"[assets] Wrote site.webmanifest -> {manifest_path}")
-    except Exception as e:
-        print("[assets] manifest write failed:", e)
-
-# Call this during startup (after ensure_static_assets)
-try:
-    ensure_favicon_assets()
-except Exception as e:
-    print("Brand assets error:", e)
-
+# The ensure_favicon_assets function was removed because the manifest and icon
+# are now static files managed directly, providing better control for PWA features.
 
 mimetypes.add_type("font/woff2", ".woff2")  # make sure .woff2 served correctly
 
@@ -1271,6 +1219,18 @@ def api_dhikr():
     dhikr = get_random_dhikr()
     return jsonify({"dhikr": dhikr})
 
+@app.route("/api/config")
+def api_config():
+    local_ip = get_local_ip()
+    server_url = get_ngrok_url()
+    local_url_full = f"http://{local_ip}:{PORT}"
+
+    return jsonify({
+        "ok": True,
+        "local_url": local_url_full,
+        "server_url": server_url or "" # Return empty string if no ngrok URL
+    })
+
 @app.route("/api/me")
 def api_me():
     if not is_authed():
@@ -1690,41 +1650,29 @@ def api_download_zip():
 # -----------------------------
 @app.route("/share")
 def share_page():
-    # Re-establish context from device cookie instead of session,
-    # as the session may be lost during the PWA share redirect flow.
+    # This route now serves the main share page.
+    # All logic for handling shared files is now on the client-side,
+    # managed by the service worker and share.js.
     device_id, folder = get_or_create_device_folder(request)
-
     if not folder:
-        # This should not happen if get_or_create_device_folder works,
-        # but as a fallback, go to login.
         return redirect(url_for("login"))
 
-    # Set the session variables to ensure this context is "authed"
-    # for subsequent API calls made from the share page's Javascript.
+    # We still set session variables to ensure the client is "authed"
+    # for making subsequent API calls (like uploading).
     session["authed"] = True
     session["folder"] = folder
     session["icon"] = get_user_icon(folder)
 
-    pending_dir = safe_path(folder) / ".pending_shares"
-    files = []
-    if pending_dir.exists():
-        for p in sorted(list(pending_dir.iterdir()), key=os.path.getmtime, reverse=True):
-            if p.is_file():
-                try:
-                    uuid_part, name_part = p.name.split("__", 1)
-                    files.append({"id": p.name, "name": name_part})
-                except ValueError:
-                    continue
-
-    # Get values for BASE_HTML rendering
+    # The rest of the context is for base.html rendering.
     dhikr = get_random_dhikr()
     dhikr_list = [{"dhikr": d} for d in ISLAMIC_DHIKR]
     cfg = get_user_cfg(folder)
     is_admin = bool(device_id and device_id == cfg.get("admin_device"))
 
+    # Note: The `files` variable is no longer passed from the server.
     return render_template(
         "share.html",
-        files=files,
+        files=[], # Pass empty list, as it's now handled client-side
         authed=True,
         icon=session.get("icon"),
         user_label=session.get("folder",""),
@@ -1736,117 +1684,9 @@ def share_page():
         token=None
     )
 
-@app.route("/share-receiver", methods=["POST"])
-def share_receiver():
-    print("[DEBUG] /share-receiver called")
-    device_id, folder = get_or_create_device_folder(request)
-    print(f"[DEBUG] device_id: {device_id}, folder: {folder}")
-
-    files = request.files.getlist("files")
-    if not files or not any(f.filename for f in files):
-        return redirect(url_for("home"))
-
-    pending_dir = safe_path(folder) / ".pending_shares"
-    pending_dir.mkdir(exist_ok=True)
-
-    saved_count = 0
-    for f in files:
-        if f and f.filename:
-            filename = sanitize_filename(f.filename)
-            save_name = f"{str(uuid.uuid4())}__{filename}"
-            save_path = pending_dir / save_name
-            try:
-                f.save(save_path)
-                saved_count += 1
-            except Exception as e:
-                print(f"[share] Save failed for {filename}: {e}")
-
-    print(f"[DEBUG] Saved {saved_count} files. Redirecting to share_page.")
-    return redirect(url_for("share_page"))
-
-@app.route("/api/commit_share", methods=["POST"])
-def api_commit_share():
-    if not is_authed():
-        return jsonify({"ok": False, "error": "not authed"}), 401
-
-    data = request.get_json(silent=True) or {}
-    pending_ids = data.get("ids", [])
-    destination_rel = data.get("destination")
-
-    if not pending_ids or destination_rel is None:
-        return jsonify({"ok": False, "error": "ids and destination required"}), 400
-
-    base_folder = session.get("folder")
-    if first_segment(destination_rel) != base_folder and destination_rel != base_folder:
-        return jsonify({"ok": False, "error": "forbidden destination"}), 403
-
-    pending_dir = safe_path(base_folder) / ".pending_shares"
-    committed = []
-    errors = []
-
-    for pending_id in pending_ids:
-        pending_file = pending_dir / pending_id
-        if not pending_file.exists() or not pending_file.is_file():
-            errors.append({"id": pending_id, "error": "not found"})
-            continue
-
-        try:
-            _, original_filename = pending_id.split("__", 1)
-        except ValueError:
-            original_filename = pending_id
-
-        dest_dir = safe_path(destination_rel)
-        save_path = dest_dir / original_filename
-
-        base, ext = os.path.splitext(original_filename)
-        i = 1
-        while save_path.exists():
-            save_path = dest_dir / f"{base} ({i}){ext}"
-            i += 1
-
-        try:
-            shutil.move(str(pending_file), str(save_path))
-            meta = get_file_meta(save_path)
-            socketio.emit("file_update", {"action":"added", "dir": destination_rel, "meta": meta})
-            committed.append(meta)
-        except Exception as e:
-            errors.append({"id": pending_id, "error": str(e)})
-
-    return jsonify({"ok": True, "committed": committed, "errors": errors})
-
-@app.route("/api/clear_shares", methods=["POST"])
-def api_clear_shares():
-    if not is_authed():
-        return jsonify({"ok": False, "error": "not authed"}), 401
-
-    base_folder = session.get("folder")
-    pending_dir = safe_path(base_folder) / ".pending_shares"
-
-    if not pending_dir.exists():
-        return jsonify({"ok": True, "deleted_count": 0})
-
-    deleted_count = 0
-    errors = []
-    for item in pending_dir.iterdir():
-        try:
-            if item.is_file():
-                item.unlink()
-                deleted_count += 1
-            elif item.is_dir():
-                shutil.rmtree(item)
-                deleted_count += 1
-        except Exception as e:
-            errors.append({"name": item.name, "error": str(e)})
-            print(f"Error deleting {item.name}: {e}")
-
-    if not errors:
-        try:
-            pending_dir.rmdir()
-        except Exception as e:
-            print(f"Error deleting .pending_shares directory: {e}")
-
-
-    return jsonify({"ok": True, "deleted_count": deleted_count, "errors": errors})
+# The old /share-receiver and /api/commit_share, /api/clear_shares routes
+# have been removed as this functionality is now handled entirely on the client
+# by the service worker and IndexedDB, making the app fully offline-capable.
 
 
 # Error handlers: redirect to login on not found/forbidden

@@ -55,6 +55,11 @@
               <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-users-cog"></i></button>
               <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-cog"></i></button>
               {% endif %}
+              <!-- New PWA buttons -->
+              <button id="goLocalBtn" class="btn btn-secondary btn-icon" title="Go to Local IP"><i class="fas fa-network-wired"></i></button>
+              <button id="goServerBtn" class="btn btn-secondary btn-icon" title="Go to Server URL"><i class="fas fa-server"></i></button>
+              <button id="appSettingsBtn" class="btn btn-secondary btn-icon" title="App Settings"><i class="fas fa-cogs"></i></button>
+
               <button class="btn btn-secondary btn-icon" id="installBtn" title="Install App" style="display: none;"><i class="fas fa-mobile-screen-button"></i></button>
               <button id="themeBtn" class="btn btn-secondary btn-icon" title="Toggle theme"><i class="fas fa-moon"></i></button>
               <a href="{{ url_for('logout') }}" class="btn btn-danger btn-icon" title="Logout"><i class="fas fa-sign-out"></i></a>
@@ -75,6 +80,11 @@
                   <button class="dropdown-item" onclick="document.getElementById('accountsBtn').click()"><i class="fas fa-users-cog"></i><span>Accounts</span></button>
                   <button class="dropdown-item" onclick="document.getElementById('settingsBtn').click()"><i class="fas fa-cog"></i><span>Settings</span></button>
                   {% endif %}
+                  <hr class="dropdown-divider">
+                  <button class="dropdown-item" onclick="document.getElementById('goLocalBtn').click()"><i class="fas fa-network-wired"></i><span>Go Local</span></button>
+                  <button class="dropdown-item" onclick="document.getElementById('goServerBtn').click()"><i class="fas fa-server"></i><span>Go Server</span></button>
+                  <button class="dropdown-item" onclick="document.getElementById('appSettingsBtn').click()"><i class="fas fa-cogs"></i><span>App Settings</span></button>
+                  <hr class="dropdown-divider">
                   <button class="dropdown-item" id="installBtnMobile" onclick="document.getElementById('installBtn').click()" style="display:none;"><i class="fas fa-mobile-screen-button"></i><span>Install App</span></button>
                   <button class="dropdown-item" onclick="document.getElementById('themeBtn').click()"><i class="fas fa-moon"></i><span>Toggle Theme</span></button>
                   <hr class="dropdown-divider">
@@ -101,6 +111,31 @@
 
   <div class="container">
     {% block content %}{% endblock %}
+  </div>
+
+  <!-- App Settings Modal -->
+  <div class="modal" id="appSettingsModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">App Settings</h3>
+        <button class="modal-close" onclick="closeModal('appSettingsModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <p>Here you can view and manually override the URLs used by the application. These settings are stored locally in your browser.</p>
+        <div class="form-group">
+          <label class="form-label" for="localUrlInput">Local IP URL</label>
+          <input type="text" id="localUrlInput" class="form-input" placeholder="e.g., http://192.168.1.10:5000">
+        </div>
+        <div class="form-group" style="margin-top: 1rem;">
+          <label class="form-label" for="serverUrlInput">Server URL</label>
+          <input type="text" id="serverUrlInput" class="form-input" placeholder="e.g., https://your-server.com">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('appSettingsModal')">Cancel</button>
+        <button class="btn btn-primary" id="saveAppSettingsBtn"><i class="fas fa-save"></i> Save</button>
+      </div>
+    </div>
   </div>
 
   <!-- Preview Modal -->
@@ -348,6 +383,7 @@
     dhikr_list: {{ dhikr_list|tojson|default('[]') }}
   };
 </script>
+<script src="{{ url_for('static', filename='js/config.js') }}"></script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% block scripts %}{% endblock %}
 </body>
