@@ -85,6 +85,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         await renderFileList();
     }
 
+    if (window.appConfigManager) {
+        const config = await window.appConfigManager.loadConfig();
+        const openAppBtn = document.getElementById('open-app-btn');
+        if (openAppBtn && config.local_url) {
+            openAppBtn.href = config.local_url;
+        } else if (openAppBtn && config.server_url) {
+            // Fallback to server url if local isn't set
+            openAppBtn.href = config.server_url;
+        } else if(openAppBtn) {
+            // If no urls, point back to launcher
+            openAppBtn.href = '/static/launcher.html';
+            openAppBtn.textContent = 'Open Launcher to Configure';
+        }
+    }
+
     // Diagnostic code for share target
     const urlParams = new URLSearchParams(window.location.search);
     const savedCount = urlParams.get('saved');
