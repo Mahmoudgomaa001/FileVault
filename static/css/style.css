@@ -235,6 +235,20 @@
       .accounts-card { flex-direction: column; align-items: stretch; }
       .account-actions { flex-direction: column; align-items: stretch; width: 100%; margin-top: .75rem; }
       .account-actions .btn { width: 100%; justify-content: center; }
+      #bulkActionsToolbar .toolbar-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: .75rem;
+      }
+      #bulkActionsToolbar .toolbar-row > div {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: .5rem;
+      }
+      #bulkActionsToolbar .toolbar-row > div:first-child {
+        grid-template-columns: 1fr;
+        text-align: center;
+      }
     }
 
     @media (min-width: 768px) {

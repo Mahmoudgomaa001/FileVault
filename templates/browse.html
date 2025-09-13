@@ -25,10 +25,13 @@
   <div class="toolbar-row" style="justify-content:space-between;">
     <div style="font-weight:700;" id="selectionCount"></div>
     <div style="display:flex; gap:.5rem;">
-      <button class="btn btn-primary btn-icon" id="bulkMoveBtn" title="Move selected"><i class="fas fa-folder-tree"></i></button>
-      <button class="btn btn-danger btn-icon" id="bulkDeleteBtn" title="Delete selected"><i class="fas fa-trash"></i></button>
-      <button class="btn btn-success btn-icon" id="bulkDownloadBtn" title="Download selected"><i class="fas fa-download"></i></button>
-      <button class="btn btn-secondary" id="deselectAllBtn">Cancel</button>
+      <button class="btn btn-secondary" id="selectAllBtn">Select All</button>
+      <button class="btn btn-secondary" id="deselectAllBtn">Select None</button>
+      <button class="btn btn-primary btn-icon" id="bulkMoveBtn" title="Move selected"><i class="fas fa-right-left"></i></button>
+      <button class="btn btn-danger btn-icon" id="bulkDeleteBtn" title="Delete selected"><i class="fas fa-trash-alt"></i></button>
+      <button class="btn btn-success btn-icon" id="bulkDownloadIndividualBtn" title="Download selected files individually"><i class="fas fa-file-download"></i></button>
+      <button class="btn btn-success btn-icon" id="bulkDownloadBtn" title="Download selected as zip"><i class="fas fa-file-archive"></i></button>
+      <button class="btn btn-secondary" id="cancelSelectionBtn">Cancel</button>
     </div>
   </div>
 </div>
@@ -41,10 +44,10 @@
       <i class="fas fa-search search-icon"></i>
     </div>
     <div class="view-controls">
-      <button class="view-btn" data-view="grid" onclick="setView('grid')"><i class="fas fa-th"></i><span>Grid</span></button>
-      <button class="view-btn" data-view="list" onclick="setView('list')"><i class="fas fa-list"></i><span>List</span></button>
+      <button class="view-btn" data-view="grid" onclick="setView('grid')"><i class="fas fa-th-large"></i><span>Grid</span></button>
+      <button class="view-btn" data-view="list" onclick="setView('list')"><i class="fas fa-list-ul"></i><span>List</span></button>
     </div>
-    <button id="selectModeBtn" class="btn btn-secondary" title="Select Files"><i class="fas fa-tasks"></i> Select</button>
+    <button id="selectModeBtn" class="btn btn-secondary" title="Select Files"><i class="fas fa-check-square"></i> Select</button>
     <!-- Sorting controls -->
     <div class="view-controls" style="gap:.5rem;">
       <select id="sortBy" class="btn btn-secondary" title="Sort by">
@@ -53,12 +56,12 @@
         <option value="type">Type</option>
         <option value="date">Date</option>
       </select>
-      <button id="sortDir" class="btn btn-secondary" title="Asc/Desc" data-dir="asc"><i class="fas fa-arrow-up-wide-short"></i></button>
+      <button id="sortDir" class="btn btn-secondary" title="Asc/Desc" data-dir="asc"><i class="fas fa-sort-amount-up"></i></button>
       <label class="btn btn-secondary" style="gap:.5rem; cursor:pointer;">
         <input type="checkbox" id="foldersFirst" style="accent-color:#3B82F6; width:16px; height:16px;"> Folders first </label>
     </div>
     <button class="btn btn-secondary" onclick="showNewFolderModal()"><i class="fas fa-folder-plus"></i> New Folder</button>
-    <button class="btn btn-primary" id="openClipBtn"><i class="fas fa-clipboard"></i> Paste Text</button>
+    <button class="btn btn-primary" id="openClipBtn"><i class="fas fa-paste"></i> Paste Text</button>
     <nav class="nav-menu">
     <a class="btn btn-secondary" href=".." title="Up one folder">
       <i class="fas fa-level-up-alt"></i>
@@ -117,7 +120,6 @@
         <div class="file-actions">
           {% if not item.is_dir %}
             <a class="btn btn-primary btn-icon" href="{{ url_for('download', path=item.rel) }}" title="Download"><i class="fas fa-download"></i></a>
-            <button class="btn btn-secondary btn-icon" onclick="event.stopPropagation(); shareFile('{{ item.rel }}')" title="Share"><i class="fas fa-share"></i></button>
             <button class="btn btn-danger btn-icon" onclick="event.stopPropagation(); deleteFile('{{ item.rel }}')" title="Delete"><i class="fas fa-trash"></i></button>
           {% else %}
             <a class="btn btn-secondary btn-icon" href="{{ url_for('browse') }}/{{ item.rel }}" title="Open"><i class="fas fa-folder-open"></i></a>

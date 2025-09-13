@@ -40,7 +40,7 @@
         <i class="fas fa-shield-alt"></i><span>FileVault</span>
       </a>
       <nav class="nav-menu">
-        <a class="btn btn-secondary" href="{{ url_for('home') }}" title="My Files"><i class="fas fa-home"></i></a>
+        <a class="btn btn-secondary" href="{{ url_for('home') }}" title="My Files"><i class="fas fa-home-alt"></i></a>
         <div class="user-badge">{{ icon or "📁" }} {{ user_label }}</div>
         {% if authed %}
           <!-- Desktop-only buttons -->
@@ -52,12 +52,12 @@
               {% endif %}
               <button class="btn btn-success btn-icon" id="myQRBtn" title="My QR"><i class="fas fa-qrcode"></i></button>
               {% if is_admin %}
-              <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-user-gear"></i></button>
-              <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-gear"></i></button>
+              <button class="btn btn-secondary btn-icon" id="accountsBtn" title="Accounts"><i class="fas fa-users-cog"></i></button>
+              <button class="btn btn-secondary btn-icon" id="settingsBtn" title="Settings"><i class="fas fa-cog"></i></button>
               {% endif %}
               <button class="btn btn-secondary btn-icon" id="installBtn" title="Install App" style="display: none;"><i class="fas fa-mobile-screen-button"></i></button>
               <button id="themeBtn" class="btn btn-secondary btn-icon" title="Toggle theme"><i class="fas fa-moon"></i></button>
-              <a href="{{ url_for('logout') }}" class="btn btn-danger btn-icon" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
+              <a href="{{ url_for('logout') }}" class="btn btn-danger btn-icon" title="Logout"><i class="fas fa-sign-out"></i></a>
           </div>
 
           <!-- Mobile-only dropdown menu -->
@@ -72,13 +72,13 @@
                   <button class="dropdown-item" onclick="document.getElementById('myQRBtn').click()"><i class="fas fa-qrcode"></i><span>My QR</span></button>
                   <hr class="dropdown-divider">
                   {% if is_admin %}
-                  <button class="dropdown-item" onclick="document.getElementById('accountsBtn').click()"><i class="fas fa-user-gear"></i><span>Accounts</span></button>
-                  <button class="dropdown-item" onclick="document.getElementById('settingsBtn').click()"><i class="fas fa-gear"></i><span>Settings</span></button>
+                  <button class="dropdown-item" onclick="document.getElementById('accountsBtn').click()"><i class="fas fa-users-cog"></i><span>Accounts</span></button>
+                  <button class="dropdown-item" onclick="document.getElementById('settingsBtn').click()"><i class="fas fa-cog"></i><span>Settings</span></button>
                   {% endif %}
                   <button class="dropdown-item" id="installBtnMobile" onclick="document.getElementById('installBtn').click()" style="display:none;"><i class="fas fa-mobile-screen-button"></i><span>Install App</span></button>
                   <button class="dropdown-item" onclick="document.getElementById('themeBtn').click()"><i class="fas fa-moon"></i><span>Toggle Theme</span></button>
                   <hr class="dropdown-divider">
-                  <a href="{{ url_for('logout') }}" class="dropdown-item dropdown-item-danger"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a>
+                  <a href="{{ url_for('logout') }}" class="dropdown-item dropdown-item-danger"><i class="fas fa-sign-out"></i><span>Logout</span></a>
               </div>
           </div>
         {% endif %}

@@ -196,6 +196,20 @@
         }
     }
 
+    function selectAll() {
+        document.querySelectorAll('.file-card:not([style*="display: none"]) .file-select-checkbox').forEach(cb => {
+            cb.checked = true;
+        });
+        handleSelectionChange();
+    }
+
+    function deselectAll() {
+        document.querySelectorAll('.file-card .file-select-checkbox').forEach(cb => {
+            cb.checked = false;
+        });
+        handleSelectionChange();
+    }
+
     // Dhikr data
 
 async function changeDhikr() {
@@ -557,14 +571,6 @@ async function changeDhikr() {
     }
 
     // SHARE / COPY
-    function shareFile(rel){
-      const rawUrl = `${window.location.origin}${URLS.raw}?path=${encodeURIComponent(rel)}`;
-      if(navigator.share && /mobile|android|iphone/i.test(navigator.userAgent)){
-        navigator.share({title:'Shared File', url:rawUrl}).catch(()=> copyLink(rawUrl));
-      } else {
-        copyLink(rawUrl);
-      }
-    }
     function copyLink(url){
       try {
         if(navigator.clipboard){
@@ -794,13 +800,34 @@ async function changeDhikr() {
         }
     }
 
+    async function bulkDownloadIndividual() {
+        if (selectedFiles.size === 0) { return; }
+        const sources = Array.from(selectedFiles);
+        for (const rel of sources) {
+            const card = document.querySelector(`.file-card[data-rel="${rel}"]`);
+            if (card && card.dataset.isDir !== '1') {
+                const downloadUrl = card.dataset.dl;
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = downloadUrl;
+                a.download = card.dataset.name;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            }
+        }
+    }
+
     function initBulkActions(){
         document.getElementById('selectModeBtn')?.addEventListener('click', toggleSelectMode);
         document.getElementById('bulkMoveBtn')?.addEventListener('click', openMoveModal);
         document.getElementById('confirmMoveBtn')?.addEventListener('click', confirmMove);
         document.getElementById('bulkDeleteBtn')?.addEventListener('click', confirmBulkDelete);
         document.getElementById('bulkDownloadBtn')?.addEventListener('click', bulkDownload);
-        document.getElementById('deselectAllBtn')?.addEventListener('click', () => toggleSelectMode(false));
+        document.getElementById('bulkDownloadIndividualBtn')?.addEventListener('click', bulkDownloadIndividual);
+        document.getElementById('cancelSelectionBtn')?.addEventListener('click', () => toggleSelectMode(false));
+        document.getElementById('selectAllBtn')?.addEventListener('click', selectAll);
+        document.getElementById('deselectAllBtn')?.addEventListener('click', deselectAll);
     }
 
     function initFileGrid() {
