@@ -1,30 +1,47 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    const openAppBtn = document.getElementById('openAppBtn');
+    const goLocalBtn = document.getElementById('goLocalBtn');
+    const goServerBtn = document.getElementById('goServerBtn');
     const settingsBtn = document.getElementById('settingsBtn');
     const saveAppSettingsBtn = document.getElementById('saveAppSettingsBtn');
     const localUrlInput = document.getElementById('localUrlInput');
     const serverUrlInput = document.getElementById('serverUrlInput');
 
-    function updateButtonLinks(config) {
-        // The launcher now *always* opens the server_url to ensure a consistent origin.
-        // The choice to upload to local or server happens inside the app.
-        if (config.server_url) {
-            openAppBtn.href = config.server_url;
-            openAppBtn.disabled = false;
+    let apiToken = null;
+
+    async function updateButtonLinks(config) {
+        if (!apiToken) {
+            showToast('API Token not found. Please set one up in the main app settings.', 'warning');
+        }
+
+        const loginUrlSuffix = apiToken ? `/login?token=${encodeURIComponent(apiToken)}` : '';
+
+        if (config.local_url) {
+            goLocalBtn.href = new URL(loginUrlSuffix, config.local_url).href;
+            goLocalBtn.disabled = !apiToken;
         } else {
-            openAppBtn.href = '#';
-            openAppBtn.disabled = true;
-            openAppBtn.textContent = 'Configure Server URL in Settings';
+            goLocalBtn.href = '#';
+            goLocalBtn.disabled = true;
+        }
+
+        if (config.server_url) {
+            goServerBtn.href = new URL(loginUrlSuffix, config.server_url).href;
+            goServerBtn.disabled = !apiToken;
+        } else {
+            goServerBtn.href = '#';
+            goServerBtn.disabled = true;
         }
     }
 
-    // Load config and update UI
-    try {
-        const config = await window.appConfigManager.loadConfig();
-        updateButtonLinks(config);
-    } catch (e) {
-        console.error("Failed to load initial config", e);
-        showToast('Could not load configuration.', 'error');
+    async function initialize() {
+        try {
+            await window.fileDB.initDB();
+            apiToken = await window.fileDB.getConfigValue('api_token');
+            const config = await window.appConfigManager.loadConfig();
+            await updateButtonLinks(config);
+        } catch (e) {
+            console.error("Failed to initialize launcher:", e);
+            showToast('Could not load configuration or token.', 'error');
+        }
     }
 
     // Settings modal logic
@@ -44,9 +61,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 server_url: serverUrlInput ? serverUrlInput.value.trim() : ''
             };
             await window.appConfigManager.saveConfig(newConfig);
-            updateButtonLinks(newConfig); // Update buttons immediately
+            await updateButtonLinks(newConfig);
             showToast('Settings saved!', 'success');
             closeModal('appSettingsModal');
         });
     }
+
+    initialize();
 });
