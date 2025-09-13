@@ -78,11 +78,6 @@ SESSION_COOKIE_NAME = "qrfiles_sess"
 # Pending admin-claim tokens (QR-based transfer)
 admin_claim_tokens: dict[str, dict] = {}
 
-# In-memory store for pending shared files
-pending_file_shares: dict[str, list] = {}
-
-
-
 # Load adhkar and translations from JSON file
 def load_adhkar():
     ROOT_DIR = Path(__file__).parent.resolve()  # project root (where gpt_v11.py lives)
@@ -1642,74 +1637,9 @@ def api_download_zip():
 
 # -----------------------------
 # -----------------------------
-# The /share route has been removed. The share page is now a static file
-# at /static/share.html, making it fully independent from the server and
-# capable of loading offline. Authentication for uploads is handled via
-# API tokens stored in the client's IndexedDB.
-
-@app.route("/share-receiver", methods=["POST"])
-def share_receiver():
-    # This endpoint is hit from the online origin. It needs to know which user
-    # this share belongs to. It uses the existing session cookie for that.
-    if not is_authed():
-        # If user isn't logged in, we can't associate the share.
-        # Redirect to the share page with an error flag.
-        return redirect(url_for("static", filename="share.html", error="login_required"))
-
-    user_folder = session.get("folder")
-    if not user_folder:
-        # This case should not happen if is_authed() is true, but as a fallback:
-        return redirect(url_for("static", filename="share.html", error="account_error"))
-
-    files = request.files.getlist("files")
-    if not files or not any(f.filename for f in files):
-        return redirect(url_for("static", filename="share.html"))
-
-    # Store files in memory as base64 encoded strings, keyed by the user's folder
-    stored_files = pending_file_shares.get(user_folder, [])
-    for f in files:
-        if f and f.filename:
-            try:
-                file_bytes = f.read()
-                b64_encoded = base64.b64encode(file_bytes).decode('utf-8')
-                stored_files.append({
-                    "name": f.filename,
-                    "mimetype": f.mimetype or "application/octet-stream",
-                    "data": b64_encoded
-                })
-            except Exception as e:
-                print(f"[share-receiver] Failed to read or encode file {f.filename}: {e}")
-
-    if not stored_files:
-         return redirect(url_for("static", filename="share.html"))
-
-    pending_file_shares[user_folder] = stored_files
-
-    # Redirect to the static share page. The JS on that page will fetch the files.
-    return redirect(url_for("static", filename="share.html", success="true"))
-
-@app.route("/api/get-pending-files")
-def api_get_pending_files():
-    # This endpoint is now authenticated by the API token of the user making the request
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return jsonify({"ok": False, "error": "Missing auth token"}), 401
-
-    token = auth_header.split(" ", 1)[1]
-    user = get_user_by_token(token)
-    if not user:
-        return jsonify({"ok": False, "error": "Invalid auth token"}), 401
-
-    user_folder = user.get("folder")
-
-    # Pop the files from memory for this user. This is a one-time retrieval.
-    files_data = pending_file_shares.pop(user_folder, None)
-
-    if files_data is None:
-        # It's not an error to have no pending files. Return an empty list.
-        return jsonify({"ok": True, "files": []})
-
-    return jsonify({"ok": True, "files": files_data})
+# The /share-receiver and /api/get-pending-files routes have been removed.
+# This functionality is now handled entirely by the service worker, which
+# intercepts share events and saves files directly to IndexedDB.
 
 @app.route('/login_and_sync')
 def login_and_sync():

@@ -1,49 +1,31 @@
-const VERSION = 'v13'; // Updated version to force update
+importScripts('/static/js/db.js');
+
+const VERSION = 'v14'; // Updated version for share target fix
 const CACHE_NAME = `filevault-cache-${VERSION}`;
 const OFFLINE_URL = '/static/offline.html';
 
-// --- IndexedDB for File Storage (copied from db.js for SW context) ---
-const DB_NAME = 'pwa-file-storage';
-const STORE_NAME = 'files';
-let db;
-
-function initDB() {
-  return new Promise((resolve, reject) => {
-    if (db) return resolve(db);
-    const request = self.indexedDB.open(DB_NAME, 2); // Version 2 for config store
-    request.onerror = e => { console.error('SW DB error:', e.target.error); reject('SW DB error'); };
-    request.onsuccess = e => { db = e.target.result; resolve(db); };
-    request.onupgradeneeded = e => {
-      const dbInstance = e.target.result;
-      if (!dbInstance.objectStoreNames.contains('files')) {
-        dbInstance.createObjectStore('files', { keyPath: 'id', autoIncrement: true });
-      }
-      if (!dbInstance.objectStoreNames.contains('config')) {
-        dbInstance.createObjectStore('config', { keyPath: 'key' });
-      }
-    };
-  });
-}
-
-function saveFileInDB(file) {
-  return new Promise((resolve, reject) => {
-    initDB().then(db => {
-      const transaction = db.transaction([STORE_NAME], 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
-      const request = store.add({ file: file, name: file.name, size: file.size });
-      request.onsuccess = e => resolve(e.target.result);
-      request.onerror = e => { console.error('SW Error saving file:', e.target.error); reject('Error saving file'); };
-    });
-  });
-}
-// --- End of DB Logic ---
-
 const APP_SHELL_URLS = [
-  '/static/launcher.html', '/static/share.html', '/', '/b/', '/login',
-  '/static/css/style.css', '/static/js/main.js', '/static/js/config.js', '/static/js/db.js', '/static/js/share.js', '/static/js/launcher.js',
-  '/static/fonts.css', '/static/vendor/fontawesome/css/all.min.css', '/static/vendor/fontawesome/css/fa-shims.css',
-  '/static/socket.io.min.js', '/static/site.webmanifest', '/static/favicon.svg', '/static/adhkar.json',
-  '/static/vendor/fontawesome/webfonts/fa-brands-400.woff2', '/static/vendor/fontawesome/webfonts/fa-regular-400.woff2', '/static/vendor/fontawesome/webfonts/fa-solid-900.woff2',
+  '/static/launcher.html',
+  // share.html is no longer needed
+  '/',
+  '/b/',
+  '/login',
+  '/static/css/style.css',
+  '/static/js/main.js',
+  '/static/js/config.js',
+  '/static/js/db.js',
+  // share.js is no longer needed
+  '/static/js/launcher.js',
+  '/static/fonts.css',
+  '/static/vendor/fontawesome/css/all.min.css',
+  '/static/vendor/fontawesome/css/fa-shims.css',
+  '/static/socket.io.min.js',
+  '/static/site.webmanifest',
+  '/static/favicon.svg',
+  '/static/adhkar.json',
+  '/static/vendor/fontawesome/webfonts/fa-brands-400.woff2',
+  '/static/vendor/fontawesome/webfonts/fa-regular-400.woff2',
+  '/static/vendor/fontawesome/webfonts/fa-solid-900.woff2',
   OFFLINE_URL
 ];
 
@@ -52,8 +34,7 @@ self.addEventListener('install', event => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      console.log('[ServiceWorker] Caching app shell with cache-busting...');
-      // **FIX:** Use 'reload' to bypass the HTTP cache for all app shell files.
+      console.log('[ServiceWorker] Caching app shell...');
       const requests = APP_SHELL_URLS.map(url => new Request(url, { cache: 'reload' }));
       await cache.addAll(requests).catch(error => console.error('[ServiceWorker] App shell cache failed:', error));
       await self.skipWaiting();
@@ -82,12 +63,37 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // The service worker no longer intercepts the share POST request.
-  // It is now handled by the server at the /share-receiver endpoint,
-  // which then redirects to the static share page.
+  // --- Share Target Interception ---
+  if (event.request.method === 'POST' && url.pathname === '/share-target/') {
+    console.log('[ServiceWorker] Intercepting share target POST request.');
+    event.respondWith(
+      (async () => {
+        try {
+          const formData = await event.request.formData();
+          const files = formData.getAll('files'); // 'files' is the name from manifest
+          if (!files || files.length === 0) {
+            console.log('[ServiceWorker] No files found in share data.');
+            return Response.redirect('/static/launcher.html?share=empty', 303);
+          }
 
-  // The special handling for /config.json has been removed, as configuration
-  // is now managed entirely in the client via IndexedDB.
+          console.log(`[ServiceWorker] Received ${files.length} files to save.`);
+
+          // The saveFile function is from db.js, imported via importScripts()
+          for (const file of files) {
+            await saveFile(file);
+            console.log(`[ServiceWorker] Saved file "${file.name}" to IndexedDB.`);
+          }
+
+          // Redirect to the launcher page after saving.
+          return Response.redirect('/static/launcher.html?share=success', 303);
+        } catch (error) {
+          console.error('[ServiceWorker] Error handling share target:', error);
+          return Response.redirect('/static/launcher.html?share=error', 303);
+        }
+      })()
+    );
+    return; // Stop further processing for this request.
+  }
 
   // Cache-first strategy for navigation
   if (event.request.mode === 'navigate') {
@@ -95,16 +101,14 @@ self.addEventListener('fetch', event => {
       caches.open(CACHE_NAME).then(async cache => {
         try {
           const cachedResponse = await cache.match(event.request);
-          if (cachedResponse) {
-            return cachedResponse;
-          }
+          if (cachedResponse) return cachedResponse;
           const networkResponse = await fetch(event.request);
           if (networkResponse.ok) {
             cache.put(event.request, networkResponse.clone());
           }
           return networkResponse;
         } catch (error) {
-          console.log('[ServiceWorker] Network fetch failed for navigation, returning offline page.', error);
+          console.log('[ServiceWorker] Fetch failed for navigation, returning offline page.', error);
           return await cache.match(OFFLINE_URL);
         }
       })
