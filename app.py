@@ -78,6 +78,9 @@ SESSION_COOKIE_NAME = "qrfiles_sess"
 # Pending admin-claim tokens (QR-based transfer)
 admin_claim_tokens: dict[str, dict] = {}
 
+# In-memory store for pending shared files
+pending_file_shares: dict[str, list] = {}
+
 
 
 # Load adhkar and translations from JSON file
@@ -1615,6 +1618,53 @@ def api_download_zip():
 # at /static/share.html, making it fully independent from the server and
 # capable of loading offline. Authentication for uploads is handled via
 # API tokens stored in the client's IndexedDB.
+
+@app.route("/share-receiver", methods=["POST"])
+def share_receiver():
+    files = request.files.getlist("files")
+    if not files or not any(f.filename for f in files):
+        # No files, just redirect to the share page to show an empty queue
+        return redirect(url_for("static", filename="share.html"))
+
+    pending_id = str(uuid.uuid4())
+
+    # Store files in memory as base64 encoded strings
+    stored_files = []
+    for f in files:
+        if f and f.filename:
+            try:
+                file_bytes = f.read()
+                b64_encoded = base64.b64encode(file_bytes).decode('utf-8')
+                stored_files.append({
+                    "name": f.filename,
+                    "mimetype": f.mimetype or "application/octet-stream",
+                    "data": b64_encoded
+                })
+            except Exception as e:
+                print(f"[share-receiver] Failed to read or encode file {f.filename}: {e}")
+
+    if not stored_files:
+         return redirect(url_for("static", filename="share.html"))
+
+    pending_file_shares[pending_id] = stored_files
+
+    # Redirect to the static share page with the pending ID
+    redirect_url = url_for("static", filename="share.html", pending_id=pending_id)
+    return redirect(redirect_url)
+
+@app.route("/api/get-pending-files")
+def api_get_pending_files():
+    pending_id = request.args.get("id")
+    if not pending_id:
+        return jsonify({"ok": False, "error": "Missing ID"}), 400
+
+    # Pop the files from memory. This is a one-time retrieval.
+    files_data = pending_file_shares.pop(pending_id, None)
+
+    if files_data is None:
+        return jsonify({"ok": False, "error": "Invalid or expired ID"}), 404
+
+    return jsonify({"ok": True, "files": files_data})
 
 
 # Error handlers: redirect to login on not found/forbidden

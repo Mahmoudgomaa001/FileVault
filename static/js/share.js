@@ -103,17 +103,49 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // Diagnostic code for share target
+    // --- New logic to handle server-assisted file queuing ---
     const urlParams = new URLSearchParams(window.location.search);
-    const savedCount = urlParams.get('saved');
-    if (savedCount) {
-        if (savedCount === 'error') {
-            showToast('DEBUG: SW reported an error saving files.', 'error');
-        } else {
-            showToast(`DEBUG: SW reported saving ${savedCount} file(s).`, 'info');
-        }
+    const pendingId = urlParams.get('pending_id');
+
+    if (pendingId) {
+        showToast('Shared files received. Saving locally...', 'info');
+        fetchAndSavePendingFiles(pendingId);
+        // Clean up the URL
         history.replaceState(null, '', window.location.pathname);
     }
 });
+
+async function fetchAndSavePendingFiles(pendingId) {
+    try {
+        const response = await fetch(`/api/get-pending-files?id=${pendingId}`);
+        const data = await response.json();
+
+        if (data.ok && data.files && data.files.length > 0) {
+            let savedCount = 0;
+            for (const fileData of data.files) {
+                // Convert base64 back to a Blob, then to a File
+                const byteString = atob(fileData.data);
+                const ab = new ArrayBuffer(byteString.length);
+                const ia = new Uint8Array(ab);
+                for (let i = 0; i < byteString.length; i++) {
+                    ia[i] = byteString.charCodeAt(i);
+                }
+                const blob = new Blob([ab], { type: fileData.mimetype });
+                const file = new File([blob], fileData.name, { type: fileData.mimetype });
+
+                await window.fileDB.saveFile(file);
+                savedCount++;
+            }
+            showToast(`${savedCount} file(s) successfully saved locally.`, 'success');
+            // Refresh the file list in the UI
+            document.dispatchEvent(new Event('DOMContentLoaded'));
+        } else {
+            showToast(data.error || 'Could not retrieve shared files.', 'error');
+        }
+    } catch (error) {
+        console.error('Failed to fetch pending files:', error);
+        showToast('An error occurred while fetching shared files.', 'error');
+    }
+}
 
 function showToast(message, type = 'info') { const c = document.getElementById('toastContainer'); if (!c) return; const t = document.createElement('div'); t.className = `toast ${type}`; const i = { success: 'fa-check-circle', error: 'fa-times-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' }[type] || 'fa-info-circle'; t.innerHTML = `<i class="fas ${i}"></i><div class="toast-message">${message}</div>`; c.appendChild(t); setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000); }

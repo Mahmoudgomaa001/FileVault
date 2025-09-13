@@ -82,33 +82,9 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Robustly handle Web Share Target POST requests
-  if (event.request.method === 'POST' && url.pathname === '/static/share.html') {
-    event.respondWith(
-      (async () => {
-        try {
-            const formData = await event.request.formData();
-            const formData = await event.request.formData();
-            const files = formData.getAll('files');
-            let savedCount = 0;
-            if (files && files.length > 0) {
-              await initDB();
-              for (const file of files) {
-                await saveFileInDB(file);
-              }
-              savedCount = files.length;
-            }
-            // Add a timestamp to the redirect to ensure it's not cached
-            const timestamp = Date.now();
-            return Response.redirect(`/static/share.html?saved=${savedCount}&ts=${timestamp}`, 303);
-        } catch (err) {
-            console.error('[ServiceWorker] Error handling share POST:', err);
-            return Response.redirect(`/static/share.html?saved=error&ts=${Date.now()}`, 303);
-        }
-      })()
-    );
-    return;
-  }
+  // The service worker no longer intercepts the share POST request.
+  // It is now handled by the server at the /share-receiver endpoint,
+  // which then redirects to the static share page.
 
   // The special handling for /config.json has been removed, as configuration
   // is now managed entirely in the client via IndexedDB.
