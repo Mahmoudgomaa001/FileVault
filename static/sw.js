@@ -1,4 +1,4 @@
-const VERSION = 'v10'; // Updated version
+const VERSION = 'v11'; // Updated version
 const CACHE_NAME = `filevault-cache-${VERSION}`;
 const OFFLINE_URL = '/static/offline.html';
 const CONFIG_URL = '/api/config';
@@ -79,20 +79,28 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Handle Web Share Target POST requests
+  // Robustly handle Web Share Target POST requests
   if (event.request.method === 'POST' && url.pathname === '/share') {
     event.respondWith(
       (async () => {
-        const formData = await event.request.formData();
-        const files = formData.getAll('files');
-        if (files && files.length > 0) {
-          await initDB();
-          for (const file of files) {
-            await saveFileInDB(file);
-          }
+        try {
+            const formData = await event.request.formData();
+            const files = formData.getAll('files');
+            if (files && files.length > 0) {
+              await initDB();
+              for (const file of files) {
+                await saveFileInDB(file);
+              }
+              console.log('[ServiceWorker] Shared files saved to IndexedDB.');
+            }
+            // After saving files (or if there are no files), redirect to the share page.
+            return Response.redirect('/share', 303);
+        } catch (err) {
+            console.error('[ServiceWorker] Error handling share POST:', err);
+            // Even if there's an error, redirect to the share page so the user sees something.
+            // This prevents the request from ever hitting the server.
+            return Response.redirect('/share', 303);
         }
-        // After saving files, redirect to the share page to view them.
-        return Response.redirect('/share', 303);
       })()
     );
     return;
@@ -116,24 +124,26 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Network-first for navigation
+  // **FIXED**: Cache-first strategy for navigation for a true offline experience.
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      (async () => {
+      caches.open(CACHE_NAME).then(async cache => {
         try {
+          const cachedResponse = await cache.match(event.request);
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          // If not in cache, go to network
           const networkResponse = await fetch(event.request);
           if (networkResponse.ok) {
-            const cache = await caches.open(CACHE_NAME);
             cache.put(event.request, networkResponse.clone());
           }
           return networkResponse;
         } catch (error) {
-          console.log('[ServiceWorker] Network fetch failed, trying cache.', error);
-          const cache = await caches.open(CACHE_NAME);
-          const cachedResponse = await cache.match(event.request);
-          return cachedResponse || await cache.match(OFFLINE_URL);
+          console.log('[ServiceWorker] Network fetch failed for navigation, returning offline page.', error);
+          return await cache.match(OFFLINE_URL);
         }
-      })()
+      })
     );
     return;
   }
