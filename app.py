@@ -1704,11 +1704,22 @@ def handle_403(e):
 # -----------------------------
 if __name__ == "__main__":
     ip = get_local_ip()
-    print(f"Serving FileVault on http://0.0.0.0:{PORT}  (scan: http://{ip}:{PORT})")
+    cert_file = 'cert.pem'
+    key_file = 'key.pem'
+    ssl_context = None
+
+    if os.path.exists(cert_file) and os.path.exists(key_file):
+        ssl_context = (cert_file, key_file)
+        print(f"SSL certs found. Serving on https://{ip}:{PORT}")
+    else:
+        print(f"SSL certs not found. Serving on http://{ip}:{PORT}")
+        print("To enable HTTPS for local development, run: openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365")
+
+    print(f"Serving FileVault on http://0.0.0.0:{PORT}")
     ngrok_url = get_ngrok_url()
     if ngrok_url:
         print(f"Ngrok URL detected: {ngrok_url}")
     else:
         print("Ngrok not detected. To enable online access, run: ngrok http 5000")
     print(f"Root directory: {ROOT_DIR}")
-    socketio.run(app, host="0.0.0.0", port=PORT, debug=False, allow_unsafe_werkzeug=True)
+    socketio.run(app, host="0.0.0.0", port=PORT, debug=False, allow_unsafe_werkzeug=True, ssl_context=ssl_context)
