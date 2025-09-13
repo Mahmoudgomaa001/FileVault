@@ -59,6 +59,32 @@
     .dhikr-refresh { position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.2); border: none; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s ease; color: white; }
     .dhikr-refresh:hover { background: rgba(255,255,255,0.3); transform: translateY(-50%) rotate(180deg); }
 
+    .dhikr-close {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: rgba(0,0,0,0.2);
+      border: none;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      font-size: 14px;
+    }
+    .dhikr-close:hover { background: rgba(0,0,0,0.4); }
+
+    @keyframes fadeInText {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .hidden { display: none !important; }
+
     body.with-dhikr .container { padding-top: calc(var(--header-height) + 60px + var(--mobile-padding)); }
 
     .header { background:rgba(30,41,59,.98); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); border-bottom:1px solid var(--border); position:fixed; top:0; left:0; right:0; z-index:1000; height:var(--header-height); }
@@ -155,7 +181,7 @@
     @keyframes modalSlide { from{opacity:0; transform:translateY(20px);} to{opacity:1; transform:translateY(0);} }
     .modal-header { padding:1rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
 .modal-title { font-size:1rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
-    .modal-close { width:28px; height:28px;min-width: 28px; border-radius:50%; background:var(--bg-tertiary); border:none; color:var(--text-primary); cursor:pointer; display:flex; align-items:center; justify-content:center; transition: transform 0.3s ease, background 0.3s ease;}
+    .modal-close { min-width: 28px; width:28px; height:28px; border-radius:50%; background:var(--bg-tertiary); border:none; color:var(--text-primary); cursor:pointer; display:flex; align-items:center; justify-content:center; transition: transform 0.3s ease, background 0.3s ease;}
     .modal-close:hover { background: var(--danger); transform: rotate(90deg); }
     .modal-body { padding:1rem; overflow:auto; display:flex; flex-direction:column; gap:.75rem; }
     .preview-holder { display:flex; align-items:center; justify-content:center; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:.5rem; min-height:240px; }

@@ -212,36 +212,24 @@
 
     // Dhikr data
 
-async function changeDhikr() {
-  try {
-    const response = await fetch(URLS.api_dhikr);
-    const data = await response.json();
+function changeDhikr() {
+  const dhikrEl = document.getElementById('dhikrArabic');
+  if (!dhikrEl) return;
 
-    if (data.dhikr) {
-      const dhikrEl = document.getElementById('dhikrArabic');
-      const banner = document.getElementById('dhikrBanner');
+  if (Array.isArray(APP_CONFIG.dhikr_list) && APP_CONFIG.dhikr_list.length > 0) {
+    const randomDhikr = APP_CONFIG.dhikr_list[Math.floor(Math.random() * APP_CONFIG.dhikr_list.length)];
 
-      if (dhikrEl) {
-        dhikrEl.textContent = data.dhikr;
-      }
-      if (banner) {
-        banner.style.animation = 'none';
-        setTimeout(() => { banner.style.animation = 'slideDown 0.5s ease'; }, 10);
-      }
-    }
-  } catch (e) {
-    if (Array.isArray(APP_CONFIG.dhikr_list) && APP_CONFIG.dhikr_list.length > 0) {
-      const randomDhikr = APP_CONFIG.dhikr_list[Math.floor(Math.random() * APP_CONFIG.dhikr_list.length)];
-      const dhikrEl = document.getElementById('dhikrArabic');
-      if (dhikrEl) {
-        dhikrEl.textContent = randomDhikr.dhikr;
-      }
-    }
+    dhikrEl.style.animation = 'none';
+    // Using a very short timeout to allow the browser to apply the 'none' animation state
+    // before re-applying the new animation.
+    setTimeout(() => {
+      if(dhikrEl) dhikrEl.textContent = randomDhikr.dhikr;
+      dhikrEl.style.animation = 'fadeInText 0.5s ease';
+    }, 10);
   }
 }
 
-
-    setInterval(changeDhikr, 30000);
+setInterval(changeDhikr, 30000);
 
 
   // THEME + PREFS
@@ -1718,6 +1706,23 @@ function removeFileCard(rel){
 
     // INIT
     document.addEventListener('DOMContentLoaded', async ()=>{
+      // Dhikr Banner visibility
+      const dhikrBanner = document.getElementById('dhikrBanner');
+      if (dhikrBanner) {
+        if (localStorage.getItem('dhikrBannerClosed') === 'true') {
+          dhikrBanner.classList.add('hidden');
+        }
+
+        const dhikrCloseBtn = document.getElementById('dhikrCloseBtn');
+        if (dhikrCloseBtn) {
+          dhikrCloseBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent triggering other banner clicks
+            dhikrBanner.classList.add('hidden');
+            localStorage.setItem('dhikrBannerClosed', 'true');
+          });
+        }
+      }
+
       window.currentPath = APP_CONFIG.current_rel;
       try {
         const r = await fetch('/api/prefs'); const j = await r.json();
