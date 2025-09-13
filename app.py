@@ -1632,7 +1632,12 @@ def api_download_zip():
 # Error handlers: redirect to login on not found/forbidden
 # -----------------------------
 @app.after_request
-def add_security_headers(response):
+def add_cors_pna_headers(response):
+    # Add PNA header for local network access from public URLs
+    if request.headers.get('Access-Control-Request-Private-Network'):
+        response.headers['Access-Control-Allow-Private-Network'] = 'true'
+
+    # Standard security headers
     if 'Cache-Control' not in response.headers:
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'

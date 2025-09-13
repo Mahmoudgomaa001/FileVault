@@ -1,26 +1,20 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    const goLocalBtn = document.getElementById('goLocalBtn');
-    const goServerBtn = document.getElementById('goServerBtn');
+    const openAppBtn = document.getElementById('openAppBtn');
     const settingsBtn = document.getElementById('settingsBtn');
     const saveAppSettingsBtn = document.getElementById('saveAppSettingsBtn');
     const localUrlInput = document.getElementById('localUrlInput');
     const serverUrlInput = document.getElementById('serverUrlInput');
 
     function updateButtonLinks(config) {
-        if (config.local_url) {
-            goLocalBtn.href = config.local_url;
-            goLocalBtn.disabled = false;
-        } else {
-            goLocalBtn.href = '#';
-            goLocalBtn.disabled = true;
-        }
-
+        // The launcher now *always* opens the server_url to ensure a consistent origin.
+        // The choice to upload to local or server happens inside the app.
         if (config.server_url) {
-            goServerBtn.href = config.server_url;
-            goServerBtn.disabled = false;
+            openAppBtn.href = config.server_url;
+            openAppBtn.disabled = false;
         } else {
-            goServerBtn.href = '#';
-            goServerBtn.disabled = true;
+            openAppBtn.href = '#';
+            openAppBtn.disabled = true;
+            openAppBtn.textContent = 'Configure Server URL in Settings';
         }
     }
 

@@ -493,14 +493,14 @@ setInterval(changeDhikr, 30000);
       setTimeout(()=>{ element.remove(); }, 900);
     }
 
-    function uploadSingleFile(item){
+    function uploadSingleFile(item, destOverride = null){
       const {file, id} = item;
       const container = document.getElementById('progressContainer');
       const row = createProgressElement(file.name, id);
       container?.appendChild(row);
 
       const form = new FormData();
-      form.append('dest', window.currentPath || '');
+      form.append('dest', destOverride !== null ? destOverride : (window.currentPath || ''));
       form.append('file', file, file.name);
 
       const xhr = new XMLHttpRequest();
@@ -1764,8 +1764,6 @@ function removeFileCard(rel){
 
       // Global initializations for all pages
       document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
-      document.getElementById('goOfflineBtn')?.addEventListener('click', goOffline);
-      document.getElementById('goOnlineBtn')?.addEventListener('click', goOnline);
       document.getElementById('subscribeBtn')?.addEventListener('click', requestNotificationPermission);
       initPwaInstall();
       initMobileMenu();
