@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block content %}
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon" style="background: rgba(59,130,246,.2); color: var(--primary);"><i class="fas fa-file"></i></div>
+    <div class="stat-info"><div class="stat-label">Files</div><div class="stat-value">{{ stats.files }}</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background: rgba(245,158,11,.2); color: var(--warning);"><i class="fas fa-hdd"></i></div>
+    <div class="stat-info"><div class="stat-label">Storage</div><div class="stat-value">{{ stats.size_h }}</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background: rgba(139,92,246,.2); color: var(--secondary);"><i class="fas fa-folder"></i></div>
+    <div class="stat-info"><div class="stat-label">Folders</div><div class="stat-value">{{ stats.dirs }}</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background: rgba(16,185,129,.2); color: var(--success);"><i class="fas fa-users"></i></div>
+    <div class="stat-info"><div class="stat-label">Accounts</div><div class="stat-value">{{ accounts_count }}</div></div>
+  </div>
+</div>
+
+<!-- Bulk Actions Toolbar -->
+<div id="bulkActionsToolbar" class="toolbar" style="display:none; background:color-mix(in srgb, var(--bg-secondary) 60%, var(--primary));">
+  <div class="toolbar-row" style="justify-content:space-between;">
+    <div style="font-weight:700;" id="selectionCount"></div>
+    <div style="display:flex; gap:.5rem;">
+      <button class="btn btn-secondary btn-icon" id="selectAllBtn" title="Select All"><i class="fas fa-check-double"></i></button>
+      <button class="btn btn-secondary btn-icon" id="deselectAllBtn" title="Select None"><i class="far fa-square"></i></button>
+      <button class="btn btn-primary btn-icon" id="bulkMoveBtn" title="Move selected"><i class="fas fa-right-left"></i></button>
+      <button class="btn btn-danger btn-icon" id="bulkDeleteBtn" title="Delete selected"><i class="fas fa-trash-alt"></i></button>
+      <button class="btn btn-success btn-icon" id="bulkDownloadIndividualBtn" title="Download selected files individually"><i class="fas fa-file-download"></i></button>
+      <button class="btn btn-success btn-icon" id="bulkDownloadBtn" title="Download selected as zip"><i class="fas fa-file-archive"></i></button>
+      <button class="btn btn-secondary btn-icon" id="cancelSelectionBtn" title="Cancel"><i class="fas fa-times"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar">
+  <div class="toolbar-row">
+    <div class="search-box">
+      <input id="searchInput" class="search-input" placeholder="Search..." />
+      <i class="fas fa-search search-icon"></i>
+    </div>
+    <div class="view-controls">
+      <button class="view-btn" data-view="grid" onclick="setView('grid')"><i class="fas fa-th-large"></i><span>Grid</span></button>
+      <button class="view-btn" data-view="list" onclick="setView('list')"><i class="fas fa-list-ul"></i><span>List</span></button>
+    </div>
+    <button id="selectModeBtn" class="btn btn-secondary" title="Select Files"><i class="fas fa-check-square"></i> Select</button>
+    <!-- Sorting controls -->
+    <div class="view-controls" style="gap:.5rem;">
+      <select id="sortBy" class="btn btn-secondary" title="Sort by">
+        <option value="name">Name</option>
+        <option value="size">Size</option>
+        <option value="type">Type</option>
+        <option value="date">Date</option>
+      </select>
+      <button id="sortDir" class="btn btn-secondary" title="Asc/Desc" data-dir="asc"><i class="fas fa-sort-amount-up"></i></button>
+      <label class="btn btn-secondary" style="gap:.5rem; cursor:pointer;">
+        <input type="checkbox" id="foldersFirst" style="accent-color:#3B82F6; width:16px; height:16px;"> Folders first </label>
+    </div>
+    <button class="btn btn-secondary" onclick="showNewFolderModal()"><i class="fas fa-folder-plus"></i> New Folder</button>
+    <button class="btn btn-primary" id="openClipBtn"><i class="fas fa-paste"></i> Paste Text</button>
+    <nav class="nav-menu">
+    <a class="btn btn-secondary" href=".." title="Up one folder">
+      <i class="fas fa-level-up-alt"></i>
+    </a>
+
+
+
+  </div>
+</div>
+
+<!-- Upload -->
+<div class="upload-section">
+  <div class="upload-area" id="uploadArea">
+    <input type="file" id="uploadInput" class="upload-input" multiple accept="*/*" />
+    <div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+    <div class="upload-text">Drop files or tap here</div>
+    <div class="upload-subtext">Max 10GB per file</div>
+  </div>
+  <div class="progress-container" id="progressContainer"></div>
+</div>
+
+<!-- Files -->
+<div class="file-grid list-view" id="fileGrid">
+  {% if not entries %}
+    <div class="card" id="noFilesMessage" style="text-align:center; color:var(--text-muted);">No files yet. Upload something!</div>
+  {% endif %}
+  {% for item in entries %}
+    <div class="file-card"
+         data-rel="{{ item.rel }}"
+         data-name="{{ item.name }}"
+         data-mime="{{ item.mime }}"
+         data-is-dir="{{ 1 if item.is_dir else 0 }}"
+         data-size="{{ item.size }}"
+         data-mtime="{{ item.mtime }}"
+         data-raw="{{ url_for('raw', path=item.rel) }}"
+         data-dl="{{ url_for('download', path=item.rel) }}">
+      <input type="checkbox" class="file-select-checkbox" data-rel="{{ item.rel }}" onchange="handleSelectionChange()" onclick="event.stopPropagation();">
+      <div class="file-preview">
+        {% if item.is_dir %}
+          <div class="file-icon-large" style="font-size:2rem;opacity:.6;">📁</div>
+        {% elif item.mime.startswith('image/') %}
+          <img src="{{ url_for('raw', path=item.rel) }}" alt="{{ item.name }}" loading="lazy" />
+        {% elif item.mime.startswith('video/') %}
+          <div class="file-icon-large" style="font-size:2rem;opacity:.6;">🎬</div>
+        {% elif item.mime.startswith('audio/') %}
+          <div class="file-icon-large" style="font-size:2rem;opacity:.6;">🎵</div>
+        {% elif item.mime == 'application/pdf' %}
+          <div class="file-icon-large" style="font-size:2rem;opacity:.6;">📄</div>
+        {% else %}
+          <div class="file-icon-large" style="font-size:2rem;opacity:.6;">📄</div>
+        {% endif %}
+      </div>
+      <div class="file-info">
+        <div class="file-name" title="{{ item.name }}">{{ item.name }}</div>
+        <div class="file-meta">{{ item.size_h }} • {{ item.mtime_h }}</div>
+        <div class="file-actions">
+          {% if not item.is_dir %}
+            <a class="btn btn-primary btn-icon" href="{{ url_for('download', path=item.rel) }}" title="Download"><i class="fas fa-download"></i></a>
+            <button class="btn btn-danger btn-icon" onclick="event.stopPropagation(); deleteFile('{{ item.rel }}')" title="Delete"><i class="fas fa-trash"></i></button>
+          {% else %}
+            <a class="btn btn-secondary btn-icon" href="{{ url_for('browse') }}/{{ item.rel }}" title="Open"><i class="fas fa-folder-open"></i></a>
+            <button class="btn btn-danger btn-icon" onclick="event.stopPropagation(); deleteFile('{{ item.rel }}')" title="Delete Folder"><i class="fas fa-trash"></i></button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+<!-- New Folder Modal -->
+<div class="modal" id="newFolderModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 class="modal-title">Create New Folder</h3>
+      <button class="modal-close" onclick="closeModal('newFolderModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="folderNameInput">Folder Name</label>
+        <input type="text" id="folderNameInput" name="folderNameInput" class="form-input" placeholder="Enter folder name" autocomplete="off">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('newFolderModal')">Cancel</button>
+      <button class="btn btn-primary" id="mkdirCreateBtn"><i class="fas fa-folder-plus"></i> Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Paste Text Modal -->
+<div class="modal" id="clipModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 class="modal-title">Paste Text</h3>
+      <button class="modal-close" onclick="closeModal('clipModal')" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <label class="form-label" for="clipNameInput">File name (optional)</label>
+      <input type="text" id="clipNameInput" name="clipNameInput" class="form-input" placeholder="E.g. note.txt (default auto)">
+      <label class="form-label" for="clipTextInput" style="margin-top:.75rem;">Text</label>
+      <textarea id="clipTextInput" name="clipTextInput" class="form-input" rows="10" placeholder="Paste here"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="clipSaveBtn"><i class="fas fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- FAB -->
+<div class="fab-container">
+  <div class="fab-menu" id="fabMenu">
+    <button class="fab-menu-item" onclick="showNewFolderModal()"><i class="fas fa-folder-plus"></i> New Folder</button>
+    <button class="fab-menu-item" onclick="document.getElementById('uploadInput').click()"><i class="fas fa-file-upload"></i> Upload Files</button>
+    <button class="fab-menu-item" onclick="openClipModal()"><i class="fas fa-clipboard"></i> Paste Text</button>
+  </div>
+  <button class="fab" onclick="toggleFabMenu()" aria-label="Open actions menu"><i class="fas fa-plus"></i></button>
+</div>
+{% endblock %}

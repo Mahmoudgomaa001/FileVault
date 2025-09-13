@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+.user-badge {
+    display: none;
+}
+.login-container {
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+}
+.login-divider {
+  width: 1px;
+  background-color: var(--border);
+  align-self: stretch;
+  min-height: 250px;
+}
+.login-section {
+  flex: 1;
+  text-align: center;
+}
+@media (max-width: 768px) {
+  .login-container {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  .login-divider {
+    width: 100%;
+    height: 1px;
+    min-height: auto;
+  }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2 style="margin-bottom:.5rem;">Log In or Pair a Device</h2>
+  {% if error %}
+    <div style="background:rgba(239,68,68,.12); color:#fecaca; border:1px solid rgba(239,68,68,.4); border-radius:.5rem; padding:.5rem .75rem; margin-bottom:.75rem;">
+      <i class="fas fa-exclamation-triangle"></i> {{ error }}
+    </div>
+  {% endif %}
+  <p style="color:var(--text-secondary); margin-bottom:.75rem;">Scan the QR code with your phone, or enter the 6-digit code on another device.</p>
+
+  {% if ngrok_available %}
+  <div class="toggle-container" style="margin-bottom:1rem; justify-content: center;">
+    <span class="toggle-label">Local</span>
+    <div class="toggle-switch {% if is_on_ngrok %}active{% endif %}" id="loginModeToggle">
+      <div class="slider"></div>
+    </div>
+    <span class="toggle-label">Online</span>
+  </div>
+  {% endif %}
+
+  <div class="login-container">
+    <!-- Left Column -->
+    <div class="login-section">
+      <h3 style="margin-bottom:.5rem;">Scan QR Code</h3>
+      <img id="qrImage" src="data:image/png;base64,{{ qr_b64 }}" alt="QR Code" style="image-rendering:pixelated; image-rendering:crisp-edges; max-width: 250px; height: auto; border-radius: 12px; margin: 0 auto;" />
+      <p class="muted" style="margin-top:.75rem; color:var(--text-muted); word-break:break-all;">Or open: <code id="qrUrl">{{ qr_url }}</code></p>
+    </div>
+
+    <!-- Divider -->
+    <div class="login-divider" style="background-color: #334155;"></div>
+
+    <!-- Right Column -->
+    <div class="login-section">
+      <h3 style="margin-bottom:.5rem;">Log In With A Code</h3>
+      <p style="color:var(--text-secondary); margin-bottom:.75rem;">Your temporary code is:</p>
+      <p style="font-size: 2rem; font-weight: bold; color: var(--primary); letter-spacing: 0.1em; margin-bottom: 1rem;">{{ login_code }}</p>
+
+      <form action="{{ url_for('login_with_code') }}" method="POST">
+          <label for="code-input" style="display: block; margin-bottom: .5rem; color: var(--text-secondary);">Enter a code from another device:</label>
+          <input id="code-input" type="text" name="code" class="form-input" placeholder="123456" required pattern="[0-9]{6}" maxlength="6" inputmode="numeric" style="font-size: 1.5rem; text-align: center; letter-spacing: 0.2em; margin-bottom: 1rem;">
+          <button type="submit" class="btn btn-primary" style="width: 100%;">Continue</button>
+      </form>
+    </div>
+  </div>
+
+  <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1rem;">
+    <p style="color:var(--text-secondary); margin-bottom:.75rem;">Or if you're on a new device:</p>
+    <a href="{{ url_for('login_with_default') }}" class="btn btn-secondary">Continue with a new/default account</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let currentMode = '{{ "online" if is_on_ngrok else "local" }}';
+  let currentToken = "{{ token }}";
+
+  {% if ngrok_available %}
+  const toggle = document.getElementById('loginModeToggle');
+  toggle.addEventListener('click', async ()=>{
+    currentMode = currentMode === 'local' ? 'online' : 'local';
+    toggle.classList.toggle('active', currentMode === 'online');
+    try {
+      const r = await fetch(`${URLS.api_my_qr}?token=${currentToken}&mode=${currentMode}`, {cache:'no-store'});
+      const j = await r.json();
+      if(j.ok){
+        document.getElementById('qrImage').src = `data:image/png;base64,${j.b64}`;
+        document.getElementById('qrUrl').textContent = j.url;
+      }
+    } catch(e){}
+  });
+  {% endif %}
+
+  async function poll(){
+    try {
+      const r = await fetch(URLS.check_login.replace('_TOKEN_', currentToken), {cache:'no-store'});
+      const j = await r.json();
+      if(j.authenticated && j.url){ window.location = j.url; return; }
+    } catch(e){}
+    setTimeout(poll, 1000);
+  }
+  setTimeout(poll, 500);
+</script>
+{% endblock %}
