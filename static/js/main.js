@@ -1399,6 +1399,7 @@ function removeFileCard(rel){
     document.getElementById('generateTokenBtn')?.addEventListener('click', generateToken);
     document.getElementById('regenerateTokenBtn')?.addEventListener('click', regenerateToken);
     document.getElementById('shareTokenBtn')?.addEventListener('click', showTokenShare);
+    document.getElementById('setupPwaBtn')?.addEventListener('click', setupPwaToken);
     document.getElementById('saveSettingsBtn')?.addEventListener('click', async ()=>{
       const priv = document.getElementById('privacyToggle').classList.contains('active'); // true => private
       const pwd = document.getElementById('privacyPassword').value || '';
@@ -1421,6 +1422,27 @@ function removeFileCard(rel){
         closeModal('settingsModal');
       }
     });
+
+    async function setupPwaToken() {
+      try {
+        showToast('Generating and saving token for PWA...', 'info');
+        const r = await fetch(URLS.api_accounts_token, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({name: 'PWA Offline Share Token'})
+        });
+        const j = await r.json();
+        if (j.ok && j.token) {
+          await window.fileDB.initDB();
+          await window.fileDB.saveConfigValue('api_token', j.token);
+          showToast('Offline Share is now enabled!', 'success');
+        } else {
+          showToast(j.error || 'Failed to get token.', 'error');
+        }
+      } catch (e) {
+        showToast('An error occurred during PWA setup.', 'error');
+      }
+    }
 
     async function generateToken() {
       try {

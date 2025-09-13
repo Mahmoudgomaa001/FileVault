@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Uploader logic adapted from main.js
      */
-    function uploadSingleFile(item, baseUrl) {
+    function uploadSingleFile(item, baseUrl, apiToken) {
         const { id, file } = item;
         const uploadId = `up-${id}`;
 
@@ -82,9 +82,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if(progressContainer) progressContainer.appendChild(row);
 
         const form = new FormData();
-        // The destination on the server is the root of the user's folder
-        const dest = (APP_CONFIG.current_folder || '');
-        form.append('dest', dest);
+        // The destination on the server is the root of the user's folder.
+        // We no longer have APP_CONFIG here, so we send to the root. The server-side
+        // auth logic will place it in the correct user folder based on the token.
+        form.append('dest', '');
         form.append('file', file, file.name);
 
         const xhr = new XMLHttpRequest();
@@ -133,10 +134,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
 
             // Construct the full URL for the upload
-            const uploadUrl = new URL(URLS.api_upload, baseUrl).href;
+            // The URLS object is not available here, so we hardcode the path.
+            const uploadUrl = new URL('/api/upload', baseUrl).href;
             xhr.open('POST', uploadUrl);
-            // We need to make sure auth context is sent if the server uses cookies
-            xhr.withCredentials = true;
+            // Add the Authorization header for token-based auth
+            xhr.setRequestHeader('Authorization', `Bearer ${apiToken}`);
             xhr.send(form);
         });
     }
@@ -151,6 +153,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        const apiToken = await window.fileDB.getConfigValue('api_token');
+        if (!apiToken) {
+            showToast('API Token not set up. Please set it up from the main application settings.', 'error');
+            return;
+        }
+
         const filesToUpload = await window.fileDB.getFiles();
         if (filesToUpload.length === 0) return;
 
@@ -161,7 +169,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         for (const fileData of filesToUpload) {
             try {
                 // The object from DB has {id, name, size, file}
-                await uploadSingleFile({id: fileData.id, file: fileData.file}, url);
+                await uploadSingleFile({id: fileData.id, file: fileData.file}, url, apiToken);
                 successfulUploads++;
             } catch (uploadError) {
                 console.error('An upload failed, stopping queue.', uploadError);

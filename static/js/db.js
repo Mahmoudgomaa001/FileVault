@@ -1,7 +1,8 @@
 // --- IndexedDB for File Storage ---
 
 const DB_NAME = 'pwa-file-storage';
-const STORE_NAME = 'files';
+const FILE_STORE = 'files';
+const CONFIG_STORE = 'config';
 let db;
 
 /**
@@ -13,7 +14,8 @@ function initDB() {
     if (db) {
       return resolve(db);
     }
-    const request = indexedDB.open(DB_NAME, 1);
+    // Increment version to 2 to trigger onupgradeneeded for new store
+    const request = indexedDB.open(DB_NAME, 2);
 
     request.onerror = (event) => {
       console.error('Database error:', event.target.error);
@@ -28,12 +30,54 @@ function initDB() {
 
     request.onupgradeneeded = (event) => {
       const dbInstance = event.target.result;
-      if (!dbInstance.objectStoreNames.contains(STORE_NAME)) {
-        dbInstance.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+      if (!dbInstance.objectStoreNames.contains(FILE_STORE)) {
+        dbInstance.createObjectStore(FILE_STORE, { keyPath: 'id', autoIncrement: true });
         console.log('Object store "files" created.');
+      }
+      if (!dbInstance.objectStoreNames.contains(CONFIG_STORE)) {
+        // This store will hold key-value pairs, e.g., { key: 'api_token', value: '...' }
+        dbInstance.createObjectStore(CONFIG_STORE, { keyPath: 'key' });
+        console.log('Object store "config" created.');
       }
     };
   });
+}
+
+/**
+ * Saves or updates a configuration value in the config store.
+ * @param {string} key - The key for the config value (e.g., 'api_token').
+ * @param {*} value - The value to store.
+ * @returns {Promise<void>}
+ */
+function saveConfigValue(key, value) {
+    return new Promise((resolve, reject) => {
+        initDB().then(db => {
+            const transaction = db.transaction([CONFIG_STORE], 'readwrite');
+            const store = transaction.objectStore(CONFIG_STORE);
+            const request = store.put({ key: key, value: value });
+            request.onsuccess = () => resolve();
+            request.onerror = (event) => reject('Error saving config value: ' + event.target.error);
+        });
+    });
+}
+
+/**
+ * Retrieves a configuration value from the config store.
+ * @param {string} key - The key of the config value to retrieve.
+ * @returns {Promise<*>} A promise that resolves with the stored value or undefined.
+ */
+function getConfigValue(key) {
+    return new Promise((resolve, reject) => {
+        initDB().then(db => {
+            const transaction = db.transaction([CONFIG_STORE], 'readonly');
+            const store = transaction.objectStore(CONFIG_STORE);
+            const request = store.get(key);
+            request.onsuccess = (event) => {
+                resolve(event.target.result ? event.target.result.value : undefined);
+            };
+            request.onerror = (event) => reject('Error getting config value: ' + event.target.error);
+        });
+    });
 }
 
 /**
@@ -44,8 +88,8 @@ function initDB() {
 function saveFile(file) {
   return new Promise((resolve, reject) => {
     initDB().then(db => {
-      const transaction = db.transaction([STORE_NAME], 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
+      const transaction = db.transaction([FILE_STORE], 'readwrite');
+      const store = transaction.objectStore(FILE_STORE);
       const request = store.add({ file: file, name: file.name, size: file.size });
 
       request.onsuccess = (event) => {
@@ -67,8 +111,8 @@ function saveFile(file) {
 function getFiles() {
   return new Promise((resolve, reject) => {
     initDB().then(db => {
-      const transaction = db.transaction([STORE_NAME], 'readonly');
-      const store = transaction.objectStore(STORE_NAME);
+      const transaction = db.transaction([FILE_STORE], 'readonly');
+      const store = transaction.objectStore(FILE_STORE);
       const request = store.getAll();
 
       request.onsuccess = (event) => {
@@ -91,8 +135,8 @@ function getFiles() {
 function deleteFile(id) {
   return new Promise((resolve, reject) => {
     initDB().then(db => {
-      const transaction = db.transaction([STORE_NAME], 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
+      const transaction = db.transaction([FILE_STORE], 'readwrite');
+      const store = transaction.objectStore(FILE_STORE);
       const request = store.delete(id);
 
       request.onsuccess = () => {
@@ -113,8 +157,8 @@ function deleteFile(id) {
 function clearFiles() {
   return new Promise((resolve, reject) => {
     initDB().then(db => {
-      const transaction = db.transaction([STORE_NAME], 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
+      const transaction = db.transaction([FILE_STORE], 'readwrite');
+      const store = transaction.objectStore(FILE_STORE);
       const request = store.clear();
 
       request.onsuccess = () => {
@@ -135,5 +179,7 @@ window.fileDB = {
   saveFile,
   getFiles,
   deleteFile,
-  clearFiles
+  clearFiles,
+  saveConfigValue,
+  getConfigValue
 };

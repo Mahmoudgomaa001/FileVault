@@ -1263,11 +1263,31 @@ def api_prefs():
 
 @app.route("/api/upload", methods=["POST"])
 def api_upload():
-    if not is_authed():
+    base_folder = None
+    authed_by = None
+
+    # Priority 1: Check for session-based authentication
+    if session.get("authed"):
+        base_folder = session.get("folder")
+        authed_by = "session"
+
+    # Priority 2: Check for Authorization header (Bearer token)
+    else:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1]
+            user = get_user_by_token(token)
+            if user:
+                base_folder = user.get("folder")
+                authed_by = "token"
+
+    if not base_folder:
         return jsonify({"ok": False, "error": "not authed"}), 401
+
     dest_rel = request.form.get("dest", "")
     dest_dir = safe_path(dest_rel)
-    base_folder = session.get("folder")
+
+    # Ensure the destination is within the authenticated user's folder
     if first_segment(path_rel(dest_dir)) != base_folder and path_rel(dest_dir) != "":
         return jsonify({"ok": False, "error": "forbidden"}), 403
     if not dest_dir.exists() or not dest_dir.is_dir():
@@ -1596,47 +1616,10 @@ def api_download_zip():
 
 # -----------------------------
 # -----------------------------
-# Routes: PWA Share Target
-# -----------------------------
-@app.route("/share")
-def share_page():
-    # This route now serves the main share page.
-    # All logic for handling shared files is now on the client-side,
-    # managed by the service worker and share.js.
-    device_id, folder = get_or_create_device_folder(request)
-    if not folder:
-        return redirect(url_for("login"))
-
-    # We still set session variables to ensure the client is "authed"
-    # for making subsequent API calls (like uploading).
-    session["authed"] = True
-    session["folder"] = folder
-    session["icon"] = get_user_icon(folder)
-
-    # The rest of the context is for base.html rendering.
-    dhikr = get_random_dhikr()
-    dhikr_list = [{"dhikr": d} for d in ISLAMIC_DHIKR]
-    cfg = get_user_cfg(folder)
-    is_admin = bool(device_id and device_id == cfg.get("admin_device"))
-
-    # Note: The `files` variable is no longer passed from the server.
-    return render_template(
-        "share.html",
-        files=[], # Pass empty list, as it's now handled client-side
-        authed=True,
-        icon=session.get("icon"),
-        user_label=session.get("folder",""),
-        current_rel="share",
-        dhikr=dhikr,
-        dhikr_list=dhikr_list,
-        is_admin=is_admin,
-        share_page_active=True,
-        token=None
-    )
-
-# The old /share-receiver and /api/commit_share, /api/clear_shares routes
-# have been removed as this functionality is now handled entirely on the client
-# by the service worker and IndexedDB, making the app fully offline-capable.
+# The /share route has been removed. The share page is now a static file
+# at /static/share.html, making it fully independent from the server and
+# capable of loading offline. Authentication for uploads is handled via
+# API tokens stored in the client's IndexedDB.
 
 
 # Error handlers: redirect to login on not found/forbidden
