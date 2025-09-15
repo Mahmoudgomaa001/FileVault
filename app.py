@@ -1893,15 +1893,16 @@ def handle_403(e):
     return redirect(url_for('home'))
 
 # -----------------------------
-def generate_qr_on_desktop():
-    """Generates a QR code for the local server URL and saves it to the desktop."""
+def generate_desktop_assets():
+    """Generates a QR code and an HTML shortcut for the local server URL and saves them to the desktop."""
     try:
         ip = get_local_ip()
         url = f"http://{ip}:{PORT}"
         desktop_path = Path.home() / "Desktop"
         desktop_path.mkdir(parents=True, exist_ok=True)
-        qr_path = desktop_path / "FileValut.png"
 
+        # Generate QR Code
+        qr_path = desktop_path / "FileValut.png"
         qr = qrcode.QRCode(
             version=None,
             error_correction=qrcode.constants.ERROR_CORRECT_L,
@@ -1910,17 +1911,23 @@ def generate_qr_on_desktop():
         )
         qr.add_data(url)
         qr.make(fit=True)
-
         img = qr.make_image(fill_color="black", back_color="white")
         img.save(qr_path)
-        logger.info(f"QR code saved to {qr_path}")
+
+        # Generate HTML Shortcut
+        shortcut_path = desktop_path / "Open FileVault.html"
+        html_content = f'<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url={url}" /></head><body><p>Redirecting to <a href="{url}">{url}</a>...</p></body></html>'
+        shortcut_path.write_text(html_content, encoding="utf-8")
+
+        logger.info(f"QR code and shortcut saved to desktop: {qr_path}, {shortcut_path}")
     except Exception as e:
-        logger.error(f"Failed to generate QR code on desktop: {e}", exc_info=True)
+        logger.error(f"Failed to generate QR code and shortcut on desktop: {e}", exc_info=True)
+
 
 # Main
 # -----------------------------
 if __name__ == "__main__":
-    generate_qr_on_desktop()
+    generate_desktop_assets()
     ip = get_local_ip()
     logger.info(f"Serving FileVault on http://0.0.0.0:{PORT}  (scan: http://{ip}:{PORT})")
     ngrok_url = get_ngrok_url()
