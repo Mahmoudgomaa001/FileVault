@@ -13,6 +13,7 @@ import shutil
 import hashlib
 import zipfile
 import logging
+import platform
 from urllib.parse import urlparse
 from io import BytesIO
 from pathlib import Path
@@ -1894,7 +1895,7 @@ def handle_403(e):
 
 # -----------------------------
 def generate_desktop_assets():
-    """Generates a QR code and an HTML shortcut for the local server URL and saves them to the desktop."""
+    """Generates a QR code and a platform-specific shortcut for the local server URL and saves them to the desktop."""
     try:
         ip = get_local_ip()
         url = f"http://{ip}:{PORT}"
@@ -1914,14 +1915,22 @@ def generate_desktop_assets():
         img = qr.make_image(fill_color="black", back_color="white")
         img.save(qr_path)
 
-        # Generate HTML Shortcut
-        shortcut_path = desktop_path / "Open FileVault.html"
-        html_content = f'<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url={url}" /></head><body><p>Redirecting to <a href="{url}">{url}</a>...</p></body></html>'
-        shortcut_path.write_text(html_content, encoding="utf-8")
+        # Generate Platform-Specific Shortcut
+        if platform.system() == "Windows":
+            shortcut_path = desktop_path / "Open FileVault.url"
+            shortcut_content = f"[InternetShortcut]\nURL={url}\n"
+            shortcut_path.write_text(shortcut_content, encoding="utf-8")
+            shortcut_type = "Windows (.url)"
+        else:
+            # Fallback for macOS, Linux, etc.
+            shortcut_path = desktop_path / "Open FileVault.html"
+            shortcut_content = f'<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url={url}" /></head><body><p>Redirecting to <a href="{url}">{url}</a>...</p></body></html>'
+            shortcut_path.write_text(shortcut_content, encoding="utf-8")
+            shortcut_type = "HTML"
 
-        logger.info(f"QR code and shortcut saved to desktop: {qr_path}, {shortcut_path}")
+        logger.info(f"QR code saved to {qr_path}. {shortcut_type} shortcut saved to {shortcut_path}.")
     except Exception as e:
-        logger.error(f"Failed to generate QR code and shortcut on desktop: {e}", exc_info=True)
+        logger.error(f"Failed to generate desktop assets: {e}", exc_info=True)
 
 
 # Main
