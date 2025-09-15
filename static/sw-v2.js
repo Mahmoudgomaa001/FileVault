@@ -63,9 +63,6 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-// Store the file received from a native share event temporarily.
-let sharedFile = null;
-
   // --- Share Target Interception ---
   if (event.request.method === 'POST' && url.pathname === '/share-target/') {
     console.log('[ServiceWorker] Intercepting share target POST request.');
@@ -73,29 +70,31 @@ let sharedFile = null;
       (async () => {
         try {
           const formData = await event.request.formData();
-          const files = formData.getAll('files'); // 'files' is the name from manifest
+          const files = formData.getAll('files');
           if (!files || files.length === 0) {
-            console.log('[ServiceWorker] No files found in share data.');
             return Response.redirect('/static/launcher.html?share=empty', 303);
           }
 
-          // Store the first file for the WebRTC transfer.
-          sharedFile = files[0];
-          console.log(`[ServiceWorker] Stored "${sharedFile.name}" for WebRTC transfer.`);
+          const file = files[0];
+          const clients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
 
-          // Notify the client that a file is ready.
-          await broadcastToClients({ type: 'file-ready-for-webrtc' });
-          console.log('[ServiceWorker] Notified client that file is ready.');
-
-          // Redirect to the main page, where the client will handle the WebRTC initiation.
-          return Response.redirect('/', 303);
+          if (clients && clients.length > 0) {
+            console.log('[ServiceWorker] Found active client. Initiating WebRTC transfer.');
+            sharedFile = file; // Store file for the SW peer connection to access
+            await broadcastToClients({ type: 'file-ready-for-webrtc' });
+            return new Response('Share received. Processing in-app.', { status: 200 });
+          } else {
+            console.log('[ServiceWorker] No active client found. Saving file to IndexedDB.');
+            await saveFile(file);
+            return Response.redirect('/static/launcher.html?share=saved-offline', 303);
+          }
         } catch (error) {
           console.error('[ServiceWorker] Error handling share target:', error);
           return Response.redirect('/static/launcher.html?share=error', 303);
         }
       })()
     );
-    return; // Stop further processing for this request.
+    return;
   }
 
   // Cache-first strategy for navigation
@@ -121,8 +120,8 @@ let sharedFile = null;
 
   // Network-only for API calls
   if (url.pathname.startsWith('/api/')) {
-      event.respondWith(fetch(event.request));
-      return;
+    event.respondWith(fetch(event.request));
+    return;
   }
 
   // Cache-first for static assets
