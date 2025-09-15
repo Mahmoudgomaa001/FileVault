@@ -41,3 +41,124 @@ Root directory: /app/shared
 127.0.0.1 - - [07/Sep/2025 18:46:58] "GET /check/56268cc0-493e-4863-880b-8838ff01128f HTTP/1.1" 200 -
 127.0.0.1 - - [07/Sep/2025 18:46:59] "GET /check/56268cc0-493e-4863-880b-8838ff01128f HTTP/1.1" 200 -
 127.0.0.1 - - [07/Sep/2025 18:47:00] "GET /check/56268cc0-493e-4863-880b-8838ff01128f HTTP/1.1" 200 -
+2025-09-15 17:56:02,535 - INFO - [assets] Wrote site.webmanifest -> C:\MUIB\Projects\python\FileVault\static\site.webmanifest
+2025-09-15 17:56:02,792 - INFO - QR code and shortcut saved to desktop: C:\Users\Gomaa\Desktop\FileValut.png, C:\Users\Gomaa\Desktop\Open FileVault.html
+2025-09-15 17:56:02,793 - INFO - Serving FileVault on http://0.0.0.0:5000  (scan: http://192.168.1.3:5000)
+2025-09-15 17:56:03,811 - INFO - Ngrok not detected. To enable online access, run: ngrok http 5000
+2025-09-15 17:56:03,811 - INFO - Root directory: C:\MUIB\Projects\python\FileVault\shared
+2025-09-15 17:56:03,955 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.3:5000
+2025-09-15 17:56:03,955 - INFO - [33mPress CTRL+C to quit[0m
+2025-09-15 17:56:07,072 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:07] "[32mGET / HTTP/1.1[0m" 302 -
+2025-09-15 17:56:09,246 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:09] "GET /login HTTP/1.1" 200 -
+2025-09-15 17:56:09,332 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:09] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-09-15 17:56:09,334 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:09] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+2025-09-15 17:56:09,347 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:09] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+2025-09-15 17:56:09,350 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:09] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+2025-09-15 17:56:09,351 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:09] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-09-15 17:56:09,397 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:09] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+2025-09-15 17:56:09,446 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:09] "GET /api/prefs HTTP/1.1" 200 -
+2025-09-15 17:56:09,458 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:09] "[36mGET /static/vendor/fontawesome/webfonts/fa-solid-900.woff2 HTTP/1.1[0m" 304 -
+2025-09-15 17:56:09,467 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:09] "GET /api/prefs HTTP/1.1" 200 -
+2025-09-15 17:56:09,516 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:09] "POST /api/prefs HTTP/1.1" 200 -
+2025-09-15 17:56:09,955 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:09] "GET /check/078d84b0-4dab-4d33-bac5-719927417cb8 HTTP/1.1" 200 -
+2025-09-15 17:56:10,976 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:10] "GET /check/078d84b0-4dab-4d33-bac5-719927417cb8 HTTP/1.1" 200 -
+2025-09-15 17:56:11,991 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:11] "GET /check/078d84b0-4dab-4d33-bac5-719927417cb8 HTTP/1.1" 200 -
+2025-09-15 17:56:13,007 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:13] "GET /check/078d84b0-4dab-4d33-bac5-719927417cb8 HTTP/1.1" 200 -
+2025-09-15 17:56:18,906 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:18] "[32mGET / HTTP/1.1[0m" 302 -
+2025-09-15 17:56:20,959 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:20] "GET /login HTTP/1.1" 200 -
+2025-09-15 17:56:21,012 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:21] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+2025-09-15 17:56:21,020 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:21] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+2025-09-15 17:56:21,021 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:21] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+2025-09-15 17:56:21,022 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:21] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-09-15 17:56:21,025 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:21] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+2025-09-15 17:56:21,028 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:21] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-09-15 17:56:21,095 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:21] "[36mGET /static/vendor/fontawesome/webfonts/fa-solid-900.woff2 HTTP/1.1[0m" 304 -
+2025-09-15 17:56:21,101 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:21] "GET /api/prefs HTTP/1.1" 200 -
+2025-09-15 17:56:21,105 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:21] "GET /api/prefs HTTP/1.1" 200 -
+2025-09-15 17:56:21,155 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:21] "POST /api/prefs HTTP/1.1" 200 -
+2025-09-15 17:56:21,600 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:21] "GET /check/97bd14d0-feda-4a43-8381-56d8920c0b6f HTTP/1.1" 200 -
+2025-09-15 17:56:22,622 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:22] "GET /check/97bd14d0-feda-4a43-8381-56d8920c0b6f HTTP/1.1" 200 -
+2025-09-15 17:56:23,631 - INFO - 192.168.1.3 - - [15/Sep/2025 17:56:23] "GET /check/97bd14d0-feda-4a43-8381-56d8920c0b6f HTTP/1.1" 200 -
+2025-09-15 17:59:30,756 - INFO - [assets] Wrote site.webmanifest -> C:\MUIB\Projects\python\FileVault\static\site.webmanifest
+2025-09-15 17:59:30,812 - INFO - QR code saved to C:\Users\Gomaa\Desktop\FileValut.png. Windows (.url) shortcut saved to C:\Users\Gomaa\Desktop\Open FileVault.url.
+2025-09-15 17:59:30,814 - INFO - Serving FileVault on http://0.0.0.0:5000  (scan: http://192.168.1.3:5000)
+2025-09-15 17:59:31,821 - INFO - Ngrok not detected. To enable online access, run: ngrok http 5000
+2025-09-15 17:59:31,822 - INFO - Root directory: C:\MUIB\Projects\python\FileVault\shared
+2025-09-15 17:59:31,861 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.3:5000
+2025-09-15 17:59:31,862 - INFO - [33mPress CTRL+C to quit[0m
+2025-09-15 17:59:34,753 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:34] "[32mGET / HTTP/1.1[0m" 302 -
+2025-09-15 17:59:36,835 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:36] "GET /login HTTP/1.1" 200 -
+2025-09-15 17:59:36,895 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:36] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+2025-09-15 17:59:36,903 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:36] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+2025-09-15 17:59:36,908 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:36] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+2025-09-15 17:59:36,911 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:36] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-09-15 17:59:36,913 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:36] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+2025-09-15 17:59:36,915 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:36] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-09-15 17:59:36,995 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:36] "[36mGET /static/vendor/fontawesome/webfonts/fa-solid-900.woff2 HTTP/1.1[0m" 304 -
+2025-09-15 17:59:36,998 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:36] "GET /api/prefs HTTP/1.1" 200 -
+2025-09-15 17:59:37,006 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:37] "GET /api/prefs HTTP/1.1" 200 -
+2025-09-15 17:59:37,038 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:37] "POST /api/prefs HTTP/1.1" 200 -
+2025-09-15 17:59:37,509 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:37] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 17:59:38,521 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:38] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 17:59:39,548 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:39] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 17:59:40,677 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:40] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 17:59:42,687 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:42] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 17:59:44,680 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:44] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 17:59:46,690 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:46] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 17:59:48,684 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:48] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 17:59:50,689 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:50] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 17:59:52,686 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:52] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 17:59:54,681 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:54] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 17:59:56,688 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:56] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 17:59:58,680 - INFO - 192.168.1.3 - - [15/Sep/2025 17:59:58] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:00,689 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:00] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:02,688 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:02] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:04,687 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:04] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:06,681 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:06] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:10,664 - INFO - [assets] Wrote site.webmanifest -> C:\MUIB\Projects\python\FileVault\static\site.webmanifest
+2025-09-15 18:00:10,722 - INFO - QR code saved to C:\Users\Gomaa\Desktop\FileValut.png. Windows (.url) shortcut saved to C:\Users\Gomaa\Desktop\Open FileVault.url.
+2025-09-15 18:00:10,723 - INFO - Serving FileVault on http://0.0.0.0:5000  (scan: http://192.168.1.3:5000)
+2025-09-15 18:00:11,733 - INFO - Ngrok not detected. To enable online access, run: ngrok http 5000
+2025-09-15 18:00:11,734 - INFO - Root directory: C:\MUIB\Projects\python\FileVault\shared
+2025-09-15 18:00:11,761 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.3:5000
+2025-09-15 18:00:11,762 - INFO - [33mPress CTRL+C to quit[0m
+2025-09-15 18:00:11,959 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:11] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:13,689 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:13] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:15,677 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:15] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:17,688 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:17] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:19,689 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:19] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:21,680 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:21] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:23,684 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:23] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:25,682 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:25] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:27,691 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:27] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:29,681 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:29] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:31,578 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:31] "[32mGET / HTTP/1.1[0m" 302 -
+2025-09-15 18:00:31,698 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:31] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:33,665 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:33] "GET /login HTTP/1.1" 200 -
+2025-09-15 18:00:33,720 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:33] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:33,725 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:33] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+2025-09-15 18:00:33,731 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:33] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+2025-09-15 18:00:33,736 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:33] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+2025-09-15 18:00:33,739 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:33] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-09-15 18:00:33,745 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:33] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+2025-09-15 18:00:33,749 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:33] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-09-15 18:00:33,827 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:33] "[36mGET /static/vendor/fontawesome/webfonts/fa-solid-900.woff2 HTTP/1.1[0m" 304 -
+2025-09-15 18:00:33,830 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:33] "GET /api/prefs HTTP/1.1" 200 -
+2025-09-15 18:00:33,836 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:33] "GET /api/prefs HTTP/1.1" 200 -
+2025-09-15 18:00:33,903 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:33] "POST /api/prefs HTTP/1.1" 200 -
+2025-09-15 18:00:34,342 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:34] "GET /check/2f4d403f-87ed-4efa-b0c7-8722ba134dca HTTP/1.1" 200 -
+2025-09-15 18:00:35,366 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:35] "GET /check/2f4d403f-87ed-4efa-b0c7-8722ba134dca HTTP/1.1" 200 -
+2025-09-15 18:00:35,676 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:35] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:36,402 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:36] "GET /check/2f4d403f-87ed-4efa-b0c7-8722ba134dca HTTP/1.1" 200 -
+2025-09-15 18:00:37,422 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:37] "GET /check/2f4d403f-87ed-4efa-b0c7-8722ba134dca HTTP/1.1" 200 -
+2025-09-15 18:00:37,624 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:37] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
+2025-09-15 18:00:38,646 - INFO - 192.168.1.3 - - [15/Sep/2025 18:00:38] "GET /check/ddcc6263-76ac-401f-b35b-622f1847875e HTTP/1.1" 200 -
