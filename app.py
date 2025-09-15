@@ -117,6 +117,45 @@ app.config["LOGIN_TOKENS"] = {}  # pc_token -> folder
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
+# -----------------------------
+# WebRTC Signaling Handlers
+# -----------------------------
+from flask_socketio import join_room, leave_room
+
+@socketio.on('join')
+def on_join(data):
+    """Client joins a room based on the folder they are viewing."""
+    folder = data.get('folder')
+    if folder:
+        join_room(folder)
+        print(f"Socket client {request.sid} joined room: {folder}")
+
+@socketio.on('leave')
+def on_leave(data):
+    """Client leaves a room."""
+    folder = data.get('folder')
+    if folder:
+        leave_room(folder)
+        print(f"Socket client {request.sid} left room: {folder}")
+
+@socketio.on('signal')
+def on_signal(data):
+    """Handle WebRTC signaling messages (offers, answers, candidates)."""
+    folder = data.get('folder')
+    signal_data = data.get('signal')
+    # The target recipient's session ID can be included in the data
+    recipient_sid = data.get('to')
+
+    if folder and signal_data:
+        # If a specific recipient is targeted, send only to them
+        if recipient_sid:
+            socketio.emit('signal', signal_data, room=recipient_sid)
+        # Otherwise, broadcast to everyone else in the folder
+        else:
+            socketio.emit('signal', signal_data, room=folder, include_self=False)
+        # print(f"Signal broadcasted in room: {folder}")
+
+
 # In-memory pending sessions for QR login
 pending_sessions: dict[str, dict] = {}
 
