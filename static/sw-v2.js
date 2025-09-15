@@ -63,6 +63,9 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
+// Store the file received from a native share event temporarily.
+let sharedFile = null;
+
   // --- Share Target Interception ---
   if (event.request.method === 'POST' && url.pathname === '/share-target/') {
     console.log('[ServiceWorker] Intercepting share target POST request.');
@@ -76,16 +79,16 @@ self.addEventListener('fetch', event => {
             return Response.redirect('/static/launcher.html?share=empty', 303);
           }
 
-          console.log(`[ServiceWorker] Received ${files.length} files to save.`);
+          // Store the first file for the WebRTC transfer.
+          sharedFile = files[0];
+          console.log(`[ServiceWorker] Stored "${sharedFile.name}" for WebRTC transfer.`);
 
-          // The saveFile function is from db.js, imported via importScripts()
-          for (const file of files) {
-            await saveFile(file);
-            console.log(`[ServiceWorker] Saved file "${file.name}" to IndexedDB.`);
-          }
+          // Notify the client that a file is ready.
+          await broadcastToClients({ type: 'file-ready-for-webrtc' });
+          console.log('[ServiceWorker] Notified client that file is ready.');
 
-          // Redirect to the launcher page after saving.
-          return Response.redirect('/static/launcher.html?share=success', 303);
+          // Redirect to the main page, where the client will handle the WebRTC initiation.
+          return Response.redirect('/', 303);
         } catch (error) {
           console.error('[ServiceWorker] Error handling share target:', error);
           return Response.redirect('/static/launcher.html?share=error', 303);
@@ -136,8 +139,106 @@ self.addEventListener('fetch', event => {
   );
 });
 
-self.addEventListener('message', event => {
-    if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+// Helper to broadcast a message to all active clients.
+const broadcastToClients = async (message) => {
+    const clients = await self.clients.matchAll({
+        includeUncontrolled: true,
+        type: 'window',
+    });
+    clients.forEach((client) => {
+        client.postMessage(message);
+    });
+};
+
+let swPeerConnection;
+let dataChannel;
+const CHUNK_SIZE = 64 * 1024;
+
+function sendFile(file) {
+    if (!dataChannel || dataChannel.readyState !== 'open') {
+        console.error('[SW] Data channel is not open. Cannot send file.');
+        return;
+    }
+    console.log(`[SW] Sending file: ${file.name}`);
+
+    // 1. Send metadata
+    dataChannel.send(JSON.stringify({
+        name: file.name,
+        size: file.size,
+        type: file.type
+    }));
+
+    // 2. Send file data in chunks
+    const reader = new FileReader();
+    let offset = 0;
+
+    reader.onload = () => {
+        if (dataChannel.readyState === 'open') {
+            dataChannel.send(reader.result);
+            offset += reader.result.byteLength;
+            if (offset < file.size) {
+                readSlice(offset);
+            } else {
+                console.log('[SW] Finished sending file.');
+            }
+        }
+    };
+
+    const readSlice = o => {
+        const slice = file.slice(o, o + CHUNK_SIZE);
+        reader.readAsArrayBuffer(slice);
+    };
+    readSlice(0);
+}
+
+self.addEventListener('message', async event => {
+    console.log('[SW] Received message from client:', event.data);
+    const { type, offer, candidate } = event.data;
+
+    if (type === 'webrtc-offer') {
+        if (swPeerConnection) {
+            swPeerConnection.close();
+        }
+        swPeerConnection = new RTCPeerConnection({
+             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        });
+
+        // Send ICE candidates to the client
+        swPeerConnection.onicecandidate = e => {
+            if (e.candidate) {
+                broadcastToClients({ type: 'webrtc-ice-candidate', candidate: e.candidate });
+            }
+        };
+
+        // When the connection is made, create the data channel and send the file
+        swPeerConnection.onconnectionstatechange = () => {
+            if (swPeerConnection.connectionState === 'connected') {
+                console.log('[SW] Peer connection established.');
+                dataChannel = swPeerConnection.createDataChannel('file-transfer');
+                dataChannel.onopen = () => {
+                    if (sharedFile) {
+                        sendFile(sharedFile);
+                    } else {
+                        console.error('[SW] No shared file to send.');
+                    }
+                };
+            }
+        };
+
+        await swPeerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await swPeerConnection.createAnswer();
+        await swPeerConnection.setLocalDescription(answer);
+
+        broadcastToClients({ type: 'webrtc-answer', answer: answer });
+        console.log('[SW] Sent answer to client.');
+
+    } else if (type === 'webrtc-ice-candidate' && swPeerConnection) {
+        try {
+            await swPeerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (e) {
+            console.error('[SW] Error adding received ICE candidate', e);
+        }
+    } else if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
         self.registration.showNotification(event.data.title, {
             body: event.data.body,
             icon: '/static/favicon.svg',

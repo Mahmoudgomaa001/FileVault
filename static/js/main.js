@@ -1919,3 +1919,102 @@ function removeFileCard(rel){
     // FAB
     function toggleFabMenu(){ document.getElementById('fabMenu')?.classList.toggle('active'); }
     function closeFabMenu(){ document.getElementById('fabMenu')?.classList.remove('active'); }
+
+    // --- Service Worker Communication Channel ---
+    function postMessageToSW(message) {
+        if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage(message);
+            console.log('[Client] Sent message to SW:', message);
+        } else {
+            console.error('Service worker not in control. Cannot send message.');
+        }
+    }
+
+    let swPeerConnection;
+    let receiveBuffer = [];
+    let receivedSize = 0;
+    let fileToReceive = null;
+
+    const CHUNK_SIZE = 64 * 1024;
+
+    async function initiateWebRTCTransfer() {
+        console.log('[Client] Initiating WebRTC transfer...');
+        if (swPeerConnection) {
+            console.log('[Client] Closing existing peer connection.');
+            swPeerConnection.close();
+        }
+
+        swPeerConnection = new RTCPeerConnection({
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        });
+
+        // Send ICE candidates to the Service Worker
+        swPeerConnection.onicecandidate = event => {
+            if (event.candidate) {
+                postMessageToSW({ type: 'webrtc-ice-candidate', candidate: event.candidate });
+            }
+        };
+
+        // Set up the data channel event handler
+        swPeerConnection.ondatachannel = event => {
+            console.log('[Client] Data channel received from SW.');
+            const receiveChannel = event.channel;
+            receiveChannel.binaryType = 'arraybuffer';
+            receiveChannel.onmessage = handleDataChannelMessage;
+            receiveChannel.onopen = () => console.log('[Client] Data channel is open.');
+            receiveChannel.onclose = () => console.log('[Client] Data channel is closed.');
+        };
+
+        const offer = await swPeerConnection.createOffer();
+        await swPeerConnection.setLocalDescription(offer);
+        postMessageToSW({ type: 'webrtc-offer', offer: offer });
+        console.log('[Client] Sent WebRTC offer to SW.');
+    }
+
+    function handleDataChannelMessage(event) {
+        const data = event.data;
+        if (typeof data === 'string') {
+            fileToReceive = JSON.parse(data);
+            receiveBuffer = [];
+            receivedSize = 0;
+            console.log('[Client] Receiving file metadata:', fileToReceive);
+            showToast(`Receiving ${fileToReceive.name}...`, 'info');
+            return;
+        }
+
+        receiveBuffer.push(data);
+        receivedSize += data.byteLength;
+
+        if (receivedSize === fileToReceive.size) {
+            const receivedBlob = new Blob(receiveBuffer, { type: fileToReceive.type });
+            const receivedFile = new File([receivedBlob], fileToReceive.name, { type: fileToReceive.type });
+
+            console.log('[Client] File received successfully. Uploading...');
+            showToast(`File "${receivedFile.name}" received. Uploading...`, 'success');
+
+            const id = `webrtc-native-share-${Date.now()}`;
+            uploadSingleFile({ file: receivedFile, id: id });
+
+            // Cleanup
+            receiveBuffer = [];
+            swPeerConnection.close();
+        }
+    }
+
+    navigator.serviceWorker.addEventListener('message', async event => {
+        console.log('[Client] Received message from SW:', event.data);
+        const { type, answer, candidate } = event.data;
+
+        if (type === 'file-ready-for-webrtc') {
+            await initiateWebRTCTransfer();
+        } else if (type === 'webrtc-answer' && swPeerConnection) {
+            await swPeerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            console.log('[Client] Set remote description with answer.');
+        } else if (type === 'webrtc-ice-candidate' && swPeerConnection) {
+            try {
+                await swPeerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (e) {
+                console.error('[Client] Error adding received ICE candidate', e);
+            }
+        }
+    });
