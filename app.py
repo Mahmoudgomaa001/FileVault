@@ -12,6 +12,7 @@ import requests
 import shutil
 import hashlib
 import zipfile
+import logging
 from urllib.parse import urlparse
 from io import BytesIO
 from pathlib import Path
@@ -25,6 +26,21 @@ from flask import (
 from flask_socketio import SocketIO
 import qrcode
 from qrcode.constants import ERROR_CORRECT_H
+
+
+# -----------------------------
+# Logging Setup
+# -----------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("app.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
 
 # -----------------------------
 # Islamic Dhikr (Remembrance)
@@ -154,9 +170,9 @@ def ensure_favicon_assets():
             tmp = fav_svg.with_suffix(".svg.tmp")
             tmp.write_text(FAVICON_SVG, encoding="utf-8")
             tmp.replace(fav_svg)
-            print(f"[assets] Wrote favicon.svg -> {fav_svg}")
+            logger.info(f"[assets] Wrote favicon.svg -> {fav_svg}")
         except Exception as e:
-            print("[assets] favicon write failed:", e)
+            logger.error("[assets] favicon write failed:", exc_info=e)
 
     # Minimal PWA manifest using SVG icons (offline-friendly)
     manifest = {
@@ -188,15 +204,15 @@ def ensure_favicon_assets():
         tmp = manifest_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(manifest_path)
-        print(f"[assets] Wrote site.webmanifest -> {manifest_path}")
+        logger.info(f"[assets] Wrote site.webmanifest -> {manifest_path}")
     except Exception as e:
-        print("[assets] manifest write failed:", e)
+        logger.error("[assets] manifest write failed:", exc_info=e)
 
 # Call this during startup (after ensure_static_assets)
 try:
     ensure_favicon_assets()
 except Exception as e:
-    print("Brand assets error:", e)
+    logger.error("Brand assets error:", exc_info=e)
 
 
 mimetypes.add_type("font/woff2", ".woff2")  # make sure .woff2 served correctly
@@ -210,7 +226,7 @@ def load_device_map() -> dict:
         if DEVICE_MAP_FILE.exists():
             return json.loads(DEVICE_MAP_FILE.read_text(encoding="utf-8"))
     except Exception as e:
-        print("Device map load failed:", e)
+        logger.error("Device map load failed:", exc_info=e)
     return {}
 
 def save_device_map(mapdata: dict):
@@ -220,7 +236,7 @@ def save_device_map(mapdata: dict):
         tmp.write_text(json.dumps(mapdata, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(DEVICE_MAP_FILE)
     except Exception as e:
-        print("Device map save failed:", e)
+        logger.error("Device map save failed:", exc_info=e)
 
 app.config["DEVICE_MAP"] = load_device_map()
 
@@ -232,7 +248,7 @@ def _load_json_file(p: Path, default: dict) -> dict:
         if p.exists():
             return json.loads(p.read_text(encoding="utf-8"))
     except Exception as e:
-        print(f"Load {p.name} failed:", e)
+        logger.error(f"Load {p.name} failed:", exc_info=e)
     return default.copy()
 
 def _save_json_file(p: Path, data: dict):
@@ -242,7 +258,7 @@ def _save_json_file(p: Path, data: dict):
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(p)
     except Exception as e:
-        print(f"Save {p.name} failed:", e)
+        logger.error(f"Save {p.name} failed:", exc_info=e)
 
 def load_users() -> dict:
     data = _load_json_file(USERS_FILE, {})
@@ -692,13 +708,13 @@ def get_ngrok_url() -> Optional[str]:
             if tunnel.get("proto") == "https":
                 NGROK_URL = tunnel.get("public_url", "").strip()
                 if NGROK_URL:
-                    print(f"Auto-detected ngrok URL: {NGROK_URL}")
+                    logger.info(f"Auto-detected ngrok URL: {NGROK_URL}")
                     return NGROK_URL
         for tunnel in tunnels:
             if tunnel.get("proto") == "http":
                 NGROK_URL = tunnel.get("public_url", "").strip()
                 if NGROK_URL:
-                    print(f"Auto-detected ngrok URL: {NGROK_URL}")
+                    logger.info(f"Auto-detected ngrok URL: {NGROK_URL}")
                     return NGROK_URL
     except Exception:
         pass
@@ -1388,7 +1404,7 @@ def api_delete():
                     p.rmdir()
                 deleted.append(rel)
             except Exception as e:
-                print("Delete failed:", e)
+                logger.error("Delete failed:", exc_info=e)
     for rel in deleted:
         parent = str(Path(rel).parent).replace("\\", "/")
         if parent == ".": parent = ""
@@ -1563,7 +1579,7 @@ def api_folders():
                         "children": children
                     })
         except Exception as e:
-            print(f"Error reading directory {path}: {e}")
+            logger.error(f"Error reading directory {path}: {e}", exc_info=e)
         return sorted(structure, key=lambda x: x['name'].lower())
 
     folder_tree = [{
@@ -1738,9 +1754,9 @@ def share_page():
 
 @app.route("/share-receiver", methods=["POST"])
 def share_receiver():
-    print("[DEBUG] /share-receiver called")
+    logger.debug("[DEBUG] /share-receiver called")
     device_id, folder = get_or_create_device_folder(request)
-    print(f"[DEBUG] device_id: {device_id}, folder: {folder}")
+    logger.debug(f"[DEBUG] device_id: {device_id}, folder: {folder}")
 
     files = request.files.getlist("files")
     if not files or not any(f.filename for f in files):
@@ -1759,9 +1775,9 @@ def share_receiver():
                 f.save(save_path)
                 saved_count += 1
             except Exception as e:
-                print(f"[share] Save failed for {filename}: {e}")
+                logger.error(f"[share] Save failed for {filename}: {e}", exc_info=e)
 
-    print(f"[DEBUG] Saved {saved_count} files. Redirecting to share_page.")
+    logger.debug(f"[DEBUG] Saved {saved_count} files. Redirecting to share_page.")
     return redirect(url_for("share_page"))
 
 @app.route("/api/commit_share", methods=["POST"])
@@ -1837,13 +1853,13 @@ def api_clear_shares():
                 deleted_count += 1
         except Exception as e:
             errors.append({"name": item.name, "error": str(e)})
-            print(f"Error deleting {item.name}: {e}")
+            logger.error(f"Error deleting {item.name}: {e}", exc_info=e)
 
     if not errors:
         try:
             pending_dir.rmdir()
         except Exception as e:
-            print(f"Error deleting .pending_shares directory: {e}")
+            logger.error(f"Error deleting .pending_shares directory: {e}", exc_info=e)
 
 
     return jsonify({"ok": True, "deleted_count": deleted_count, "errors": errors})
@@ -1877,15 +1893,40 @@ def handle_403(e):
     return redirect(url_for('home'))
 
 # -----------------------------
+def generate_qr_on_desktop():
+    """Generates a QR code for the local server URL and saves it to the desktop."""
+    try:
+        ip = get_local_ip()
+        url = f"http://{ip}:{PORT}"
+        desktop_path = Path.home() / "Desktop"
+        desktop_path.mkdir(parents=True, exist_ok=True)
+        qr_path = desktop_path / "FileValut.png"
+
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(url)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+        img.save(qr_path)
+        logger.info(f"QR code saved to {qr_path}")
+    except Exception as e:
+        logger.error(f"Failed to generate QR code on desktop: {e}", exc_info=True)
+
 # Main
 # -----------------------------
 if __name__ == "__main__":
+    generate_qr_on_desktop()
     ip = get_local_ip()
-    print(f"Serving FileVault on http://0.0.0.0:{PORT}  (scan: http://{ip}:{PORT})")
+    logger.info(f"Serving FileVault on http://0.0.0.0:{PORT}  (scan: http://{ip}:{PORT})")
     ngrok_url = get_ngrok_url()
     if ngrok_url:
-        print(f"Ngrok URL detected: {ngrok_url}")
+        logger.info(f"Ngrok URL detected: {ngrok_url}")
     else:
-        print("Ngrok not detected. To enable online access, run: ngrok http 5000")
-    print(f"Root directory: {ROOT_DIR}")
+        logger.info("Ngrok not detected. To enable online access, run: ngrok http 5000")
+    logger.info(f"Root directory: {ROOT_DIR}")
     socketio.run(app, host="0.0.0.0", port=PORT, debug=False, allow_unsafe_werkzeug=True)
