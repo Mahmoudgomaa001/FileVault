@@ -432,6 +432,15 @@ setInterval(changeDhikr, 30000);
         const files = e.target.files; if(files?.length){ handleNewFiles(files); }
         input.value = '';
       }, false);
+
+      const folderInput = document.getElementById('uploadFolderInput');
+      folderInput.addEventListener('change', e => {
+        const files = e.target.files;
+        if (files?.length) {
+          handleNewFiles(files);
+        }
+        folderInput.value = '';
+      }, false);
     }
 
     function handleNewFiles(files){
@@ -496,12 +505,12 @@ setInterval(changeDhikr, 30000);
     function uploadSingleFile(item){
       const {file, id} = item;
       const container = document.getElementById('progressContainer');
-      const row = createProgressElement(file.name, id);
+      const row = createProgressElement(file.webkitRelativePath || file.name, id);
       container?.appendChild(row);
 
       const form = new FormData();
       form.append('dest', window.currentPath || '');
-      form.append('file', file, file.name);
+      form.append('file', file, file.webkitRelativePath || file.name);
 
       const xhr = new XMLHttpRequest();
       activeXHRs.set(id, xhr);
@@ -1399,6 +1408,7 @@ function removeFileCard(rel){
     document.getElementById('generateTokenBtn')?.addEventListener('click', generateToken);
     document.getElementById('regenerateTokenBtn')?.addEventListener('click', regenerateToken);
     document.getElementById('shareTokenBtn')?.addEventListener('click', showTokenShare);
+    document.getElementById('setPermanentCodeBtn')?.addEventListener('click', setPermanentCode);
     document.getElementById('saveSettingsBtn')?.addEventListener('click', async ()=>{
       const priv = document.getElementById('privacyToggle').classList.contains('active'); // true => private
       const pwd = document.getElementById('privacyPassword').value || '';
@@ -1485,6 +1495,33 @@ function removeFileCard(rel){
         }
       } catch (e) {
         showToast('Failed to regenerate token', 'error');
+      }
+    }
+
+    async function setPermanentCode() {
+      const codeInput = document.getElementById('permanentCodeInput');
+      const code = codeInput.value.trim();
+
+      if (!/^\d{6}$/.test(code)) {
+          showToast('Permanent code must be a 6-digit number.', 'warning');
+          return;
+      }
+
+      try {
+          const r = await fetch(URLS.api_accounts_set_permanent_code, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code: code })
+          });
+          const j = await r.json();
+
+          if (j.ok) {
+              showToast('Permanent code updated successfully!', 'success');
+          } else {
+              showToast(j.error || 'Failed to update permanent code.', 'error');
+          }
+      } catch (e) {
+          showToast('An error occurred while updating the code.', 'error');
       }
     }
 
