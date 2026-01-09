@@ -66,8 +66,8 @@ def generate_name() -> str:
     return f"{random.choice(ADJECTIVES)}-{random.choice(ANIMALS)}-{random.randint(0,999):03d}"
 
 def generate_temp_code() -> str:
-    """Generates a 6-digit numeric code."""
-    return f"{random.randint(100000, 999999):06d}"
+    """Generates a 3-digit numeric code."""
+    return f"{random.randint(100, 999):03d}"
 
 def generate_unique_permanent_code() -> str:
     """Generates a unique 6-digit code for permanent login."""
@@ -689,6 +689,37 @@ def api_accounts_token_regenerate():
         "message": "Permanent token and code have been regenerated."
     })
 
+@app.route("/api/accounts/set_permanent_code", methods=["POST"])
+def api_set_permanent_code():
+    if not is_authed():
+        return jsonify({"ok": False, "error": "not authed"}), 401
+
+    folder = session.get("folder")
+    if not folder:
+        return jsonify({"ok": False, "error": "no folder in session"}), 400
+
+    if not is_admin_device_of(folder):
+        return jsonify({"ok": False, "error": "only admin device can set permanent code"}), 403
+
+    data = request.get_json(silent=True) or {}
+    code = data.get("code", "").strip()
+
+    if not code.isdigit() or len(code) != 6:
+        return jsonify({"ok": False, "error": "Permanent code must be a 6-digit number"}), 400
+
+    users = app.config.setdefault("USERS", load_users())
+
+    # Check if the code is already in use by another user
+    for f, user_data in users.items():
+        if f != folder and user_data.get("permanent_code") == code:
+            return jsonify({"ok": False, "error": "This code is already in use"}), 409
+
+    user_cfg = users[folder]
+    user_cfg["permanent_code"] = code
+    save_users(users)
+
+    return jsonify({"ok": True, "message": "Permanent code updated successfully"})
+
 def get_local_ip() -> str:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -745,7 +776,12 @@ def safe_path(path: Optional[str]) -> Path:
         abort(403)
     return p
 
-def sanitize_filename(filename: str) -> str:
+def sanitize_filename(filename: str, is_path: bool = False) -> str:
+    if is_path:
+        parts = filename.split('/')
+        sanitized_parts = [sanitize_filename(part) for part in parts]
+        return '/'.join(sanitized_parts)
+
     name = os.path.basename(filename or "").strip()
     name = unicodedata.normalize("NFC", name)
     name = "".join(ch for ch in name if ch >= " " and ch != "\x7f")
@@ -1075,8 +1111,8 @@ def check_login(token: str):
 @app.route("/login_with_code", methods=["POST"])
 def login_with_code():
     code = request.form.get("code", "").strip()
-    if not code or not code.isdigit() or len(code) != 6:
-        return redirect(url_for("login", error="Invalid code format. Please enter a 6-digit code."))
+    if not code or not code.isdigit():
+        return redirect(url_for("login", error="Invalid code format."))
 
     # 1. Check for temporary codes in pending_sessions
     found_token = None
@@ -1354,13 +1390,17 @@ def api_upload():
     if not f or not f.filename:
         return jsonify({"ok": False, "error": "no file"}), 400
 
-    filename = sanitize_filename(f.filename)
+    filename = sanitize_filename(f.filename, is_path=True)
     if ALLOWED_UPLOAD_EXT:
-      ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-      if ext not in ALLOWED_UPLOAD_EXT:
-        return jsonify({"ok": False, "error": "file type not allowed"}), 400
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        if ext not in ALLOWED_UPLOAD_EXT:
+            return jsonify({"ok": False, "error": "file type not allowed"}), 400
 
     save_path = dest_dir / filename
+
+    # Create parent directories if they don't exist
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+
     base, ext = os.path.splitext(filename)
     i = 1
     while save_path.exists():
@@ -1372,7 +1412,7 @@ def api_upload():
         return jsonify({"ok": False, "error": f"save failed: {e}"}), 500
 
     meta = get_file_meta(save_path)
-    parent_rel = path_rel(dest_dir) if dest_dir != ROOT_DIR else ""
+    parent_rel = path_rel(save_path.parent) if save_path.parent != ROOT_DIR else ""
     socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
     return jsonify({"ok": True, "meta": meta}), 201
 
@@ -1418,7 +1458,7 @@ def api_mkdir():
         return jsonify({"ok": False, "error": "not authed"}), 401
     data = request.get_json(silent=True) or {}
     dest_rel = data.get("dest") or ""
-    name = sanitize_filename((data.get("name") or "").strip())
+    name = sanitize_filename((data.get("name") or "").strip(), is_path=True)
     base_folder = session.get("folder")
     target_dir = safe_path(dest_rel)
     if first_segment(path_rel(target_dir)) != base_folder and path_rel(target_dir) != "":
