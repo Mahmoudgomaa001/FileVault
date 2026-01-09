@@ -412,20 +412,84 @@ setInterval(changeDhikr, 30000);
     // UPLOADS
     const activeXHRs = new Map();
 
+    async function getFilesFromDataTransferItems(dataTransferItems) {
+      const files = [];
+      const queue = [];
+      for (const item of dataTransferItems) {
+          queue.push(item.webkitGetAsEntry());
+      }
+      while (queue.length > 0) {
+          const entry = queue.shift();
+          if (entry.isFile) {
+              try {
+                  const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+                  file.customRelativePath = entry.fullPath.startsWith('/') ? entry.fullPath.substring(1) : entry.fullPath;
+                  files.push(file);
+              } catch (err) {
+                  console.error('Error getting file from entry:', err);
+              }
+          } else if (entry.isDirectory) {
+              const reader = entry.createReader();
+              try {
+                  const entries = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+                  for (const innerEntry of entries) {
+                      queue.push(innerEntry);
+                  }
+              } catch (err) {
+                  console.error('Error reading directory entries:', err);
+              }
+          }
+      }
+      return files;
+    }
+
     function initUploadArea(){
       const area = document.getElementById('uploadArea');
       const input = document.getElementById('uploadInput');
-      if(!area || !input) return;
+      const fullPageDropZone = document.getElementById('fullPageDropZone');
+      if(!area || !input || !fullPageDropZone) return;
 
-      ['dragenter','dragover','dragleave','drop'].forEach(ev=>{
-        area.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); }, false);
-        document.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); }, false);
-      });
-      area.addEventListener('dragenter', ()=> area.classList.add('dragover'));
-      area.addEventListener('dragleave', ()=> area.classList.remove('dragover'));
-      area.addEventListener('drop', e=>{
-        area.classList.remove('dragover');
-        const files = e.dataTransfer.files; if(files?.length) handleNewFiles(files);
+      let dragCounter = 0;
+
+      document.addEventListener('dragenter', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+          dragCounter++;
+          fullPageDropZone.style.display = 'flex';
+        }
+      }, false);
+
+      document.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.stopPropagation();
+      }, false);
+      
+      fullPageDropZone.addEventListener('dragleave', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter--;
+        if (dragCounter === 0) {
+          fullPageDropZone.style.display = 'none';
+        }
+      }, false);
+
+      fullPageDropZone.addEventListener('drop', async e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounter = 0;
+        fullPageDropZone.style.display = 'none';
+
+        let files;
+        if (e.dataTransfer.items && e.dataTransfer.items.length > 0 && e.dataTransfer.items[0].webkitGetAsEntry) {
+            files = await getFilesFromDataTransferItems(e.dataTransfer.items);
+        } else {
+            files = e.dataTransfer.files;
+        }
+        
+        if (files && files.length > 0) {
+            handleNewFiles(files);
+        }
       });
 
       input.addEventListener('change', e=>{
@@ -505,12 +569,13 @@ setInterval(changeDhikr, 30000);
     function uploadSingleFile(item){
       const {file, id} = item;
       const container = document.getElementById('progressContainer');
-      const row = createProgressElement(file.webkitRelativePath || file.name, id);
+      const displayPath = file.customRelativePath || file.webkitRelativePath || file.name;
+      const row = createProgressElement(displayPath, id);
       container?.appendChild(row);
 
       const form = new FormData();
       form.append('dest', window.currentPath || '');
-      form.append('file', file, file.webkitRelativePath || file.name);
+      form.append('file', file, displayPath);
 
       const xhr = new XMLHttpRequest();
       activeXHRs.set(id, xhr);
