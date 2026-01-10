@@ -690,36 +690,25 @@ def api_accounts_token_regenerate():
     })
 
 @app.route("/api/accounts/set_permanent_code", methods=["POST"])
-def api_set_permanent_code():
+def api_accounts_set_permanent_code():
     if not is_authed():
         return jsonify({"ok": False, "error": "not authed"}), 401
-
     folder = session.get("folder")
     if not folder:
         return jsonify({"ok": False, "error": "no folder in session"}), 400
-
-    if not is_admin_device_of(folder):
-        return jsonify({"ok": False, "error": "only admin device can set permanent code"}), 403
-
     data = request.get_json(silent=True) or {}
     code = data.get("code", "").strip()
-
-    if not code.isdigit() or len(code) != 6:
-        return jsonify({"ok": False, "error": "Permanent code must be a 6-digit number"}), 400
-
+    if not code or not re.match(r"^\d{6}$", code):
+        return jsonify({"ok": False, "error": "invalid code (must be 6 digits)"}), 400
     users = app.config.setdefault("USERS", load_users())
-    
-    # Check if the code is already in use by another user
-    for f, user_data in users.items():
-        if f != folder and user_data.get("permanent_code") == code:
-            return jsonify({"ok": False, "error": "This code is already in use"}), 409
-
-    user_cfg = users[folder]
-    user_cfg["permanent_code"] = code
+    # Ensure uniqueness across all users
+    if any(user.get("permanent_code") == code for user in users.values() if user != users.get(folder)):
+        return jsonify({"ok": False, "error": "code already in use"}), 409
+    if folder not in users:
+        return jsonify({"ok": False, "error": "folder not found"}), 404
+    users[folder]["permanent_code"] = code
     save_users(users)
-
-    return jsonify({"ok": True, "message": "Permanent code updated successfully"})
-
+    return jsonify({"ok": True})
 def get_local_ip() -> str:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:

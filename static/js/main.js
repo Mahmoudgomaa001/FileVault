@@ -137,13 +137,9 @@
                 showToast('Account renamed!', 'success');
                 closeModal('renameAccountModal');
                 openAccounts();
-            if (APP_CONFIG.current_folder === oldName) {
-                if (!newName) {
-                    showToast('Cannot redirect: new name is empty', 'error');
-                    return;
+                if (APP_CONFIG.current_folder === oldName) {
+                    setTimeout(()=> window.location.href = window.location.pathname.replace('/b/' + oldName, '/b/' + newName), 300);
                 }
-                setTimeout(()=> window.location.href = window.location.pathname.replace('/b/' + oldName, '/b/' + newName), 300);
-            }
             } else {
                 showToast(j.error || 'Rename failed.', 'error');
             }
@@ -517,14 +513,14 @@ function initUploadArea(){
   }
 
   // When clicking the upload area, trigger file selection.
-  area.addEventListener('click', () => {
-    const isFolder = confirm('Upload a folder? (OK = Folder, Cancel = Files)');
-    if (isFolder) {
-      folderInput.click();
-    } else {
-      input.click();
-    }
+  area.addEventListener('click', (e) => {
+    // Prevent the click from reaching the underlying file inputs directly
+    e.preventDefault();
+    e.stopPropagation();
+    // Trigger the file input.
+    input.click();
   });
+}
 
 // Get files from DataTransferItems (supports folder drops)
 async function getFilesFromDataTransferItems(items) {
@@ -2054,34 +2050,15 @@ function removeFileCard(rel){
         document.getElementById('clipTextInput')?.addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); saveClipboardText(); }});
         document.getElementById('clipNameInput')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveClipboardText(); }});
 
-        // Bind FAB (Floating Action Button) Menu Buttons
-        const fabActions = {
-          'fabNewFolderBtn': showNewFolderModal,
-          'fabUploadFileBtn': () => {
-            console.log('FAB Upload Files clicked');
-            const input = document.getElementById('uploadInput');
-            if (input) input.click();
-            else alert('File input not found. Please use the toolbar upload.');
-          },
-          'fabUploadFolderBtn': () => {
-            console.log('FAB Upload Folder clicked');
-            const input = document.getElementById('uploadFolderInput');
-            if (input) input.click();
-            else alert('Folder input not found. Please use the toolbar upload.');
-          },
-          'fabPasteTextBtn': openClipModal
-        };
+        // Bind Toolbar Upload Buttons
+        document.getElementById('uploadFileBtn')?.addEventListener('click', () => document.getElementById('uploadInput')?.click());
+        document.getElementById('uploadFolderBtn')?.addEventListener('click', () => document.getElementById('uploadFolderInput')?.click());
 
-        for (const [id, action] of Object.entries(fabActions)) {
-          const btn = document.getElementById(id);
-          if (btn) {
-            btn.addEventListener('click', (e) => {
-              e.stopPropagation(); // Prevent the FAB menu from closing
-              action();
-              closeFabMenu(); // Manually close menu after action
-            });
-          }
-        }
+        // Bind FAB (Floating Action Button) Menu Buttons
+        document.getElementById('fabNewFolderBtn')?.addEventListener('click', showNewFolderModal);
+        document.getElementById('fabUploadFileBtn')?.addEventListener('click', () => document.getElementById('uploadInput')?.click());
+        document.getElementById('fabUploadFolderBtn')?.addEventListener('click', () => document.getElementById('uploadFolderInput')?.click());
+        document.getElementById('fabPasteTextBtn')?.addEventListener('click', openClipModal);
       }
 
       // Global initializations for all pages
