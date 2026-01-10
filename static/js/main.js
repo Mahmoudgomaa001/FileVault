@@ -410,7 +410,91 @@ setInterval(changeDhikr, 30000);
     }
 
  // UPLOADS
+// UPLOADS - Complete implementation with folder conflict handling
+
+// UPLOADS - Complete implementation with folder conflict handling
+
 const activeXHRs = new Map();
+
+// Get files from DataTransferItems (supports folder drops)
+async function getFilesFromDataTransferItems(items) {
+  const files = [];
+  
+  async function traverseFileTree(entry, path = '') {
+    if (!entry) return;
+    
+    if (entry.isFile) {
+      return new Promise((resolve) => {
+        entry.file((file) => {
+          // Create a new file object with the relative path
+          const relativePath = path + file.name;
+          
+          // We need to create a wrapper that includes the path
+          const fileWithPath = new File([file], file.name, { type: file.type });
+          fileWithPath.relativePath = relativePath;
+          fileWithPath.fullPath = relativePath;
+          
+          files.push({
+            file: fileWithPath,
+            relativePath: relativePath
+          });
+          resolve();
+        }, (err) => {
+          console.warn('Error reading file:', err);
+          resolve();
+        });
+      });
+    } else if (entry.isDirectory) {
+      const dirReader = entry.createReader();
+      return new Promise((resolve) => {
+        const allEntries = [];
+        
+        const readEntries = () => {
+          dirReader.readEntries(async (entries) => {
+            if (entries.length === 0) {
+              // Process all entries
+              for (const e of allEntries) {
+                await traverseFileTree(e, path + entry.name + '/');
+              }
+              resolve();
+            } else {
+              allEntries.push(...entries);
+              readEntries(); // Continue reading (readEntries has a limit per call)
+            }
+          }, (err) => {
+            console.warn('Error reading directory:', err);
+            resolve();
+          });
+        };
+        readEntries();
+      });
+    }
+  }
+  
+  const promises = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.kind === 'file') {
+      const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+      
+      if (entry) {
+        promises.push(traverseFileTree(entry, ''));
+      } else {
+        // No entry support, get file directly
+        const file = item.getAsFile();
+        if (file) {
+          files.push({
+            file: file,
+            relativePath: file.name
+          });
+        }
+      }
+    }
+  }
+  
+  await Promise.all(promises);
+  return files;
+}
 
 // Modified handleNewFiles to detect folder uploads and handle conflicts
 function handleNewFiles(filesInput) {
@@ -611,51 +695,62 @@ function uploadSingleFile(item) {
   xhr.send(form);
 }
 
-// FAB Button Handlers
-function initFabButtons() {
-  // FAB Upload Files
-  document.getElementById('fabUploadFileBtn')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const input = document.getElementById('uploadInput');
-    if (input) {
-      console.log("Triggering FILE upload from FAB");
-      closeFabMenu();
-      input.click();
-    } else {
-      showToast("File upload input not found", "error");
-    }
-  });
+function createProgressElement(filename, id){
+  const div = document.createElement('div');
+  div.className = 'progress-item';
+  div.dataset.uploadId = id;
+  div.innerHTML = `
+    <div class="progress-header">
+      <div class="progress-info">
+        <div class="progress-filename">${filename}</div>
+        <div class="progress-stats"><span class="stat-speed">0 B/s</span><span class="stat-eta">Starting…</span></div>
+      </div>
+      <div class="progress-actions">
+        <span class="progress-percent">0%</span>
+        <button class="progress-cancel" title="Cancel upload"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+  `;
+  div.querySelector('.progress-cancel').addEventListener('click', ()=> cancelUpload(id));
+  return div;
+}
 
-  // FAB Upload Folder
-  document.getElementById('fabUploadFolderBtn')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const input = document.getElementById('uploadFolderInput');
-    if (input) {
-      console.log("Triggering FOLDER upload from FAB");
-      closeFabMenu();
-      input.click();
-    } else {
-      showToast("Folder upload input not found", "error");
-    }
-  });
+function formatSpeed(bps){
+  if(!bps || !isFinite(bps)) return "0 B/s";
+  const units = ['B/s','KB/s','MB/s','GB/s']; let u=0; let s=bps;
+  while(s>=1024 && u<units.length-1){ s/=1024; u++; }
+  return `${s.toFixed(u?1:0)} ${units[u]}`;
+}
 
-  // FAB New Folder
-  document.getElementById('fabNewFolderBtn')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    closeFabMenu();
-    showNewFolderModal();
-  });
+function formatETA(sec){
+  if(!isFinite(sec) || sec<=0) return '...';
+  if(sec<60) return `${Math.round(sec)}s`;
+  const m = Math.floor(sec/60), s=Math.round(sec%60);
+  return `${m}m ${s}s`;
+}
 
-  // FAB Paste Text
-  document.getElementById('fabPasteTextBtn')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    closeFabMenu();
-    openClipModal();
-  });
+function updateProgress(element, data){
+  if(!element) return;
+  element.querySelector('.progress-fill').style.width = `${data.percent}%`;
+  element.querySelector('.progress-percent').textContent = `${Math.round(data.percent)}%`;
+  element.querySelector('.stat-speed').textContent = formatSpeed(data.speed);
+  element.querySelector('.stat-eta').textContent = data.percent >= 100 ? 'Done' : formatETA(data.eta);
+}
+
+function markProgressComplete(element, success){
+  if(!element) return;
+  element.classList.add(success ? 'completed' : 'error');
+  const btn = element.querySelector('.progress-cancel'); 
+  if(btn){ btn.disabled = true; btn.style.opacity = .5; }
+  setTimeout(()=>{ element.remove(); }, 900);
+}
+
+function cancelUpload(id){
+  const xhr = activeXHRs.get(id);
+  if(xhr){ xhr.abort(); activeXHRs.delete(id); }
+  const el = document.querySelector(`[data-upload-id="${id}"]`);
+  if(el){ el.remove(); }
 }
 
 // Fixed initUploadArea
@@ -755,16 +850,85 @@ function initUploadArea(){
     folderInput.addEventListener('change', fileChangeHandler, false);
   }
 
-  // Click handler for upload area
+  // Click handler for upload area - allow user to choose files or folders
   area.addEventListener('click', (e) => {
     if (e.target === input || e.target === folderInput) {
       return;
     }
-    input.click();
+    
+    // Check if user is holding Shift key to upload folders instead
+    if (e.shiftKey && folderInput) {
+      folderInput.click();
+    } else {
+      // Default to regular file upload
+      input.click();
+    }
+  });
+
+  // Visual feedback for Shift key
+  let shiftHintTimeout;
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Shift' && !e.repeat) {
+      const uploadText = area.querySelector('.upload-text');
+      if (uploadText && folderInput) {
+        uploadText.dataset.originalText = uploadText.textContent;
+        uploadText.textContent = 'Drop or click to select FOLDERS';
+        uploadText.style.color = 'var(--primary)';
+      }
+    }
+  });
+
+  document.addEventListener('keyup', (e) => {
+    if (e.key === 'Shift') {
+      const uploadText = area.querySelector('.upload-text');
+      if (uploadText && uploadText.dataset.originalText) {
+        uploadText.textContent = uploadText.dataset.originalText;
+        uploadText.style.color = '';
+      }
+    }
   });
 }
 
+// FAB Button Handlers
+function initFabButtons() {
+  document.getElementById('fabUploadFileBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const input = document.getElementById('uploadInput');
+    if (input) {
+      closeFabMenu();
+      input.click();
+    } else {
+      showToast("File upload input not found", "error");
+    }
+  });
 
+  document.getElementById('fabUploadFolderBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const input = document.getElementById('uploadFolderInput');
+    if (input) {
+      closeFabMenu();
+      input.click();
+    } else {
+      showToast("Folder upload input not found", "error");
+    }
+  });
+
+  document.getElementById('fabNewFolderBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeFabMenu();
+    showNewFolderModal();
+  });
+
+  document.getElementById('fabPasteTextBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeFabMenu();
+    openClipModal();
+  });
+}
 
 
     function createProgressElement(filename, id){

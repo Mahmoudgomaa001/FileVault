@@ -175,10 +175,10 @@
     .file-preview img, .file-preview video { width:100%; height:100%; object-fit:cover; }
     .file-info { padding:.75rem; }
     .list-view .file-info { flex:1; padding:0; min-width:0; }
-    .file-name { font-size:.85rem; font-weight:700; margin-bottom:.25rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .file-meta { font-size:.7rem; color:var(--text-muted); margin-bottom:.5rem; }
+    .file-name { font-size:.85rem; font-weight:700; margin-bottom:.25rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width: fit-content; }
+    .file-meta { font-size:.7rem; color:var(--text-muted); margin-bottom:.5rem;width: fit-content;  }
     .list-view .file-meta { margin-bottom:0; }
-    .file-actions { display:flex; gap:.375rem; }
+    .file-actions { display:flex; gap:.375rem;width: fit-content;  }
     .btn-icon { width:34px; height:34px; padding:0; border-radius:.375rem; display:inline-flex; align-items:center; justify-content:center; }
 
     /* Toasts */
