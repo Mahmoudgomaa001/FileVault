@@ -415,26 +415,53 @@ const activeXHRs = new Map();
 function initUploadArea(){
   const area = document.getElementById('uploadArea');
   const input = document.getElementById('uploadInput');
-  if(!area || !input) return;
+  const fullPageDropZone = document.getElementById('fullPageDropZone');
 
-  ['dragenter','dragover','dragleave','drop'].forEach(ev=>{
-    area.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); }, false);
-    document.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); }, false);
-  });
-  area.addEventListener('dragenter', ()=> area.classList.add('dragover'));
-  area.addEventListener('dragleave', (e)=> {
-    // Only remove if leaving the area entirely
-    if (!area.contains(e.relatedTarget)) {
-      area.classList.remove('dragover');
+  if(!area || !input || !fullPageDropZone) return;
+
+  // --- Full Page Drag-and-Drop ---
+  let dragCounter = 0;
+
+  document.addEventListener('dragenter', e => {
+    if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+      e.preventDefault();
+      e.stopPropagation();
+      if(dragCounter === 0) { // Only show on first enter
+        fullPageDropZone.style.display = 'flex';
+      }
+      dragCounter++;
     }
   });
-  
-  // Handle drop with folder support
-  area.addEventListener('drop', async (e) => {
+
+  document.addEventListener('dragleave', e => {
+    if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        fullPageDropZone.style.display = 'none';
+      }
+    }
+  });
+
+  document.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  document.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter = 0;
+    fullPageDropZone.style.display = 'none';
     area.classList.remove('dragover');
-    
+
+    if (e.target.closest('input, textarea, button, a, [contenteditable]')) {
+      return;
+    }
+
     const items = e.dataTransfer.items;
-    
     if (items && items.length > 0) {
       try {
         const files = await getFilesFromDataTransferItems(items);
@@ -446,22 +473,58 @@ function initUploadArea(){
         console.warn('DataTransferItems processing failed:', err);
       }
     }
-    
-    // Fallback for regular files
+
     const files = e.dataTransfer.files;
     if (files && files.length) {
       handleNewFiles(Array.from(files));
     }
   });
 
-  // Handle file input (supports folder selection via webkitdirectory)
-  input.addEventListener('change', e => {
+
+  // --- Specific listeners for the smaller upload area ---
+
+  area.addEventListener('dragenter', ()=> area.classList.add('dragover'));
+  area.addEventListener('dragleave', (e)=> {
+    if (!area.contains(e.relatedTarget)) {
+      area.classList.remove('dragover');
+    }
+  });
+
+  // The global drop listener handles the logic, but we still need to prevent default on the area
+  area.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  // Handle file input changes (from clicking)
+  const folderInput = document.getElementById('uploadFolderInput');
+
+  const fileChangeHandler = e => {
     const files = Array.from(e.target.files || []);
     if (files.length) {
       handleNewFiles(files);
     }
-    input.value = '';
-  }, false);
+    e.target.value = ''; // Clear the input to allow re-uploading the same file
+  };
+
+  input.addEventListener('change', fileChangeHandler, false);
+  if (folderInput) {
+    folderInput.addEventListener('change', fileChangeHandler, false);
+  }
+
+  // When clicking the upload area, trigger folder selection, which is more versatile.
+  area.addEventListener('click', (e) => {
+    // Prevent the click from reaching the underlying file inputs directly
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Trigger the folder input. Fallback to file input if it doesn't exist.
+    if (folderInput) {
+      folderInput.click();
+    } else {
+      input.click();
+    }
+  });
 }
 
 // Get files from DataTransferItems (supports folder drops)
