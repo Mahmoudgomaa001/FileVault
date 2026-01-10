@@ -588,3 +588,301 @@ Root directory: /app/shared
 2026-01-10 01:24:27,800 - INFO - 127.0.0.1 - - [10/Jan/2026 01:24:27] "GET /api/me HTTP/1.1" 200 -
 2026-01-10 01:24:30,364 - INFO - 127.0.0.1 - - [10/Jan/2026 01:24:30] "[31m[1mPOST /b/undefined HTTP/1.1[0m" 405 -
 2026-01-10 01:24:36,981 - INFO - 127.0.0.1 - - [10/Jan/2026 01:24:36] "[31m[1mPOST /b/undefined HTTP/1.1[0m" 405 -
+2026-01-10 01:26:15,989 - INFO - 192.168.1.7 - - [10/Jan/2026 01:26:15] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5G6l HTTP/1.1" 200 -
+2026-01-10 01:26:16,006 - INFO - 192.168.1.7 - - [10/Jan/2026 01:26:16] "POST /socket.io/?EIO=4&transport=polling&t=Pkb5G6u&sid=FJuWBCijkpD2r6o8AAAA HTTP/1.1" 200 -
+2026-01-10 01:26:16,007 - INFO - 192.168.1.7 - - [10/Jan/2026 01:26:16] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5G6v&sid=FJuWBCijkpD2r6o8AAAA HTTP/1.1" 200 -
+2026-01-10 01:26:16,389 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:16] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5G8D HTTP/1.1" 200 -
+2026-01-10 01:26:16,652 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:16] "POST /socket.io/?EIO=4&transport=polling&t=Pkb5GD7&sid=ot1j3eQPwgmwJ6IUAAAC HTTP/1.1" 200 -
+2026-01-10 01:26:16,699 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:16] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5GD8&sid=ot1j3eQPwgmwJ6IUAAAC HTTP/1.1" 200 -
+2026-01-10 01:26:16,700 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:16] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5GFk HTTP/1.1" 200 -
+2026-01-10 01:26:16,801 - INFO - [assets] Wrote site.webmanifest -> D:\projects\FileVault\static\site.webmanifest
+2026-01-10 01:26:16,831 - INFO - QR code saved to C:\Users\Gomaa\Desktop\FileValut.png. Windows (.url) shortcut saved to C:\Users\Gomaa\Desktop\Open FileVault.url.
+2026-01-10 01:26:16,831 - INFO - Serving FileVault on http://0.0.0.0:5000  (scan: http://192.168.1.7:5000)
+2026-01-10 01:26:16,869 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:16] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5GH-&sid=ot1j3eQPwgmwJ6IUAAAC HTTP/1.1" 200 -
+2026-01-10 01:26:17,011 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:17] "POST /socket.io/?EIO=4&transport=polling&t=Pkb5GH_&sid=XK2Uu0kzuGj3vOf8AAAE HTTP/1.1" 200 -
+2026-01-10 01:26:17,012 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:17] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5GI0&sid=XK2Uu0kzuGj3vOf8AAAE HTTP/1.1" 200 -
+2026-01-10 01:26:17,023 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:17] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5GMz&sid=XK2Uu0kzuGj3vOf8AAAE HTTP/1.1" 200 -
+2026-01-10 01:26:17,837 - INFO - Ngrok not detected. To enable online access, run: ngrok http 5000
+2026-01-10 01:26:17,837 - INFO - Root directory: D:\projects\FileVault\shared
+2026-01-10 01:26:19,138 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.7:5000
+2026-01-10 01:26:19,138 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-10 01:26:22,717 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:22] "GET /b/lucky-fox-780 HTTP/1.1" 200 -
+2026-01-10 01:26:22,723 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:22] "GET /socket.io/?EIO=4&transport=websocket&sid=ot1j3eQPwgmwJ6IUAAAC HTTP/1.1" 200 -
+2026-01-10 01:26:22,732 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:22] "GET /static/vendor/fontawesome/css/all.min.css HTTP/1.1" 200 -
+2026-01-10 01:26:22,732 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:22] "GET /static/fonts.css HTTP/1.1" 200 -
+2026-01-10 01:26:23,047 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:23] "GET /static/css/style.css HTTP/1.1" 200 -
+2026-01-10 01:26:23,047 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:23] "GET /static/socket.io.min.js HTTP/1.1" 200 -
+2026-01-10 01:26:23,047 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:23] "GET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1" 200 -
+2026-01-10 01:26:23,047 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:23] "GET /static/js/main.js HTTP/1.1" 200 -
+2026-01-10 01:26:23,377 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:23] "GET /static/vendor/fontawesome/webfonts/fa-solid-900.woff2 HTTP/1.1" 200 -
+2026-01-10 01:26:23,377 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:23] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 01:26:23,642 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:23] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 01:26:23,687 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:23] "GET /static/favicon.svg HTTP/1.1" 200 -
+2026-01-10 01:26:23,704 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:23] "GET /static/site.webmanifest HTTP/1.1" 200 -
+2026-01-10 01:26:23,708 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:23] "POST /api/prefs HTTP/1.1" 200 -
+2026-01-10 01:26:23,953 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:23] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5H-W HTTP/1.1" 200 -
+2026-01-10 01:26:23,954 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:23] "[36mGET /static/favicon.svg HTTP/1.1[0m" 304 -
+2026-01-10 01:26:24,015 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:24] "POST /socket.io/?EIO=4&transport=polling&t=Pkb5I3K&sid=gQlpLKHbiLa8H3vwAAAG HTTP/1.1" 200 -
+2026-01-10 01:26:24,265 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:24] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5I3L&sid=gQlpLKHbiLa8H3vwAAAG HTTP/1.1" 200 -
+2026-01-10 01:26:24,269 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:24] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5I8B&sid=gQlpLKHbiLa8H3vwAAAG HTTP/1.1" 200 -
+2026-01-10 01:26:35,817 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:35] "[32mGET /b//lucky-fox-780/God%20of%20War HTTP/1.1[0m" 308 -
+2026-01-10 01:26:36,844 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:36] "GET /b/lucky-fox-780/God%20of%20War HTTP/1.1" 200 -
+2026-01-10 01:26:36,849 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:36] "GET /socket.io/?EIO=4&transport=websocket&sid=gQlpLKHbiLa8H3vwAAAG HTTP/1.1" 200 -
+2026-01-10 01:26:36,862 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:36] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+2026-01-10 01:26:37,176 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:37] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+2026-01-10 01:26:37,177 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:37] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+2026-01-10 01:26:37,177 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:37] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2026-01-10 01:26:37,178 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:37] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2026-01-10 01:26:37,178 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:37] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+2026-01-10 01:26:37,197 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:37] "[36mGET /static/site.webmanifest HTTP/1.1[0m" 304 -
+2026-01-10 01:26:37,503 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:37] "[36mGET /static/favicon.svg HTTP/1.1[0m" 304 -
+2026-01-10 01:26:37,503 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:37] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 01:26:37,767 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:37] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 01:26:37,814 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:37] "POST /api/prefs HTTP/1.1" 200 -
+2026-01-10 01:26:38,077 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:38] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5LRA HTTP/1.1" 200 -
+2026-01-10 01:26:38,082 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:38] "POST /socket.io/?EIO=4&transport=polling&t=Pkb5LV_&sid=BBo1kJQGBB-tY--kAAAI HTTP/1.1" 200 -
+2026-01-10 01:26:38,392 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:38] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5LW0&sid=BBo1kJQGBB-tY--kAAAI HTTP/1.1" 200 -
+2026-01-10 01:26:40,216 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:40] "[32mGET /b//lucky-fox-780/God%20of%20War/6300451 HTTP/1.1[0m" 308 -
+2026-01-10 01:26:40,891 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:40] "[32mGET /b//lucky-fox-780/God%20of%20War/6300451 HTTP/1.1[0m" 308 -
+2026-01-10 01:26:41,246 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:41] "GET /b/lucky-fox-780/God%20of%20War/6300451 HTTP/1.1" 200 -
+2026-01-10 01:26:41,378 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:41] "[32mGET /b//lucky-fox-780/God%20of%20War/6300451 HTTP/1.1[0m" 308 -
+2026-01-10 01:26:41,832 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:41] "[32mGET /b//lucky-fox-780/God%20of%20War/6300451 HTTP/1.1[0m" 308 -
+2026-01-10 01:26:42,215 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:42] "GET /b/lucky-fox-780/God%20of%20War/6300451 HTTP/1.1" 200 -
+2026-01-10 01:26:42,465 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:42] "GET /b/lucky-fox-780/God%20of%20War/6300451 HTTP/1.1" 200 -
+2026-01-10 01:26:43,158 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:43] "GET /b/lucky-fox-780/God%20of%20War/6300451 HTTP/1.1" 200 -
+2026-01-10 01:26:43,163 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:43] "GET /socket.io/?EIO=4&transport=websocket&sid=BBo1kJQGBB-tY--kAAAI HTTP/1.1" 200 -
+2026-01-10 01:26:43,493 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:43] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+2026-01-10 01:26:43,494 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:43] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+2026-01-10 01:26:43,494 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:43] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2026-01-10 01:26:43,494 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:43] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+2026-01-10 01:26:43,495 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:43] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2026-01-10 01:26:43,495 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:43] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+2026-01-10 01:26:43,849 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:43] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 01:26:43,849 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:43] "[36mGET /static/site.webmanifest HTTP/1.1[0m" 304 -
+2026-01-10 01:26:44,114 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:44] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 01:26:44,161 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:44] "[36mGET /static/favicon.svg HTTP/1.1[0m" 304 -
+2026-01-10 01:26:44,165 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:44] "POST /api/prefs HTTP/1.1" 200 -
+2026-01-10 01:26:44,425 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:44] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5M-L HTTP/1.1" 200 -
+2026-01-10 01:26:44,428 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:44] "POST /socket.io/?EIO=4&transport=polling&t=Pkb5N3A&sid=wQaLYrGZy9hMHyPDAAAK HTTP/1.1" 200 -
+2026-01-10 01:26:44,739 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:44] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5N3B&sid=wQaLYrGZy9hMHyPDAAAK HTTP/1.1" 200 -
+2026-01-10 01:26:58,201 - INFO - 127.0.0.1 - - [10/Jan/2026 01:26:58] "GET /api/me HTTP/1.1" 200 -
+2026-01-10 01:27:04,892 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:04] "[31m[1mPOST /b/lucky-fox-780/God%20of%20War/undefined HTTP/1.1[0m" 405 -
+2026-01-10 01:27:19,488 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:19] "GET /api/me HTTP/1.1" 200 -
+2026-01-10 01:27:22,876 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:22] "GET /api/accounts HTTP/1.1" 200 -
+2026-01-10 01:27:28,374 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:28] "GET /api/my_qr?mode=local HTTP/1.1" 200 -
+2026-01-10 01:27:31,607 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:31] "[32mGET / HTTP/1.1[0m" 302 -
+2026-01-10 01:27:32,937 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:32] "GET /b/lucky-fox-780 HTTP/1.1" 200 -
+2026-01-10 01:27:32,942 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:32] "GET /socket.io/?EIO=4&transport=websocket&sid=wQaLYrGZy9hMHyPDAAAK HTTP/1.1" 200 -
+2026-01-10 01:27:32,951 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:32] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+2026-01-10 01:27:32,955 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:32] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+2026-01-10 01:27:33,269 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:33] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+2026-01-10 01:27:33,270 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:33] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2026-01-10 01:27:33,270 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:33] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+2026-01-10 01:27:33,270 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:33] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2026-01-10 01:27:33,288 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:33] "[36mGET /static/site.webmanifest HTTP/1.1[0m" 304 -
+2026-01-10 01:27:33,591 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:33] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 01:27:33,596 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:33] "[36mGET /static/favicon.svg HTTP/1.1[0m" 304 -
+2026-01-10 01:27:33,856 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:33] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 01:27:33,904 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:33] "POST /api/prefs HTTP/1.1" 200 -
+2026-01-10 01:27:34,169 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:34] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5Z7Z HTTP/1.1" 200 -
+2026-01-10 01:27:34,172 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:34] "POST /socket.io/?EIO=4&transport=polling&t=Pkb5ZCQ&sid=44RQhbYdL1WgT-9vAAAM HTTP/1.1" 200 -
+2026-01-10 01:27:34,483 - INFO - 127.0.0.1 - - [10/Jan/2026 01:27:34] "GET /socket.io/?EIO=4&transport=polling&t=Pkb5ZCR&sid=44RQhbYdL1WgT-9vAAAM HTTP/1.1" 200 -
+2026-01-10 01:48:42,934 - INFO - 192.168.1.7 - - [10/Jan/2026 01:48:42] "GET /socket.io/?EIO=4&transport=websocket&sid=FJuWBCijkpD2r6o8AAAA HTTP/1.1" 200 -
+2026-01-10 02:15:50,852 - INFO - [assets] Wrote site.webmanifest -> D:\projects\FileVault\static\site.webmanifest
+2026-01-10 02:15:50,882 - INFO - QR code saved to C:\Users\Gomaa\Desktop\FileValut.png. Windows (.url) shortcut saved to C:\Users\Gomaa\Desktop\Open FileVault.url.
+2026-01-10 02:15:50,882 - INFO - Serving FileVault on http://0.0.0.0:5000  (scan: http://192.168.1.7:5000)
+2026-01-10 02:15:51,895 - INFO - Ngrok not detected. To enable online access, run: ngrok http 5000
+2026-01-10 02:15:51,895 - INFO - Root directory: D:\projects\FileVault\shared
+2026-01-10 02:15:53,244 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.7:5000
+2026-01-10 02:15:53,244 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-10 02:16:00,758 - INFO - 192.168.1.7 - - [10/Jan/2026 02:16:00] "[32mGET / HTTP/1.1[0m" 302 -
+2026-01-10 02:16:01,827 - INFO - 192.168.1.7 - - [10/Jan/2026 02:16:01] "GET /b/fuzzy-otter-521 HTTP/1.1" 200 -
+2026-01-10 02:16:01,909 - INFO - 192.168.1.7 - - [10/Jan/2026 02:16:01] "GET /static/fonts.css HTTP/1.1" 200 -
+2026-01-10 02:16:01,911 - INFO - 192.168.1.7 - - [10/Jan/2026 02:16:01] "GET /static/vendor/fontawesome/css/all.min.css HTTP/1.1" 200 -
+2026-01-10 02:16:01,914 - INFO - 192.168.1.7 - - [10/Jan/2026 02:16:01] "GET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1" 200 -
+2026-01-10 02:16:01,916 - INFO - 192.168.1.7 - - [10/Jan/2026 02:16:01] "GET /static/css/style.css HTTP/1.1" 200 -
+2026-01-10 02:16:01,916 - INFO - 192.168.1.7 - - [10/Jan/2026 02:16:01] "GET /static/socket.io.min.js HTTP/1.1" 200 -
+2026-01-10 02:16:01,918 - INFO - 192.168.1.7 - - [10/Jan/2026 02:16:01] "GET /static/js/main.js HTTP/1.1" 200 -
+2026-01-10 02:16:01,997 - INFO - 192.168.1.7 - - [10/Jan/2026 02:16:01] "GET /static/vendor/fontawesome/webfonts/fa-solid-900.woff2 HTTP/1.1" 200 -
+2026-01-10 02:16:02,016 - INFO - 192.168.1.7 - - [10/Jan/2026 02:16:02] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 02:16:02,036 - INFO - 192.168.1.7 - - [10/Jan/2026 02:16:02] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 02:16:02,079 - INFO - 192.168.1.7 - - [10/Jan/2026 02:16:02] "GET /socket.io/?EIO=4&transport=polling&t=PkbGf87 HTTP/1.1" 200 -
+2026-01-10 02:16:02,083 - INFO - 192.168.1.7 - - [10/Jan/2026 02:16:02] "POST /api/prefs HTTP/1.1" 200 -
+2026-01-10 02:16:02,100 - INFO - 192.168.1.7 - - [10/Jan/2026 02:16:02] "POST /socket.io/?EIO=4&transport=polling&t=PkbGf8d&sid=_I8WnyHR9obr_uSTAAAO HTTP/1.1" 200 -
+2026-01-10 02:16:02,101 - INFO - 192.168.1.7 - - [10/Jan/2026 02:16:02] "GET /socket.io/?EIO=4&transport=polling&t=PkbGf8e&sid=_I8WnyHR9obr_uSTAAAO HTTP/1.1" 200 -
+2026-01-10 03:10:37,667 - INFO - 192.168.1.7 - - [10/Jan/2026 03:10:37] "GET /socket.io/?EIO=4&transport=websocket&sid=_I8WnyHR9obr_uSTAAAO HTTP/1.1" 200 -
+2026-01-10 06:04:27,450 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:27] "GET /socket.io/?EIO=4&transport=polling&t=Pkc4xAj HTTP/1.1" 200 -
+2026-01-10 06:04:27,464 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:27] "POST /socket.io/?EIO=4&transport=polling&t=Pkc4xA-&sid=4_eqp_s6LRfZGxuiAAAQ HTTP/1.1" 200 -
+2026-01-10 06:04:27,465 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:27] "GET /socket.io/?EIO=4&transport=polling&t=Pkc4xA-.0&sid=4_eqp_s6LRfZGxuiAAAQ HTTP/1.1" 200 -
+2026-01-10 06:04:38,250 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:38] "[35m[1mPOST /api/upload HTTP/1.1[0m" 201 -
+2026-01-10 06:04:38,251 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:38] "[35m[1mPOST /api/upload HTTP/1.1[0m" 201 -
+2026-01-10 06:04:38,252 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:38] "[35m[1mPOST /api/upload HTTP/1.1[0m" 201 -
+2026-01-10 06:04:38,258 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:38] "[35m[1mPOST /api/upload HTTP/1.1[0m" 201 -
+2026-01-10 06:04:38,261 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:38] "[35m[1mPOST /api/upload HTTP/1.1[0m" 201 -
+2026-01-10 06:04:38,276 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:38] "[35m[1mPOST /api/upload HTTP/1.1[0m" 201 -
+2026-01-10 06:04:38,283 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:38] "[35m[1mPOST /api/upload HTTP/1.1[0m" 201 -
+2026-01-10 06:04:38,284 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:38] "[35m[1mPOST /api/upload HTTP/1.1[0m" 201 -
+2026-01-10 06:04:38,287 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:38] "[35m[1mPOST /api/upload HTTP/1.1[0m" 201 -
+2026-01-10 06:04:38,294 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:38] "[35m[1mPOST /api/upload HTTP/1.1[0m" 201 -
+2026-01-10 06:04:45,818 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:45] "GET /b/fuzzy-otter-521 HTTP/1.1" 200 -
+2026-01-10 06:04:45,826 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:45] "GET /socket.io/?EIO=4&transport=websocket&sid=4_eqp_s6LRfZGxuiAAAQ HTTP/1.1" 200 -
+2026-01-10 06:04:45,882 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:45] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+2026-01-10 06:04:45,886 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:45] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2026-01-10 06:04:45,897 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:45] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+2026-01-10 06:04:45,905 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:45] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+2026-01-10 06:04:45,935 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:45] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2026-01-10 06:04:45,963 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:45] "[36mGET /static/vendor/fontawesome/webfonts/fa-solid-900.woff2 HTTP/1.1[0m" 304 -
+2026-01-10 06:04:45,970 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:45] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+2026-01-10 06:04:45,993 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:45] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:04:45,996 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:45] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:04:46,021 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:46] "GET /socket.io/?EIO=4&transport=polling&t=Pkc4_i- HTTP/1.1" 200 -
+2026-01-10 06:04:46,024 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:46] "POST /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:04:46,032 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:46] "GET /static/favicon.svg HTTP/1.1" 200 -
+2026-01-10 06:04:46,040 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:46] "POST /socket.io/?EIO=4&transport=polling&t=Pkc4_jB&sid=uhR3ekBYP9QzhGipAAAS HTTP/1.1" 200 -
+2026-01-10 06:04:46,041 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:46] "GET /socket.io/?EIO=4&transport=polling&t=Pkc4_jC&sid=uhR3ekBYP9QzhGipAAAS HTTP/1.1" 200 -
+2026-01-10 06:04:48,121 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:48] "[32mGET /b//fuzzy-otter-521/111 HTTP/1.1[0m" 308 -
+2026-01-10 06:04:49,160 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:49] "GET /b/fuzzy-otter-521/111 HTTP/1.1" 200 -
+2026-01-10 06:04:49,161 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:49] "[32mGET /b//fuzzy-otter-521/111 HTTP/1.1[0m" 308 -
+2026-01-10 06:04:50,185 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /b/fuzzy-otter-521/111 HTTP/1.1" 200 -
+2026-01-10 06:04:50,192 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /socket.io/?EIO=4&transport=websocket&sid=uhR3ekBYP9QzhGipAAAS HTTP/1.1" 200 -
+2026-01-10 06:04:50,243 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+2026-01-10 06:04:50,245 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+2026-01-10 06:04:50,247 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+2026-01-10 06:04:50,247 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2026-01-10 06:04:50,249 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+2026-01-10 06:04:50,249 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2026-01-10 06:04:50,271 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:04:50,274 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:04:50,350 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /raw?path=fuzzy-otter-521/111/1766852138-a7a30beb.jpg HTTP/1.1" 200 -
+2026-01-10 06:04:50,362 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /raw?path=fuzzy-otter-521/111/1766852334-26f89a1b.jpg HTTP/1.1" 200 -
+2026-01-10 06:04:50,362 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /raw?path=fuzzy-otter-521/111/d6467592-5985-45f5-859c-1f334e1a5cbe.jpg HTTP/1.1" 200 -
+2026-01-10 06:04:50,363 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /raw?path=fuzzy-otter-521/111/1766852307-21806e15.jpg HTTP/1.1" 200 -
+2026-01-10 06:04:50,363 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /raw?path=fuzzy-otter-521/111/b6446f2e-17c3-4c63-91cd-9bee4c38795e.jpg HTTP/1.1" 200 -
+2026-01-10 06:04:50,364 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /raw?path=fuzzy-otter-521/111/39b61d52-ad9c-404f-9449-d55ca82d9d55.jpg HTTP/1.1" 200 -
+2026-01-10 06:04:50,368 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "POST /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:04:50,376 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /socket.io/?EIO=4&transport=polling&t=Pkc50m3 HTTP/1.1" 200 -
+2026-01-10 06:04:50,400 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "POST /socket.io/?EIO=4&transport=polling&t=Pkc50nJ&sid=iZkGcsHocHpip_feAAAU HTTP/1.1" 200 -
+2026-01-10 06:04:50,401 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /socket.io/?EIO=4&transport=polling&t=Pkc50nK&sid=iZkGcsHocHpip_feAAAU HTTP/1.1" 200 -
+2026-01-10 06:04:50,415 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /raw?path=fuzzy-otter-521/111/wmremove-transformed(1).jpeg HTTP/1.1" 200 -
+2026-01-10 06:04:50,415 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /raw?path=fuzzy-otter-521/111/wmremove-transformed(2).jpeg HTTP/1.1" 200 -
+2026-01-10 06:04:50,416 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /raw?path=fuzzy-otter-521/111/supawork-970e64efdb6d470fb19692136a730abb.jpeg HTTP/1.1" 200 -
+2026-01-10 06:04:50,454 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /download?path=fuzzy-otter-521/111/1766852138-a7a30beb.jpg HTTP/1.1" 200 -
+2026-01-10 06:04:50,643 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:50] "GET /download?path=fuzzy-otter-521/111/1766852138-a7a30beb.jpg HTTP/1.1" 200 -
+2026-01-10 06:04:59,375 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:59] "GET /b/fuzzy-otter-521 HTTP/1.1" 200 -
+2026-01-10 06:04:59,382 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:59] "GET /socket.io/?EIO=4&transport=websocket&sid=iZkGcsHocHpip_feAAAU HTTP/1.1" 200 -
+2026-01-10 06:04:59,443 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:59] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:04:59,449 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:59] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:04:59,462 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:59] "GET /socket.io/?EIO=4&transport=polling&t=Pkc52-_ HTTP/1.1" 200 -
+2026-01-10 06:04:59,464 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:59] "POST /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:04:59,478 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:59] "POST /socket.io/?EIO=4&transport=polling&t=Pkc52_D&sid=oEeAj-46oM2GErDBAAAW HTTP/1.1" 200 -
+2026-01-10 06:04:59,479 - INFO - 192.168.1.7 - - [10/Jan/2026 06:04:59] "GET /socket.io/?EIO=4&transport=polling&t=Pkc52_D.0&sid=oEeAj-46oM2GErDBAAAW HTTP/1.1" 200 -
+2026-01-10 06:05:09,490 - INFO - 192.168.1.7 - - [10/Jan/2026 06:05:09] "GET /b/fuzzy-otter-521 HTTP/1.1" 200 -
+2026-01-10 06:05:09,498 - INFO - 192.168.1.7 - - [10/Jan/2026 06:05:09] "GET /socket.io/?EIO=4&transport=websocket&sid=oEeAj-46oM2GErDBAAAW HTTP/1.1" 200 -
+2026-01-10 06:05:09,541 - INFO - 192.168.1.7 - - [10/Jan/2026 06:05:09] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+2026-01-10 06:05:09,543 - INFO - 192.168.1.7 - - [10/Jan/2026 06:05:09] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+2026-01-10 06:05:09,544 - INFO - 192.168.1.7 - - [10/Jan/2026 06:05:09] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+2026-01-10 06:05:09,547 - INFO - 192.168.1.7 - - [10/Jan/2026 06:05:09] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2026-01-10 06:05:09,550 - INFO - 192.168.1.7 - - [10/Jan/2026 06:05:09] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+2026-01-10 06:05:09,552 - INFO - 192.168.1.7 - - [10/Jan/2026 06:05:09] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2026-01-10 06:05:09,595 - INFO - 192.168.1.7 - - [10/Jan/2026 06:05:09] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:05:09,599 - INFO - 192.168.1.7 - - [10/Jan/2026 06:05:09] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:05:09,617 - INFO - 192.168.1.7 - - [10/Jan/2026 06:05:09] "[36mGET /static/favicon.svg HTTP/1.1[0m" 304 -
+2026-01-10 06:05:09,632 - INFO - 192.168.1.7 - - [10/Jan/2026 06:05:09] "GET /socket.io/?EIO=4&transport=polling&t=Pkc55Ts HTTP/1.1" 200 -
+2026-01-10 06:05:09,635 - INFO - 192.168.1.7 - - [10/Jan/2026 06:05:09] "POST /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:05:09,649 - INFO - 192.168.1.7 - - [10/Jan/2026 06:05:09] "POST /socket.io/?EIO=4&transport=polling&t=Pkc55U7&sid=qr79TENpxQSAc1wKAAAY HTTP/1.1" 200 -
+2026-01-10 06:05:09,650 - INFO - 192.168.1.7 - - [10/Jan/2026 06:05:09] "GET /socket.io/?EIO=4&transport=polling&t=Pkc55U7.0&sid=qr79TENpxQSAc1wKAAAY HTTP/1.1" 200 -
+2026-01-10 06:12:43,299 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "GET /b/fuzzy-otter-521 HTTP/1.1" 200 -
+2026-01-10 06:12:43,306 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "GET /socket.io/?EIO=4&transport=websocket&sid=qr79TENpxQSAc1wKAAAY HTTP/1.1" 200 -
+2026-01-10 06:12:43,369 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+2026-01-10 06:12:43,371 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+2026-01-10 06:12:43,375 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+2026-01-10 06:12:43,377 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2026-01-10 06:12:43,380 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+2026-01-10 06:12:43,380 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2026-01-10 06:12:43,427 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:12:43,430 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:12:43,443 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "[36mGET /static/vendor/fontawesome/webfonts/fa-solid-900.woff2 HTTP/1.1[0m" 304 -
+2026-01-10 06:12:43,490 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "GET /socket.io/?EIO=4&transport=polling&t=Pkc6qH7 HTTP/1.1" 200 -
+2026-01-10 06:12:43,493 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "[36mGET /static/favicon.svg HTTP/1.1[0m" 304 -
+2026-01-10 06:12:43,506 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "POST /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:12:43,509 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "POST /socket.io/?EIO=4&transport=polling&t=Pkc6qHh&sid=l-8XzRQLuj867KQiAAAa HTTP/1.1" 200 -
+2026-01-10 06:12:43,510 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:43] "GET /socket.io/?EIO=4&transport=polling&t=Pkc6qHi&sid=l-8XzRQLuj867KQiAAAa HTTP/1.1" 200 -
+2026-01-10 06:12:58,654 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:58] "GET /b/fuzzy-otter-521 HTTP/1.1" 200 -
+2026-01-10 06:12:58,661 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:58] "GET /socket.io/?EIO=4&transport=websocket&sid=l-8XzRQLuj867KQiAAAa HTTP/1.1" 200 -
+2026-01-10 06:12:58,706 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:58] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+2026-01-10 06:12:58,708 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:58] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+2026-01-10 06:12:58,709 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:58] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+2026-01-10 06:12:58,710 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:58] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2026-01-10 06:12:58,713 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:58] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+2026-01-10 06:12:58,716 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:58] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2026-01-10 06:12:58,750 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:58] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:12:58,755 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:58] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:12:58,768 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:58] "[36mGET /static/favicon.svg HTTP/1.1[0m" 304 -
+2026-01-10 06:12:58,783 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:58] "GET /socket.io/?EIO=4&transport=polling&t=Pkc6u0K HTTP/1.1" 200 -
+2026-01-10 06:12:58,785 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:58] "POST /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:12:58,801 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:58] "POST /socket.io/?EIO=4&transport=polling&t=Pkc6u0b&sid=OTcFDVlmdVcHEuaGAAAc HTTP/1.1" 200 -
+2026-01-10 06:12:58,803 - INFO - 192.168.1.7 - - [10/Jan/2026 06:12:58] "GET /socket.io/?EIO=4&transport=polling&t=Pkc6u0c&sid=OTcFDVlmdVcHEuaGAAAc HTTP/1.1" 200 -
+2026-01-10 06:13:03,064 - INFO - [assets] Wrote site.webmanifest -> D:\projects\FileVault\static\site.webmanifest
+2026-01-10 06:13:03,236 - INFO - QR code saved to C:\Users\Gomaa\Desktop\FileValut.png. Windows (.url) shortcut saved to C:\Users\Gomaa\Desktop\Open FileVault.url.
+2026-01-10 06:13:03,236 - INFO - Serving FileVault on http://0.0.0.0:5000  (scan: http://192.168.1.7:5000)
+2026-01-10 06:13:04,244 - INFO - Ngrok not detected. To enable online access, run: ngrok http 5000
+2026-01-10 06:13:04,245 - INFO - Root directory: D:\projects\FileVault\shared
+2026-01-10 06:13:05,646 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.7:5000
+2026-01-10 06:13:05,646 - INFO - [33mPress CTRL+C to quit[0m
+2026-01-10 06:13:06,564 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:06] "GET /b/fuzzy-otter-521 HTTP/1.1" 200 -
+2026-01-10 06:13:06,570 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:06] "GET /socket.io/?EIO=4&transport=websocket&sid=OTcFDVlmdVcHEuaGAAAc HTTP/1.1" 200 -
+2026-01-10 06:13:06,615 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:06] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+2026-01-10 06:13:06,615 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:06] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+2026-01-10 06:13:06,619 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:06] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2026-01-10 06:13:06,620 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:06] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+2026-01-10 06:13:06,621 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:06] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+2026-01-10 06:13:06,621 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:06] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2026-01-10 06:13:06,636 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:06] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:13:06,639 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:06] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:13:06,669 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:06] "[36mGET /static/favicon.svg HTTP/1.1[0m" 304 -
+2026-01-10 06:13:06,677 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:06] "GET /socket.io/?EIO=4&transport=polling&t=Pkc6vxa HTTP/1.1" 200 -
+2026-01-10 06:13:06,680 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:06] "POST /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:13:06,692 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:06] "POST /socket.io/?EIO=4&transport=polling&t=Pkc6vxx&sid=YNAUCpxDheh_ZI_zAAAe HTTP/1.1" 200 -
+2026-01-10 06:13:06,694 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:06] "GET /socket.io/?EIO=4&transport=polling&t=Pkc6vxy&sid=YNAUCpxDheh_ZI_zAAAe HTTP/1.1" 200 -
+2026-01-10 06:13:16,139 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:16] "[35m[1mPOST /api/upload HTTP/1.1[0m" 201 -
+2026-01-10 06:13:23,150 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:23] "POST /api/delete HTTP/1.1" 200 -
+2026-01-10 06:13:24,582 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:24] "GET /b/fuzzy-otter-521 HTTP/1.1" 200 -
+2026-01-10 06:13:24,589 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:24] "GET /socket.io/?EIO=4&transport=websocket&sid=YNAUCpxDheh_ZI_zAAAe HTTP/1.1" 200 -
+2026-01-10 06:13:24,637 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:24] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+2026-01-10 06:13:24,640 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:24] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+2026-01-10 06:13:24,642 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:24] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+2026-01-10 06:13:24,644 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:24] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2026-01-10 06:13:24,645 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:24] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+2026-01-10 06:13:24,648 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:24] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2026-01-10 06:13:24,662 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:24] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:13:24,666 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:24] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:13:24,698 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:24] "[36mGET /static/favicon.svg HTTP/1.1[0m" 304 -
+2026-01-10 06:13:24,705 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:24] "GET /socket.io/?EIO=4&transport=polling&t=Pkc6-LL HTTP/1.1" 200 -
+2026-01-10 06:13:24,707 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:24] "POST /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:13:24,722 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:24] "POST /socket.io/?EIO=4&transport=polling&t=Pkc6-Ld&sid=snnZDpqGG4275mPfAAAg HTTP/1.1" 200 -
+2026-01-10 06:13:24,723 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:24] "GET /socket.io/?EIO=4&transport=polling&t=Pkc6-Le&sid=snnZDpqGG4275mPfAAAg HTTP/1.1" 200 -
+2026-01-10 06:13:27,713 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:27] "[35m[1mPOST /api/upload HTTP/1.1[0m" 201 -
+2026-01-10 06:13:36,530 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:36] "GET /b/fuzzy-otter-521 HTTP/1.1" 200 -
+2026-01-10 06:13:36,536 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:36] "GET /socket.io/?EIO=4&transport=websocket&sid=snnZDpqGG4275mPfAAAg HTTP/1.1" 200 -
+2026-01-10 06:13:36,580 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:36] "[36mGET /static/fonts.css HTTP/1.1[0m" 304 -
+2026-01-10 06:13:36,580 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:36] "[36mGET /static/vendor/fontawesome/css/all.min.css HTTP/1.1[0m" 304 -
+2026-01-10 06:13:36,584 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:36] "[36mGET /static/vendor/fontawesome/css/fa-shims.css HTTP/1.1[0m" 304 -
+2026-01-10 06:13:36,584 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:36] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2026-01-10 06:13:36,585 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:36] "[36mGET /static/socket.io.min.js HTTP/1.1[0m" 304 -
+2026-01-10 06:13:36,588 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:36] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2026-01-10 06:13:36,602 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:36] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:13:36,606 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:36] "GET /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:13:36,635 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:36] "[36mGET /static/favicon.svg HTTP/1.1[0m" 304 -
+2026-01-10 06:13:36,645 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:36] "GET /socket.io/?EIO=4&transport=polling&t=Pkc71Fm HTTP/1.1" 200 -
+2026-01-10 06:13:36,648 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:36] "POST /api/prefs HTTP/1.1" 200 -
+2026-01-10 06:13:36,663 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:36] "POST /socket.io/?EIO=4&transport=polling&t=Pkc71GA&sid=FVNi4__5vfvvzHocAAAi HTTP/1.1" 200 -
+2026-01-10 06:13:36,664 - INFO - 192.168.1.7 - - [10/Jan/2026 06:13:36] "GET /socket.io/?EIO=4&transport=polling&t=Pkc71GB&sid=FVNi4__5vfvvzHocAAAi HTTP/1.1" 200 -

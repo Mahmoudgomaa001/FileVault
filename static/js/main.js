@@ -412,87 +412,72 @@ setInterval(changeDhikr, 30000);
     // UPLOADS
     const activeXHRs = new Map();
 
-    async function getFilesFromDataTransferItems(dataTransferItems) {
-      const files = [];
-      const queue = [];
-      for (const item of dataTransferItems) {
-          queue.push(item.webkitGetAsEntry());
-      }
-      while (queue.length > 0) {
-          const entry = queue.shift();
-          if (entry.isFile) {
-              try {
-                  const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
-                  file.customRelativePath = entry.fullPath.startsWith('/') ? entry.fullPath.substring(1) : entry.fullPath;
-                  files.push(file);
-              } catch (err) {
-                  console.error('Error getting file from entry:', err);
-              }
-          } else if (entry.isDirectory) {
-              const reader = entry.createReader();
-              try {
-                  const entries = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
-                  for (const innerEntry of entries) {
-                      queue.push(innerEntry);
-                  }
-              } catch (err) {
-                  console.error('Error reading directory entries:', err);
-              }
-          }
-      }
-      return files;
-    }
+    function initUploadArea() {
+        const area = document.getElementById('uploadArea');
+        const input = document.getElementById('uploadInput');
+        const fullPageDropZone = document.getElementById('fullPageDropZone');
+        if (!area || !input || !fullPageDropZone) return;
 
-    function initUploadArea(){
-      const area = document.getElementById('uploadArea');
-      const input = document.getElementById('uploadInput');
-      const fullPageDropZone = document.getElementById('fullPageDropZone');
-      if(!area || !input || !fullPageDropZone) return;
+        let dragCounter = 0;
 
-      let dragCounter = 0;
+        // Show full-page drop zone on drag enter
+        window.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // Check if dragged items are files
+            if (e.dataTransfer && e.dataTransfer.types.some(type => type === 'Files')) {
+                dragCounter++;
+                fullPageDropZone.style.display = 'flex';
+            }
+        }, false);
 
-      document.addEventListener('dragenter', e => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
-          dragCounter++;
-          fullPageDropZone.style.display = 'flex';
-        }
-      }, false);
+        // Hide full-page drop zone on drag leave
+        window.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragCounter--;
+            if (dragCounter === 0) {
+                fullPageDropZone.style.display = 'none';
+            }
+        }, false);
 
-      document.addEventListener('dragover', e => {
-        e.preventDefault();
-        e.stopPropagation();
-      }, false);
-      
-      fullPageDropZone.addEventListener('dragleave', e => {
-        e.preventDefault();
-        e.stopPropagation();
-        dragCounter--;
-        if (dragCounter === 0) {
-          fullPageDropZone.style.display = 'none';
-        }
-      }, false);
+        // Prevent default for dragover to allow drop
+        window.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        }, false);
 
-      fullPageDropZone.addEventListener('drop', async e => {
-        e.preventDefault();
-        e.stopPropagation();
-        dragCounter = 0;
-        fullPageDropZone.style.display = 'none';
+        // Handle file drop on the full-page zone
+        fullPageDropZone.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragCounter = 0;
+            fullPageDropZone.style.display = 'none';
 
-        let files;
-        if (e.dataTransfer.items && e.dataTransfer.items.length > 0 && e.dataTransfer.items[0].webkitGetAsEntry) {
-            files = await getFilesFromDataTransferItems(e.dataTransfer.items);
-        } else {
-            files = e.dataTransfer.files;
-        }
-        
-        if (files && files.length > 0) {
-            handleNewFiles(files);
-        }
-      });
+            if (e.dataTransfer && e.dataTransfer.items) {
+                const files = await getFilesFromDataTransferItems(e.dataTransfer.items);
+                if (files.length) handleNewFiles(files);
+            } else if (e.dataTransfer && e.dataTransfer.files) {
+                if (e.dataTransfer.files.length) handleNewFiles(e.dataTransfer.files);
+            }
+        }, false);
 
-      input.addEventListener('change', e=>{
+
+        // Original smaller drop zone logic
+        area.addEventListener('dragenter', (e) => { e.stopPropagation(); area.classList.add('dragover'); }, false);
+        area.addEventListener('dragleave', (e) => { e.stopPropagation(); area.classList.remove('dragover'); }, false);
+        area.addEventListener('drop', async (e) => {
+            e.stopPropagation();
+            area.classList.remove('dragover');
+            if (e.dataTransfer && e.dataTransfer.items) {
+                const files = await getFilesFromDataTransferItems(e.dataTransfer.items);
+                if (files.length) handleNewFiles(files);
+            } else if (e.dataTransfer && e.dataTransfer.files) {
+                if (e.dataTransfer.files.length) handleNewFiles(e.dataTransfer.files);
+            }
+        }, false);
+
+        input.addEventListener('change', e => {
         const files = e.target.files; if(files?.length){ handleNewFiles(files); }
         input.value = '';
       }, false);
@@ -505,6 +490,37 @@ setInterval(changeDhikr, 30000);
         }
         folderInput.value = '';
       }, false);
+    }
+
+    async function getFilesFromDataTransferItems(dataTransferItems) {
+        const files = [];
+        const queue = [];
+        for (const item of dataTransferItems) {
+            queue.push(item.webkitGetAsEntry());
+        }
+        while (queue.length > 0) {
+            const entry = queue.shift();
+            if (entry.isFile) {
+                try {
+                    const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+                    if (file) {
+                        file.webkitRelativePath = entry.fullPath.startsWith('/') ? entry.fullPath.substring(1) : entry.fullPath;
+                        files.push(file);
+                    }
+                } catch (err) {
+                    console.error('Could not get file from entry:', entry.fullPath, err);
+                }
+            } else if (entry.isDirectory) {
+                const reader = entry.createReader();
+                try {
+                    const entries = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+                    queue.push(...entries);
+                } catch (err) {
+                    console.error('Could not read directory entries:', entry.fullPath, err);
+                }
+            }
+        }
+        return files;
     }
 
     function handleNewFiles(files){
@@ -569,13 +585,12 @@ setInterval(changeDhikr, 30000);
     function uploadSingleFile(item){
       const {file, id} = item;
       const container = document.getElementById('progressContainer');
-      const displayPath = file.customRelativePath || file.webkitRelativePath || file.name;
-      const row = createProgressElement(displayPath, id);
+      const row = createProgressElement(file.webkitRelativePath || file.name, id);
       container?.appendChild(row);
 
       const form = new FormData();
       form.append('dest', window.currentPath || '');
-      form.append('file', file, displayPath);
+      form.append('file', file, file.webkitRelativePath || file.name);
 
       const xhr = new XMLHttpRequest();
       activeXHRs.set(id, xhr);
