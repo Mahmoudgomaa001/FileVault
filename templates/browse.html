@@ -83,7 +83,7 @@
 <div class="upload-section">
   <div class="upload-area" id="uploadArea">
     <input type="file" id="uploadInput" class="upload-input" multiple accept="*/*" />
-    <input type="file" id="uploadFolderInput" class="upload-input" multiple webkitdirectory directory />
+    <input type="file" id="uploadFolderInput" class="upload-input" webkitdirectory directory multiple />
     <div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>
     <div class="upload-text">Drop files or tap here</div>
     <div class="upload-subtext">Max 10GB per file</div>
@@ -183,6 +183,7 @@
   <div class="fab-menu" id="fabMenu">
     <button class="fab-menu-item" onclick="showNewFolderModal()"><i class="fas fa-folder-plus"></i> New Folder</button>
     <button class="fab-menu-item" onclick="document.getElementById('uploadInput').click()"><i class="fas fa-file-upload"></i> Upload Files</button>
+    <button class="fab-menu-item" onclick="document.getElementById('uploadFolderInput').click()"><i class="fas fa-folder-upload"></i> Upload Folder</button>
     <button class="fab-menu-item" onclick="openClipModal()"><i class="fas fa-clipboard"></i> Paste Text</button>
   </div>
   <button class="fab" onclick="toggleFabMenu()" aria-label="Open actions menu"><i class="fas fa-plus"></i></button>
