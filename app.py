@@ -1403,10 +1403,11 @@ def api_upload():
         first_component = filename.split('/')[0]
         new_folder_path = dest_dir / first_component
         if not new_folder_path.exists():
-            # Let the mkdir below create the folder, then get meta and emit
-            save_path.parent.mkdir(parents=True, exist_ok=True)
-            meta = get_file_meta(new_folder_path)
-            socketio.emit("file_update", {"action": "added", "dir": dest_rel, "meta": meta})
+             new_folder_path.mkdir(parents=True, exist_ok=True)
+        # Always emit the event for the top-level folder to ensure UI updates.
+        # The client will handle duplicates.
+        meta = get_file_meta(new_folder_path)
+        socketio.emit("file_update", {"action": "added", "dir": dest_rel, "meta": meta})
     
     # Create parent directories if they don't exist
     save_path.parent.mkdir(parents=True, exist_ok=True)
