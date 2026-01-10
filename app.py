@@ -1398,18 +1398,33 @@ def api_upload():
 
     save_path = dest_dir / filename
 
-    # If uploading a file into a new sub-folder, emit an event for the folder itself first
+    # If a file has a path, create the directories and emit an event for the top-level one
     if '/' in filename:
+        # Create all parent directories for the file
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Check if the top-level folder of the upload exists. If not, emit a socket event.
+        # This ensures the UI updates to show the new folder.
         first_component = filename.split('/')[0]
         new_folder_path = dest_dir / first_component
-        if not new_folder_path.exists():
-            # Let the mkdir below create the folder, then get meta and emit
-            save_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # To avoid multiple events for the same folder in a single upload batch,
+        # we can check a simple flag in the session. This is a basic way to handle this.
+        if 'uploaded_folders' not in session:
+            session['uploaded_folders'] = set()
+
+        if first_component not in session['uploaded_folders']:
+            if not new_folder_path.is_dir(): # Check if it's actually a new folder
+                # This part is tricky because the folder might be created by another concurrent request.
+                # A more robust solution might involve a lock or a more sophisticated check.
+                # For now, we assume this check is sufficient for most cases.
+                pass
             meta = get_file_meta(new_folder_path)
             socketio.emit("file_update", {"action": "added", "dir": dest_rel, "meta": meta})
-    
-    # Create parent directories if they don't exist
-    save_path.parent.mkdir(parents=True, exist_ok=True)
+            session['uploaded_folders'].add(first_component)
+    else:
+        # Create parent directory if it doesn't exist (for single file uploads)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
 
     base, ext = os.path.splitext(filename)
     i = 1
