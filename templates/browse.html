@@ -67,7 +67,8 @@
         <input type="checkbox" id="foldersFirst" style="accent-color:#3B82F6; width:16px; height:16px;"> Folders first </label>
     </div>
     <button class="btn btn-secondary" onclick="showNewFolderModal()"><i class="fas fa-folder-plus"></i> New Folder</button>
-    <button id="uploadFolderBtn" class="btn btn-secondary" onclick="document.getElementById('uploadFolderInput').click()"><i class="fas fa-folder-upload"></i> Upload Folder</button>
+    <button id="uploadFileBtn" class="btn btn-secondary"><i class="fas fa-file-upload"></i> Upload Files</button>
+    <button id="uploadFolderBtn" class="btn btn-secondary"><i class="fas fa-folder-upload"></i> Upload Folder</button>
     <button class="btn btn-primary" id="openClipBtn"><i class="fas fa-paste"></i> Paste Text</button>
     <nav class="nav-menu">
     <a class="btn btn-secondary" href=".." title="Up one folder">
@@ -181,10 +182,10 @@
 <!-- FAB -->
 <div class="fab-container">
   <div class="fab-menu" id="fabMenu">
-    <button class="fab-menu-item" onclick="showNewFolderModal()"><i class="fas fa-folder-plus"></i> New Folder</button>
-    <button class="fab-menu-item" onclick="document.getElementById('uploadInput').click()"><i class="fas fa-file-upload"></i> Upload Files</button>
-    <button class="fab-menu-item" onclick="document.getElementById('uploadFolderInput').click()"><i class="fas fa-folder-upload"></i> Upload Folder</button>
-    <button class="fab-menu-item" onclick="openClipModal()"><i class="fas fa-clipboard"></i> Paste Text</button>
+    <button id="fabNewFolderBtn" class="fab-menu-item"><i class="fas fa-folder-plus"></i> New Folder</button>
+    <button id="fabUploadFileBtn" class="fab-menu-item"><i class="fas fa-file-upload"></i> Upload Files</button>
+    <button id="fabUploadFolderBtn" class="fab-menu-item"><i class="fas fa-folder-upload"></i> Upload Folder</button>
+    <button id="fabPasteTextBtn" class="fab-menu-item"><i class="fas fa-clipboard"></i> Paste Text</button>
   </div>
   <button class="fab" onclick="toggleFabMenu()" aria-label="Open actions menu"><i class="fas fa-plus"></i></button>
 </div>

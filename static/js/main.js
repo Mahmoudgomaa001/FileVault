@@ -512,18 +512,13 @@ function initUploadArea(){
     folderInput.addEventListener('change', fileChangeHandler, false);
   }
 
-  // When clicking the upload area, trigger folder selection, which is more versatile.
+  // When clicking the upload area, trigger file selection.
   area.addEventListener('click', (e) => {
     // Prevent the click from reaching the underlying file inputs directly
     e.preventDefault();
     e.stopPropagation();
-
-    // Trigger the folder input. Fallback to file input if it doesn't exist.
-    if (folderInput) {
-      folderInput.click();
-    } else {
-      input.click();
-    }
+    // Trigger the file input.
+    input.click();
   });
 }
 
@@ -2054,6 +2049,16 @@ function removeFileCard(rel){
         document.getElementById('clipSaveBtn')?.addEventListener('click', saveClipboardText);
         document.getElementById('clipTextInput')?.addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); saveClipboardText(); }});
         document.getElementById('clipNameInput')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveClipboardText(); }});
+
+        // Bind Toolbar Upload Buttons
+        document.getElementById('uploadFileBtn')?.addEventListener('click', () => document.getElementById('uploadInput')?.click());
+        document.getElementById('uploadFolderBtn')?.addEventListener('click', () => document.getElementById('uploadFolderInput')?.click());
+
+        // Bind FAB (Floating Action Button) Menu Buttons
+        document.getElementById('fabNewFolderBtn')?.addEventListener('click', showNewFolderModal);
+        document.getElementById('fabUploadFileBtn')?.addEventListener('click', () => document.getElementById('uploadInput')?.click());
+        document.getElementById('fabUploadFolderBtn')?.addEventListener('click', () => document.getElementById('uploadFolderInput')?.click());
+        document.getElementById('fabPasteTextBtn')?.addEventListener('click', openClipModal);
       }
 
       // Global initializations for all pages
