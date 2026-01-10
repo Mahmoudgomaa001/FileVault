@@ -412,7 +412,253 @@ setInterval(changeDhikr, 30000);
  // UPLOADS
 const activeXHRs = new Map();
 
-// UPLOADS - Fixed click handler for upload area
+// Modified handleNewFiles to detect folder uploads and handle conflicts
+function handleNewFiles(filesInput) {
+  // Normalize input - can be FileList, array of Files, or array of {file, relativePath}
+  let items = [];
+  
+  if (filesInput instanceof FileList) {
+    items = Array.from(filesInput).map(f => ({
+      file: f,
+      relativePath: f.webkitRelativePath || f.relativePath || f.name
+    }));
+  } else if (Array.isArray(filesInput)) {
+    items = filesInput.map(item => {
+      if (item.file) {
+        // Already in {file, relativePath} format
+        return item;
+      } else {
+        // Plain File object
+        return {
+          file: item,
+          relativePath: item.webkitRelativePath || item.relativePath || item.name
+        };
+      }
+    });
+  }
+  
+  if (!items.length) return;
+  
+  const container = document.getElementById('progressContainer');
+  if (container) container.innerHTML = '';
+  
+  // Detect if this is a folder upload (multiple files with same root folder)
+  const folderMap = new Map();
+  let isFolderUpload = false;
+  let rootFolderName = null;
+  
+  for (const item of items) {
+    const parts = item.relativePath.split('/');
+    if (parts.length > 1) {
+      isFolderUpload = true;
+      const topLevel = parts[0];
+      if (!folderMap.has(topLevel)) {
+        folderMap.set(topLevel, []);
+      }
+      folderMap.get(topLevel).push(item);
+      
+      // Track the root folder name if all files share the same root
+      if (rootFolderName === null) {
+        rootFolderName = topLevel;
+      } else if (rootFolderName !== topLevel) {
+        rootFolderName = null; // Multiple root folders
+      }
+    }
+  }
+  
+  // If this is a single folder upload, check for conflicts and get a unique name
+  if (isFolderUpload && rootFolderName && folderMap.size === 1) {
+    checkFolderConflictAndUpload(rootFolderName, items);
+  } else {
+    // Regular file upload or multiple folders - upload as-is
+    for (const item of items) {
+      const id = `up-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      uploadSingleFile({ file: item.file, relativePath: item.relativePath, id });
+    }
+  }
+}
+
+// Check if folder exists and get a unique name if needed
+async function checkFolderConflictAndUpload(folderName, items) {
+  try {
+    // Check existing files in current directory
+    const existingCards = document.querySelectorAll('.file-card[data-is-dir="1"]');
+    const existingFolders = new Set();
+    
+    existingCards.forEach(card => {
+      const name = card.dataset.name;
+      if (name) {
+        existingFolders.add(name.toLowerCase());
+      }
+    });
+    
+    // Find a unique folder name
+    let uniqueFolderName = folderName;
+    let counter = 1;
+    
+    while (existingFolders.has(uniqueFolderName.toLowerCase())) {
+      uniqueFolderName = `${folderName} (${counter})`;
+      counter++;
+    }
+    
+    // If we had to rename, show a toast
+    if (uniqueFolderName !== folderName) {
+      showToast(`Folder renamed to "${uniqueFolderName}" to avoid conflict`, 'info');
+    }
+    
+    // Upload all files with the new folder name
+    for (const item of items) {
+      const parts = item.relativePath.split('/');
+      // Replace the root folder name with the unique name
+      parts[0] = uniqueFolderName;
+      const newRelativePath = parts.join('/');
+      
+      const id = `up-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      uploadSingleFile({ 
+        file: item.file, 
+        relativePath: newRelativePath, 
+        id,
+        originalFolderName: folderName,
+        uniqueFolderName: uniqueFolderName
+      });
+    }
+  } catch (error) {
+    console.error('Error checking folder conflict:', error);
+    // Fallback to regular upload
+    for (const item of items) {
+      const id = `up-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      uploadSingleFile({ file: item.file, relativePath: item.relativePath, id });
+    }
+  }
+}
+
+// Modified uploadSingleFile to handle renamed folders
+function uploadSingleFile(item) {
+  const { file, relativePath, id, uniqueFolderName } = item;
+  const container = document.getElementById('progressContainer');
+  
+  // Use relative path for display if it's different from filename
+  const displayName = relativePath || file.name;
+  const row = createProgressElement(displayName, id);
+  container?.appendChild(row);
+
+  const form = new FormData();
+  form.append('dest', window.currentPath || '');
+  
+  // Send the relative path as the filename to preserve folder structure
+  const uploadPath = relativePath || file.name;
+  form.append('file', file, uploadPath);
+  form.append('relativePath', uploadPath); // Extra field for clarity
+  
+  // Send the unique folder name if we had to rename
+  if (uniqueFolderName) {
+    form.append('uniqueFolderName', uniqueFolderName);
+  }
+
+  const xhr = new XMLHttpRequest();
+  activeXHRs.set(id, xhr);
+
+  const start = Date.now();
+  xhr.upload.addEventListener('progress', e => {
+    if (e.lengthComputable) {
+      const percent = (e.loaded / e.total) * 100;
+      const seconds = Math.max(0.25, (Date.now() - start) / 1000);
+      const speed = e.loaded / seconds;
+      const eta = (e.total - e.loaded) / Math.max(speed, 1);
+      updateProgress(row, { percent, speed, eta });
+    }
+  });
+  
+  xhr.addEventListener('load', () => {
+    activeXHRs.delete(id);
+    try {
+      const j = JSON.parse(xhr.responseText || '{}');
+      if (xhr.status >= 200 && xhr.status < 300 && j.ok) {
+        markProgressComplete(row, true);
+        // Don't show individual file success toasts for folder uploads
+        if (!uniqueFolderName) {
+          showToast(`Uploaded: ${file.name}`, 'success');
+        }
+      } else {
+        markProgressComplete(row, false);
+        showToast(`Failed: ${file.name} - ${j.error || 'Unknown error'}`, 'error');
+      }
+    } catch (e) {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        markProgressComplete(row, true);
+        if (!uniqueFolderName) {
+          showToast(`Uploaded: ${file.name}`, 'success');
+        }
+      } else {
+        markProgressComplete(row, false);
+        showToast(`Failed: ${file.name}`, 'error');
+      }
+    }
+  });
+  
+  xhr.addEventListener('error', () => {
+    activeXHRs.delete(id);
+    markProgressComplete(row, false);
+    showToast(`Failed: ${file.name}`, 'error');
+  });
+  
+  xhr.addEventListener('abort', () => {
+    activeXHRs.delete(id);
+    row.remove();
+  });
+
+  xhr.open('POST', URLS.api_upload);
+  xhr.send(form);
+}
+
+// FAB Button Handlers
+function initFabButtons() {
+  // FAB Upload Files
+  document.getElementById('fabUploadFileBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const input = document.getElementById('uploadInput');
+    if (input) {
+      console.log("Triggering FILE upload from FAB");
+      closeFabMenu();
+      input.click();
+    } else {
+      showToast("File upload input not found", "error");
+    }
+  });
+
+  // FAB Upload Folder
+  document.getElementById('fabUploadFolderBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const input = document.getElementById('uploadFolderInput');
+    if (input) {
+      console.log("Triggering FOLDER upload from FAB");
+      closeFabMenu();
+      input.click();
+    } else {
+      showToast("Folder upload input not found", "error");
+    }
+  });
+
+  // FAB New Folder
+  document.getElementById('fabNewFolderBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeFabMenu();
+    showNewFolderModal();
+  });
+
+  // FAB Paste Text
+  document.getElementById('fabPasteTextBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeFabMenu();
+    openClipModal();
+  });
+}
+
+// Fixed initUploadArea
 function initUploadArea(){
   const area = document.getElementById('uploadArea');
   const input = document.getElementById('uploadInput');
@@ -427,7 +673,7 @@ function initUploadArea(){
     if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes('Files')) {
       e.preventDefault();
       e.stopPropagation();
-      if(dragCounter === 0) { // Only show on first enter
+      if(dragCounter === 0) {
         fullPageDropZone.style.display = 'flex';
       }
       dragCounter++;
@@ -481,7 +727,6 @@ function initUploadArea(){
     }
   });
 
-  // --- Specific listeners for the smaller upload area ---
   area.addEventListener('dragenter', ()=> area.classList.add('dragover'));
   area.addEventListener('dragleave', (e)=> {
     if (!area.contains(e.relatedTarget)) {
@@ -494,7 +739,7 @@ function initUploadArea(){
     e.stopPropagation();
   });
 
-  // Handle file input changes (from clicking)
+  // Handle file input changes
   const folderInput = document.getElementById('uploadFolderInput');
 
   const fileChangeHandler = e => {
@@ -502,7 +747,7 @@ function initUploadArea(){
     if (files.length) {
       handleNewFiles(files);
     }
-    e.target.value = ''; // Clear the input to allow re-uploading the same file
+    e.target.value = '';
   };
 
   input.addEventListener('change', fileChangeHandler, false);
@@ -510,213 +755,18 @@ function initUploadArea(){
     folderInput.addEventListener('change', fileChangeHandler, false);
   }
 
-  // FIXED: Click handler for upload area - simplified to just trigger the file input
+  // Click handler for upload area
   area.addEventListener('click', (e) => {
-    // Don't trigger if clicking on the actual file inputs
     if (e.target === input || e.target === folderInput) {
       return;
     }
-    // Trigger the regular file input (not folder)
     input.click();
   });
 }
 
-// Get files from DataTransferItems (supports folder drops)
-async function getFilesFromDataTransferItems(items) {
-  const files = [];
-  
-  async function traverseFileTree(entry, path = '') {
-    if (!entry) return;
-    
-    if (entry.isFile) {
-      return new Promise((resolve) => {
-        entry.file((file) => {
-          // Create a new file object with the relative path
-          const relativePath = path + file.name;
-          
-          // We need to create a wrapper that includes the path
-          const fileWithPath = new File([file], file.name, { type: file.type });
-          fileWithPath.relativePath = relativePath;
-          fileWithPath.fullPath = relativePath;
-          
-          files.push({
-            file: fileWithPath,
-            relativePath: relativePath
-          });
-          resolve();
-        }, (err) => {
-          console.warn('Error reading file:', err);
-          resolve();
-        });
-      });
-    } else if (entry.isDirectory) {
-      const dirReader = entry.createReader();
-      return new Promise((resolve) => {
-        const allEntries = [];
-        
-        const readEntries = () => {
-          dirReader.readEntries(async (entries) => {
-            if (entries.length === 0) {
-              // Process all entries
-              for (const e of allEntries) {
-                await traverseFileTree(e, path + entry.name + '/');
-              }
-              resolve();
-            } else {
-              allEntries.push(...entries);
-              readEntries(); // Continue reading (readEntries has a limit per call)
-            }
-          }, (err) => {
-            console.warn('Error reading directory:', err);
-            resolve();
-          });
-        };
-        readEntries();
-      });
-    }
-  }
-  
-  const promises = [];
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    if (item.kind === 'file') {
-      const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
-      
-      if (entry) {
-        promises.push(traverseFileTree(entry, ''));
-      } else {
-        // No entry support, get file directly
-        const file = item.getAsFile();
-        if (file) {
-          files.push({
-            file: file,
-            relativePath: file.name
-          });
-        }
-      }
-    }
-  }
-  
-  await Promise.all(promises);
-  return files;
-}
 
-function handleNewFiles(filesInput) {
-  // Normalize input - can be FileList, array of Files, or array of {file, relativePath}
-  let items = [];
-  
-  if (filesInput instanceof FileList) {
-    items = Array.from(filesInput).map(f => ({
-      file: f,
-      relativePath: f.webkitRelativePath || f.relativePath || f.name
-    }));
-  } else if (Array.isArray(filesInput)) {
-    items = filesInput.map(item => {
-      if (item.file) {
-        // Already in {file, relativePath} format
-        return item;
-      } else {
-        // Plain File object
-        return {
-          file: item,
-          relativePath: item.webkitRelativePath || item.relativePath || item.name
-        };
-      }
-    });
-  }
-  
-  if (!items.length) return;
-  
-  const container = document.getElementById('progressContainer');
-  if (container) container.innerHTML = '';
-  
-  // Group files by their top-level folder (or no folder for root files)
-  const groups = new Map();
-  
-  for (const item of items) {
-    const parts = item.relativePath.split('/');
-    const topLevel = parts.length > 1 ? parts[0] : '__root__';
-    
-    if (!groups.has(topLevel)) {
-      groups.set(topLevel, []);
-    }
-    groups.get(topLevel).push(item);
-  }
-  
-  // Upload each file
-  for (const item of items) {
-    const id = `up-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    uploadSingleFile({ file: item.file, relativePath: item.relativePath, id });
-  }
-}
 
-function uploadSingleFile(item) {
-  const { file, relativePath, id } = item;
-  const container = document.getElementById('progressContainer');
-  
-  // Use relative path for display if it's different from filename
-  const displayName = relativePath || file.name;
-  const row = createProgressElement(displayName, id);
-  container?.appendChild(row);
 
-  const form = new FormData();
-  form.append('dest', window.currentPath || '');
-  
-  // Send the relative path as the filename to preserve folder structure
-  const uploadPath = relativePath || file.name;
-  form.append('file', file, uploadPath);
-  form.append('relativePath', uploadPath); // Extra field for clarity
-
-  const xhr = new XMLHttpRequest();
-  activeXHRs.set(id, xhr);
-
-  const start = Date.now();
-  xhr.upload.addEventListener('progress', e => {
-    if (e.lengthComputable) {
-      const percent = (e.loaded / e.total) * 100;
-      const seconds = Math.max(0.25, (Date.now() - start) / 1000);
-      const speed = e.loaded / seconds;
-      const eta = (e.total - e.loaded) / Math.max(speed, 1);
-      updateProgress(row, { percent, speed, eta });
-    }
-  });
-  
-  xhr.addEventListener('load', () => {
-    activeXHRs.delete(id);
-    try {
-      const j = JSON.parse(xhr.responseText || '{}');
-      if (xhr.status >= 200 && xhr.status < 300 && j.ok) {
-        markProgressComplete(row, true);
-        showToast(`Uploaded: ${file.name}`, 'success');
-      } else {
-        markProgressComplete(row, false);
-        showToast(`Failed: ${file.name} - ${j.error || 'Unknown error'}`, 'error');
-      }
-    } catch (e) {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        markProgressComplete(row, true);
-        showToast(`Uploaded: ${file.name}`, 'success');
-      } else {
-        markProgressComplete(row, false);
-        showToast(`Failed: ${file.name}`, 'error');
-      }
-    }
-  });
-  
-  xhr.addEventListener('error', () => {
-    activeXHRs.delete(id);
-    markProgressComplete(row, false);
-    showToast(`Failed: ${file.name}`, 'error');
-  });
-  
-  xhr.addEventListener('abort', () => {
-    activeXHRs.delete(id);
-    row.remove();
-  });
-
-  xhr.open('POST', URLS.api_upload);
-  xhr.send(form);
-}
     function createProgressElement(filename, id){
       const div = document.createElement('div');
       div.className = 'progress-item';
@@ -2053,87 +2103,55 @@ function removeFileCard(rel){
         document.getElementById('clipTextInput')?.addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); saveClipboardText(); }});
         document.getElementById('clipNameInput')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveClipboardText(); }});
 
-        // Bind Toolbar Upload Buttons
-        // document.getElementById('uploadFileBtn')?.addEventListener('click', () => document.getElementById('uploadInput')?.click());
-        // document.getElementById('uploadFolderBtn')?.addEventListener('click', () => document.getElementById('uploadFolderInput')?.click());
-
-        // // Bind FAB (Floating Action Button) Menu Buttons
-        // document.getElementById('fabNewFolderBtn')?.addEventListener('click', showNewFolderModal);
-        // // FAB Upload Files
-        // document.getElementById('fabUploadFileBtn')?.addEventListener('click', (e) => {
-        //     e.preventDefault();
-        //     e.stopPropagation();
-        //     const input = document.getElementById('uploadInput');
-        //     if (input) {
-        //         console.log("Triggering FILE upload from FAB");
-        //         input.click();
-        //     } else {
-        //         showToast("File upload input not found", "error");
-        //     }
-        // });
-
-        // // FAB Upload Folder
-        // document.getElementById('fabUploadFolderBtn')?.addEventListener('click', (e) => {
-        //     e.preventDefault();
-        //     e.stopPropagation();
-        //     const input = document.getElementById('uploadFolderInput');
-        //     if (input) {
-        //         console.log("Triggering FOLDER upload from FAB");
-        //         input.click();
-        //     } else {
-        //         showToast("Folder upload input not found", "error");
-        //     }
-        // });
-        
         document.getElementById('fabPasteTextBtn')?.addEventListener('click', openClipModal);
       }
 
-// FAB Button Handlers - Add these to your DOMContentLoaded section
-function initFabButtons() {
-  // FAB Upload Files
-  document.getElementById('fabUploadFileBtn')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const input = document.getElementById('uploadInput');
-    if (input) {
-      console.log("Triggering FILE upload from FAB");
-      closeFabMenu(); // Close the menu first
-      input.click();
-    } else {
-      showToast("File upload input not found", "error");
-    }
-  });
+// // FAB Button Handlers - Add these to your DOMContentLoaded section
+// function initFabButtons() {
+//   // FAB Upload Files
+//   document.getElementById('fabUploadFileBtn')?.addEventListener('click', (e) => {
+//     e.preventDefault();
+//     e.stopPropagation();
+//     const input = document.getElementById('uploadInput');
+//     if (input) {
+//       console.log("Triggering FILE upload from FAB");
+//       closeFabMenu(); // Close the menu first
+//       input.click();
+//     } else {
+//       showToast("File upload input not found", "error");
+//     }
+//   });
 
-  // FAB Upload Folder
-  document.getElementById('fabUploadFolderBtn')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const input = document.getElementById('uploadFolderInput');
-    if (input) {
-      console.log("Triggering FOLDER upload from FAB");
-      closeFabMenu(); // Close the menu first
-      input.click();
-    } else {
-      showToast("Folder upload input not found", "error");
-    }
-  });
+//   // FAB Upload Folder
+//   document.getElementById('fabUploadFolderBtn')?.addEventListener('click', (e) => {
+//     e.preventDefault();
+//     e.stopPropagation();
+//     const input = document.getElementById('uploadFolderInput');
+//     if (input) {
+//       console.log("Triggering FOLDER upload from FAB");
+//       closeFabMenu(); // Close the menu first
+//       input.click();
+//     } else {
+//       showToast("Folder upload input not found", "error");
+//     }
+//   });
 
-  // FAB New Folder
-  document.getElementById('fabNewFolderBtn')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    closeFabMenu();
-    showNewFolderModal();
-  });
+//   // FAB New Folder
+//   document.getElementById('fabNewFolderBtn')?.addEventListener('click', (e) => {
+//     e.preventDefault();
+//     e.stopPropagation();
+//     closeFabMenu();
+//     showNewFolderModal();
+//   });
 
-  // FAB Paste Text
-  document.getElementById('fabPasteTextBtn')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    closeFabMenu();
-    openClipModal();
-  });
-}
+//   // FAB Paste Text
+//   document.getElementById('fabPasteTextBtn')?.addEventListener('click', (e) => {
+//     e.preventDefault();
+//     e.stopPropagation();
+//     closeFabMenu();
+//     openClipModal();
+//   });
+// }
 
       // Global initializations for all pages
       document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
