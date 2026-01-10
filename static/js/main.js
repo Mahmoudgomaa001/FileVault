@@ -409,131 +409,257 @@ setInterval(changeDhikr, 30000);
       const ff = document.getElementById('foldersFirst'); if(ff) ff.checked = prefs.foldersFirst;
     }
 
-    // UPLOADS
-    const activeXHRs = new Map();
+ // UPLOADS
+const activeXHRs = new Map();
 
-    function initUploadArea() {
-        const area = document.getElementById('uploadArea');
-        const input = document.getElementById('uploadInput');
-        const fullPageDropZone = document.getElementById('fullPageDropZone');
-        if (!area || !input || !fullPageDropZone) return;
+function initUploadArea(){
+  const area = document.getElementById('uploadArea');
+  const input = document.getElementById('uploadInput');
+  if(!area || !input) return;
 
-        let dragCounter = 0;
-
-        // Show full-page drop zone on drag enter
-        window.addEventListener('dragenter', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            // Check if dragged items are files
-            if (e.dataTransfer && e.dataTransfer.types.some(type => type === 'Files')) {
-                dragCounter++;
-                fullPageDropZone.style.display = 'flex';
-            }
-        }, false);
-
-        // Hide full-page drop zone on drag leave
-        window.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            dragCounter--;
-            if (dragCounter === 0) {
-                fullPageDropZone.style.display = 'none';
-            }
-        }, false);
-
-        // Prevent default for dragover to allow drop
-        window.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-        }, false);
-
-        // Handle file drop on the full-page zone
-        fullPageDropZone.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            dragCounter = 0;
-            fullPageDropZone.style.display = 'none';
-
-            if (e.dataTransfer && e.dataTransfer.items) {
-                const files = await getFilesFromDataTransferItems(e.dataTransfer.items);
-                if (files.length) handleNewFiles(files);
-            } else if (e.dataTransfer && e.dataTransfer.files) {
-                if (e.dataTransfer.files.length) handleNewFiles(e.dataTransfer.files);
-            }
-        }, false);
-
-
-        // Original smaller drop zone logic
-        area.addEventListener('dragenter', (e) => { e.stopPropagation(); area.classList.add('dragover'); }, false);
-        area.addEventListener('dragleave', (e) => { e.stopPropagation(); area.classList.remove('dragover'); }, false);
-        area.addEventListener('drop', async (e) => {
-            e.stopPropagation();
-            area.classList.remove('dragover');
-            if (e.dataTransfer && e.dataTransfer.items) {
-                const files = await getFilesFromDataTransferItems(e.dataTransfer.items);
-                if (files.length) handleNewFiles(files);
-            } else if (e.dataTransfer && e.dataTransfer.files) {
-                if (e.dataTransfer.files.length) handleNewFiles(e.dataTransfer.files);
-            }
-        }, false);
-
-        input.addEventListener('change', e => {
-        const files = e.target.files; if(files?.length){ handleNewFiles(files); }
-        input.value = '';
-      }, false);
-
-      const folderInput = document.getElementById('uploadFolderInput');
-      folderInput.addEventListener('change', e => {
-        const files = e.target.files;
-        if (files?.length) {
+  ['dragenter','dragover','dragleave','drop'].forEach(ev=>{
+    area.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); }, false);
+    document.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); }, false);
+  });
+  area.addEventListener('dragenter', ()=> area.classList.add('dragover'));
+  area.addEventListener('dragleave', (e)=> {
+    // Only remove if leaving the area entirely
+    if (!area.contains(e.relatedTarget)) {
+      area.classList.remove('dragover');
+    }
+  });
+  
+  // Handle drop with folder support
+  area.addEventListener('drop', async (e) => {
+    area.classList.remove('dragover');
+    
+    const items = e.dataTransfer.items;
+    
+    if (items && items.length > 0) {
+      try {
+        const files = await getFilesFromDataTransferItems(items);
+        if (files && files.length) {
           handleNewFiles(files);
+          return;
         }
-        folderInput.value = '';
-      }, false);
-    }
-
-    async function getFilesFromDataTransferItems(dataTransferItems) {
-        const files = [];
-        const queue = [];
-        for (const item of dataTransferItems) {
-            queue.push(item.webkitGetAsEntry());
-        }
-        while (queue.length > 0) {
-            const entry = queue.shift();
-            if (entry.isFile) {
-                try {
-                    const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
-                    if (file) {
-                        file.webkitRelativePath = entry.fullPath.startsWith('/') ? entry.fullPath.substring(1) : entry.fullPath;
-                        files.push(file);
-                    }
-                } catch (err) {
-                    console.error('Could not get file from entry:', entry.fullPath, err);
-                }
-            } else if (entry.isDirectory) {
-                const reader = entry.createReader();
-                try {
-                    const entries = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
-                    queue.push(...entries);
-                } catch (err) {
-                    console.error('Could not read directory entries:', entry.fullPath, err);
-                }
-            }
-        }
-        return files;
-    }
-
-    function handleNewFiles(files){
-      const arr = Array.from(files || []);
-      if(!arr.length) return;
-      const container = document.getElementById('progressContainer');
-      if(container) container.innerHTML = '';
-      for(const f of arr){
-        const id = `up-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        uploadSingleFile({file:f, id});
+      } catch (err) {
+        console.warn('DataTransferItems processing failed:', err);
       }
     }
+    
+    // Fallback for regular files
+    const files = e.dataTransfer.files;
+    if (files && files.length) {
+      handleNewFiles(Array.from(files));
+    }
+  });
 
+  // Handle file input (supports folder selection via webkitdirectory)
+  input.addEventListener('change', e => {
+    const files = Array.from(e.target.files || []);
+    if (files.length) {
+      handleNewFiles(files);
+    }
+    input.value = '';
+  }, false);
+}
+
+// Get files from DataTransferItems (supports folder drops)
+async function getFilesFromDataTransferItems(items) {
+  const files = [];
+  
+  async function traverseFileTree(entry, path = '') {
+    if (!entry) return;
+    
+    if (entry.isFile) {
+      return new Promise((resolve) => {
+        entry.file((file) => {
+          // Create a new file object with the relative path
+          const relativePath = path + file.name;
+          
+          // We need to create a wrapper that includes the path
+          const fileWithPath = new File([file], file.name, { type: file.type });
+          fileWithPath.relativePath = relativePath;
+          fileWithPath.fullPath = relativePath;
+          
+          files.push({
+            file: fileWithPath,
+            relativePath: relativePath
+          });
+          resolve();
+        }, (err) => {
+          console.warn('Error reading file:', err);
+          resolve();
+        });
+      });
+    } else if (entry.isDirectory) {
+      const dirReader = entry.createReader();
+      return new Promise((resolve) => {
+        const allEntries = [];
+        
+        const readEntries = () => {
+          dirReader.readEntries(async (entries) => {
+            if (entries.length === 0) {
+              // Process all entries
+              for (const e of allEntries) {
+                await traverseFileTree(e, path + entry.name + '/');
+              }
+              resolve();
+            } else {
+              allEntries.push(...entries);
+              readEntries(); // Continue reading (readEntries has a limit per call)
+            }
+          }, (err) => {
+            console.warn('Error reading directory:', err);
+            resolve();
+          });
+        };
+        readEntries();
+      });
+    }
+  }
+  
+  const promises = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.kind === 'file') {
+      const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+      
+      if (entry) {
+        promises.push(traverseFileTree(entry, ''));
+      } else {
+        // No entry support, get file directly
+        const file = item.getAsFile();
+        if (file) {
+          files.push({
+            file: file,
+            relativePath: file.name
+          });
+        }
+      }
+    }
+  }
+  
+  await Promise.all(promises);
+  return files;
+}
+
+function handleNewFiles(filesInput) {
+  // Normalize input - can be FileList, array of Files, or array of {file, relativePath}
+  let items = [];
+  
+  if (filesInput instanceof FileList) {
+    items = Array.from(filesInput).map(f => ({
+      file: f,
+      relativePath: f.webkitRelativePath || f.relativePath || f.name
+    }));
+  } else if (Array.isArray(filesInput)) {
+    items = filesInput.map(item => {
+      if (item.file) {
+        // Already in {file, relativePath} format
+        return item;
+      } else {
+        // Plain File object
+        return {
+          file: item,
+          relativePath: item.webkitRelativePath || item.relativePath || item.name
+        };
+      }
+    });
+  }
+  
+  if (!items.length) return;
+  
+  const container = document.getElementById('progressContainer');
+  if (container) container.innerHTML = '';
+  
+  // Group files by their top-level folder (or no folder for root files)
+  const groups = new Map();
+  
+  for (const item of items) {
+    const parts = item.relativePath.split('/');
+    const topLevel = parts.length > 1 ? parts[0] : '__root__';
+    
+    if (!groups.has(topLevel)) {
+      groups.set(topLevel, []);
+    }
+    groups.get(topLevel).push(item);
+  }
+  
+  // Upload each file
+  for (const item of items) {
+    const id = `up-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    uploadSingleFile({ file: item.file, relativePath: item.relativePath, id });
+  }
+}
+
+function uploadSingleFile(item) {
+  const { file, relativePath, id } = item;
+  const container = document.getElementById('progressContainer');
+  
+  // Use relative path for display if it's different from filename
+  const displayName = relativePath || file.name;
+  const row = createProgressElement(displayName, id);
+  container?.appendChild(row);
+
+  const form = new FormData();
+  form.append('dest', window.currentPath || '');
+  
+  // Send the relative path as the filename to preserve folder structure
+  const uploadPath = relativePath || file.name;
+  form.append('file', file, uploadPath);
+  form.append('relativePath', uploadPath); // Extra field for clarity
+
+  const xhr = new XMLHttpRequest();
+  activeXHRs.set(id, xhr);
+
+  const start = Date.now();
+  xhr.upload.addEventListener('progress', e => {
+    if (e.lengthComputable) {
+      const percent = (e.loaded / e.total) * 100;
+      const seconds = Math.max(0.25, (Date.now() - start) / 1000);
+      const speed = e.loaded / seconds;
+      const eta = (e.total - e.loaded) / Math.max(speed, 1);
+      updateProgress(row, { percent, speed, eta });
+    }
+  });
+  
+  xhr.addEventListener('load', () => {
+    activeXHRs.delete(id);
+    try {
+      const j = JSON.parse(xhr.responseText || '{}');
+      if (xhr.status >= 200 && xhr.status < 300 && j.ok) {
+        markProgressComplete(row, true);
+        showToast(`Uploaded: ${file.name}`, 'success');
+      } else {
+        markProgressComplete(row, false);
+        showToast(`Failed: ${file.name} - ${j.error || 'Unknown error'}`, 'error');
+      }
+    } catch (e) {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        markProgressComplete(row, true);
+        showToast(`Uploaded: ${file.name}`, 'success');
+      } else {
+        markProgressComplete(row, false);
+        showToast(`Failed: ${file.name}`, 'error');
+      }
+    }
+  });
+  
+  xhr.addEventListener('error', () => {
+    activeXHRs.delete(id);
+    markProgressComplete(row, false);
+    showToast(`Failed: ${file.name}`, 'error');
+  });
+  
+  xhr.addEventListener('abort', () => {
+    activeXHRs.delete(id);
+    row.remove();
+  });
+
+  xhr.open('POST', URLS.api_upload);
+  xhr.send(form);
+}
     function createProgressElement(filename, id){
       const div = document.createElement('div');
       div.className = 'progress-item';
@@ -582,63 +708,63 @@ setInterval(changeDhikr, 30000);
       setTimeout(()=>{ element.remove(); }, 900);
     }
 
-    function uploadSingleFile(item){
-      const {file, id} = item;
-      const container = document.getElementById('progressContainer');
-      const row = createProgressElement(file.webkitRelativePath || file.name, id);
-      container?.appendChild(row);
+    // function uploadSingleFile(item){
+    //   const {file, id} = item;
+    //   const container = document.getElementById('progressContainer');
+    //   const row = createProgressElement(file.webkitRelativePath || file.name, id);
+    //   container?.appendChild(row);
 
-      const form = new FormData();
-      form.append('dest', window.currentPath || '');
-      form.append('file', file, file.webkitRelativePath || file.name);
+    //   const form = new FormData();
+    //   form.append('dest', window.currentPath || '');
+    //   form.append('file', file, file.webkitRelativePath || file.name);
 
-      const xhr = new XMLHttpRequest();
-      activeXHRs.set(id, xhr);
+    //   const xhr = new XMLHttpRequest();
+    //   activeXHRs.set(id, xhr);
 
-      const start = Date.now();
-      xhr.upload.addEventListener('progress', e=>{
-        if(e.lengthComputable){
-          const percent = (e.loaded/e.total) * 100;
-          const seconds = Math.max(0.25, (Date.now()-start)/1000);
-          const speed = e.loaded/seconds;
-          const eta = (e.total-e.loaded) / Math.max(speed, 1);
-          updateProgress(row, {percent, speed, eta});
-        }
-      });
-      xhr.addEventListener('load', ()=>{
-        activeXHRs.delete(id);
-        try {
-          const j = JSON.parse(xhr.responseText || '{}');
-          if(xhr.status >= 200 && xhr.status < 300 && j.ok){
-            markProgressComplete(row, true);
-            showToast(`Uploaded: ${file.name}`, 'success');
-          } else {
-            markProgressComplete(row, false);
-            showToast(`Failed: ${file.name}`, 'error');
-          }
-        } catch(e){
-          if(xhr.status >= 200 && xhr.status < 300){
-            markProgressComplete(row, true);
-            showToast(`Uploaded: ${file.name}`, 'success');
-          } else {
-            markProgressComplete(row, false);
-            showToast(`Failed: ${file.name}`, 'error');
-          }
-        }
-      });
-      xhr.addEventListener('error', ()=>{
-        activeXHRs.delete(id);
-        markProgressComplete(row, false);
-        showToast(`Failed: ${file.name}`, 'error');
-      });
-      xhr.addEventListener('abort', ()=>{
-        activeXHRs.delete(id);
-        row.remove();
-      });
+    //   const start = Date.now();
+    //   xhr.upload.addEventListener('progress', e=>{
+    //     if(e.lengthComputable){
+    //       const percent = (e.loaded/e.total) * 100;
+    //       const seconds = Math.max(0.25, (Date.now()-start)/1000);
+    //       const speed = e.loaded/seconds;
+    //       const eta = (e.total-e.loaded) / Math.max(speed, 1);
+    //       updateProgress(row, {percent, speed, eta});
+    //     }
+    //   });
+    //   xhr.addEventListener('load', ()=>{
+    //     activeXHRs.delete(id);
+    //     try {
+    //       const j = JSON.parse(xhr.responseText || '{}');
+    //       if(xhr.status >= 200 && xhr.status < 300 && j.ok){
+    //         markProgressComplete(row, true);
+    //         showToast(`Uploaded: ${file.name}`, 'success');
+    //       } else {
+    //         markProgressComplete(row, false);
+    //         showToast(`Failed: ${file.name}`, 'error');
+    //       }
+    //     } catch(e){
+    //       if(xhr.status >= 200 && xhr.status < 300){
+    //         markProgressComplete(row, true);
+    //         showToast(`Uploaded: ${file.name}`, 'success');
+    //       } else {
+    //         markProgressComplete(row, false);
+    //         showToast(`Failed: ${file.name}`, 'error');
+    //       }
+    //     }
+    //   });
+    //   xhr.addEventListener('error', ()=>{
+    //     activeXHRs.delete(id);
+    //     markProgressComplete(row, false);
+    //     showToast(`Failed: ${file.name}`, 'error');
+    //   });
+    //   xhr.addEventListener('abort', ()=>{
+    //     activeXHRs.delete(id);
+    //     row.remove();
+    //   });
 
-      xhr.open('POST', URLS.api_upload);
-      xhr.send(form);
-    }
+    //   xhr.open('POST', URLS.api_upload);
+    //   xhr.send(form);
+    // }
 
     function cancelUpload(id){
       const xhr = activeXHRs.get(id);

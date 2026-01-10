@@ -776,25 +776,26 @@ def safe_path(path: Optional[str]) -> Path:
         abort(403)
     return p
 
-def sanitize_filename(filename: str, is_path: bool = False) -> str:
-    if is_path:
-        parts = filename.split('/')
-        sanitized_parts = [sanitize_filename(part) for part in parts]
-        return '/'.join(sanitized_parts)
-
-    name = os.path.basename(filename or "").strip()
-    name = unicodedata.normalize("NFC", name)
-    name = "".join(ch for ch in name if ch >= " " and ch != "\x7f")
-    illegal = '<>:"\\|?*\n\r\t'
-    name = name.replace("/", "_").replace("\\", "_")
-    for ch in illegal:
-        name = name.replace(ch, "_")
-    name = name.strip().strip(".")
+def sanitize_filename(name, is_path=False):
+    """Sanitize a filename or path for safe filesystem use."""
     if not name:
-        name = "file"
-    if len(name) > 200:
-        base, ext = os.path.splitext(name)
-        name = base[:200 - len(ext)] + ext
+        return "unnamed"
+    
+    if is_path and '/' in name:
+        # Handle path: sanitize each component
+        parts = name.split('/')
+        sanitized_parts = [sanitize_filename(part, is_path=False) for part in parts if part]
+        return '/'.join(sanitized_parts)
+    
+    # Remove or replace dangerous characters
+    # Keep alphanumeric, spaces, hyphens, underscores, dots
+    import re
+    name = re.sub(r'[<>:"|?*\\]', '_', name)
+    name = name.strip('. ')
+    
+    if not name:
+        return "unnamed"
+    
     return name
 
 def human_size(n: Optional[int]) -> str:
@@ -1379,66 +1380,95 @@ def api_prefs():
 def api_upload():
     if not is_authed():
         return jsonify({"ok": False, "error": "not authed"}), 401
+    
     dest_rel = request.form.get("dest", "")
     dest_dir = safe_path(dest_rel)
     base_folder = session.get("folder")
+    
     if first_segment(path_rel(dest_dir)) != base_folder and path_rel(dest_dir) != "":
         return jsonify({"ok": False, "error": "forbidden"}), 403
+    
     if not dest_dir.exists() or not dest_dir.is_dir():
         return jsonify({"ok": False, "error": "bad dest"}), 400
+    
     f = request.files.get("file")
     if not f or not f.filename:
         return jsonify({"ok": False, "error": "no file"}), 400
 
-    filename = sanitize_filename(f.filename, is_path=True)
+    # Get the relative path (may include folder structure like "folder/subfolder/file.txt")
+    relative_path = request.form.get("relativePath", "") or f.filename
+    
+    # Sanitize the path - allow forward slashes for folder structure
+    filename = sanitize_filename(relative_path, is_path=True)
+    
+    # Security: prevent path traversal
+    if '..' in filename or filename.startswith('/'):
+        return jsonify({"ok": False, "error": "invalid path"}), 400
+    
+    # Check file extension
     if ALLOWED_UPLOAD_EXT:
-        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        # Get the actual filename (last part of path)
+        actual_filename = filename.split('/')[-1] if '/' in filename else filename
+        ext = actual_filename.rsplit(".", 1)[-1].lower() if "." in actual_filename else ""
         if ext not in ALLOWED_UPLOAD_EXT:
             return jsonify({"ok": False, "error": "file type not allowed"}), 400
 
     save_path = dest_dir / filename
-
-    # If a file has a path, create the directories and emit an event for the top-level one
+    
+    # Track if we're creating a new top-level folder
+    top_level_folder = None
+    top_level_folder_path = None
+    
     if '/' in filename:
-        # Create all parent directories for the file
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Check if the top-level folder of the upload exists. If not, emit a socket event.
-        # This ensures the UI updates to show the new folder.
+        # This is a file inside a folder structure
         first_component = filename.split('/')[0]
-        new_folder_path = dest_dir / first_component
+        top_level_folder_path = dest_dir / first_component
         
-        # To avoid multiple events for the same folder in a single upload batch,
-        # we can check a simple flag in the session. This is a basic way to handle this.
-        if 'uploaded_folders' not in session:
-            session['uploaded_folders'] = set()
-
-        if first_component not in session['uploaded_folders']:
-            if not new_folder_path.is_dir(): # Check if it's actually a new folder
-                # This part is tricky because the folder might be created by another concurrent request.
-                # A more robust solution might involve a lock or a more sophisticated check.
-                # For now, we assume this check is sufficient for most cases.
-                pass
-            meta = get_file_meta(new_folder_path)
-            socketio.emit("file_update", {"action": "added", "dir": dest_rel, "meta": meta})
-            session['uploaded_folders'].add(first_component)
+        # Check if this is a new folder we need to announce
+        if not top_level_folder_path.exists():
+            top_level_folder = first_component
+        
+        # Create all parent directories
+        save_path.parent.mkdir(parents=True, exist_ok=True)
     else:
-        # Create parent directory if it doesn't exist (for single file uploads)
+        # Single file, ensure parent exists
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
-    base, ext = os.path.splitext(filename)
-    i = 1
-    while save_path.exists():
-        save_path = dest_dir / f"{base} ({i}){ext}"
-        i += 1
+    # Handle filename conflicts
+    if save_path.exists():
+        base_name = filename.split('/')[-1] if '/' in filename else filename
+        parent_path = save_path.parent
+        name_part, ext_part = os.path.splitext(base_name)
+        i = 1
+        while save_path.exists():
+            new_name = f"{name_part} ({i}){ext_part}"
+            save_path = parent_path / new_name
+            i += 1
+    
     try:
         f.save(save_path)
     except Exception as e:
         return jsonify({"ok": False, "error": f"save failed: {e}"}), 500
 
+    # Emit socket events
+    # First, if we created a new top-level folder, announce it
+    if top_level_folder and top_level_folder_path and top_level_folder_path.exists():
+        folder_meta = get_file_meta(top_level_folder_path)
+        socketio.emit("file_update", {
+            "action": "added",
+            "dir": dest_rel,
+            "meta": folder_meta
+        })
+    
+    # Then announce the file itself (for live updates within the folder)
     meta = get_file_meta(save_path)
     parent_rel = path_rel(save_path.parent) if save_path.parent != ROOT_DIR else ""
-    socketio.emit("file_update", {"action":"added","dir": parent_rel, "meta": meta})
+    socketio.emit("file_update", {
+        "action": "added",
+        "dir": parent_rel,
+        "meta": meta
+    })
+    
     return jsonify({"ok": True, "meta": meta}), 201
 
 @app.route("/api/delete", methods=["POST"])
