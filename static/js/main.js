@@ -2050,15 +2050,24 @@ function removeFileCard(rel){
         document.getElementById('clipTextInput')?.addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); saveClipboardText(); }});
         document.getElementById('clipNameInput')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveClipboardText(); }});
 
-        // Bind Toolbar Upload Buttons
-        document.getElementById('uploadFileBtn')?.addEventListener('click', () => document.getElementById('uploadInput')?.click());
-        document.getElementById('uploadFolderBtn')?.addEventListener('click', () => document.getElementById('uploadFolderInput')?.click());
-
         // Bind FAB (Floating Action Button) Menu Buttons
-        document.getElementById('fabNewFolderBtn')?.addEventListener('click', showNewFolderModal);
-        document.getElementById('fabUploadFileBtn')?.addEventListener('click', () => document.getElementById('uploadInput')?.click());
-        document.getElementById('fabUploadFolderBtn')?.addEventListener('click', () => document.getElementById('uploadFolderInput')?.click());
-        document.getElementById('fabPasteTextBtn')?.addEventListener('click', openClipModal);
+        const fabActions = {
+          'fabNewFolderBtn': showNewFolderModal,
+          'fabUploadFileBtn': () => document.getElementById('uploadInput')?.click(),
+          'fabUploadFolderBtn': () => document.getElementById('uploadFolderInput')?.click(),
+          'fabPasteTextBtn': openClipModal
+        };
+
+        for (const [id, action] of Object.entries(fabActions)) {
+          const btn = document.getElementById(id);
+          if (btn) {
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation(); // Prevent the FAB menu from closing
+              action();
+              closeFabMenu(); // Manually close menu after action
+            });
+          }
+        }
       }
 
       // Global initializations for all pages
