@@ -150,65 +150,243 @@
 
     'use strict';
 
-    let selectModeActive = false;
-    let selectedFiles = new Set();
-    let lastSelectedIndex = -1;
+    // let selectModeActive = false;
+    // let selectedFiles = new Set();
+    // let lastSelectedIndex = -1;
 
-    function handleSelectionChange(){
-        selectedFiles = new Set(Array.from(document.querySelectorAll('.file-select-checkbox:checked')).map(cb => cb.dataset.rel));
+    // function handleSelectionChange(){
+    //     selectedFiles = new Set(Array.from(document.querySelectorAll('.file-select-checkbox:checked')).map(cb => cb.dataset.rel));
 
-        document.querySelectorAll('.file-card').forEach(card => {
-            const cb = card.querySelector('.file-select-checkbox');
-            if(cb && selectedFiles.has(cb.dataset.rel)){
-                card.classList.add('selected');
-                cb.checked = true;
-            } else {
-                card.classList.remove('selected');
-                if(cb) cb.checked = false;
-            }
-        });
+    //     document.querySelectorAll('.file-card').forEach(card => {
+    //         const cb = card.querySelector('.file-select-checkbox');
+    //         if(cb && selectedFiles.has(cb.dataset.rel)){
+    //             card.classList.add('selected');
+    //             cb.checked = true;
+    //         } else {
+    //             card.classList.remove('selected');
+    //             if(cb) cb.checked = false;
+    //         }
+    //     });
 
-        const bulkToolbar = document.getElementById('bulkActionsToolbar');
-        if (bulkToolbar) {
-            if(selectedFiles.size > 0){
-                bulkToolbar.style.display = 'flex';
-                document.getElementById('selectionCount').textContent = `${selectedFiles.size} selected`;
-            } else {
-                bulkToolbar.style.display = 'none';
-                if (selectModeActive) {
-                    toggleSelectMode(false);
-                }
-            }
-        }
+    //     const bulkToolbar = document.getElementById('bulkActionsToolbar');
+    //     if (bulkToolbar) {
+    //         if(selectedFiles.size > 0){
+    //             bulkToolbar.style.display = 'flex';
+    //             document.getElementById('selectionCount').textContent = `${selectedFiles.size} selected`;
+    //         } else {
+    //             bulkToolbar.style.display = 'none';
+    //             if (selectModeActive) {
+    //                 toggleSelectMode(false);
+    //             }
+    //         }
+    //     }
+    // }
+
+    // function toggleSelectMode(forceState) {
+    //     selectModeActive = (forceState === undefined) ? !selectModeActive : forceState;
+    //     document.body.classList.toggle('select-mode', selectModeActive);
+    //     document.getElementById('selectModeBtn')?.classList.toggle('active', selectModeActive);
+
+    //     if (!selectModeActive) {
+    //         // Clear selection when exiting mode
+    //         document.querySelectorAll('.file-select-checkbox:checked').forEach(cb => {
+    //             cb.checked = false;
+    //         });
+    //         handleSelectionChange();
+    //     }
+    // }
+
+    // function selectAll() {
+    //     document.querySelectorAll('.file-card:not([style*="display: none"]) .file-select-checkbox').forEach(cb => {
+    //         cb.checked = true;
+    //     });
+    //     handleSelectionChange();
+    // }
+
+    // function deselectAll() {
+    //     document.querySelectorAll('.file-card .file-select-checkbox').forEach(cb => {
+    //         cb.checked = false;
+    //     });
+    //     handleSelectionChange();
+    // }
+
+
+// ============================================================================
+// FINAL FIXED SELECTION SYSTEM (Ctrl enables mode + full card click = select)
+// ============================================================================
+
+// ============================================================================
+// FILE GRID SELECTION SYSTEM - 2025/2026 STYLE
+// ============================================================================
+
+let selectModeActive = false;
+let selectedFiles = new Set();
+let lastSelectedCard = null;
+
+// ============================================================================
+// CORE FUNCTIONS
+// ============================================================================
+
+function handleSelectionChange() {
+    // Update selected set from actual checkboxes (most reliable source)
+    selectedFiles = new Set(
+        Array.from(document.querySelectorAll('.file-select-checkbox:checked'))
+            .map(cb => cb.dataset.rel)
+    );
+
+    // Visual sync
+    document.querySelectorAll('.file-card').forEach(card => {
+        const isSelected = selectedFiles.has(card.dataset.rel);
+        card.classList.toggle('selected', isSelected);
+        
+        const checkbox = card.querySelector('.file-select-checkbox');
+        if (checkbox) checkbox.checked = isSelected;
+    });
+
+    // Update counter
+    const countEl = document.getElementById('selectionCount');
+    if (countEl) {
+        countEl.textContent = selectedFiles.size > 0 
+            ? `${selectedFiles.size} selected` 
+            : 'No items selected';
+    }
+}
+
+function toggleSelectMode(forceState) {
+    selectModeActive = forceState !== undefined ? !!forceState : !selectModeActive;
+
+    document.body.classList.toggle('select-mode', selectModeActive);
+    document.getElementById('selectModeBtn')?.classList.toggle('active', selectModeActive);
+
+    const toolbar = document.getElementById('bulkActionsToolbar');
+    if (toolbar) toolbar.style.display = selectModeActive ? 'flex' : 'none';
+
+    if (!selectModeActive) {
+        // Clear everything when leaving mode
+        selectedFiles.clear();
+        document.querySelectorAll('.file-select-checkbox').forEach(cb => cb.checked = false);
+        document.querySelectorAll('.file-card').forEach(c => c.classList.remove('selected'));
+        lastSelectedCard = null;
     }
 
-    function toggleSelectMode(forceState) {
-        selectModeActive = (forceState === undefined) ? !selectModeActive : forceState;
-        document.body.classList.toggle('select-mode', selectModeActive);
-        document.getElementById('selectModeBtn')?.classList.toggle('active', selectModeActive);
+    handleSelectionChange();
+}
 
+function selectAll() {
+    document.querySelectorAll('.file-card:not([style*="display: none"]):not(.hidden)').forEach(card => {
+        const rel = card.dataset.rel;
+        if (!rel) return;
+        selectedFiles.add(rel);
+        const cb = card.querySelector('.file-select-checkbox');
+        if (cb) cb.checked = true;
+    });
+    handleSelectionChange();
+}
+
+function deselectAll() {
+    selectedFiles.clear();
+    document.querySelectorAll('.file-select-checkbox').forEach(cb => cb.checked = false);
+    handleSelectionChange();
+}
+
+// ============================================================================
+// MAIN CLICK HANDLER
+// ============================================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    const grid = document.getElementById('fileGrid');
+    if (!grid) return;
+
+    grid.addEventListener('click', function(e) {
+        // 1. Allow clicks on action buttons / links / etc.
+        if (e.target.closest('.file-actions, button, a, [data-action]')) {
+            return;
+        }
+
+        const card = e.target.closest('.file-card');
+        if (!card) return;
+
+        const rel = card.dataset.rel;
+        if (!rel) return;
+
+        const isCtrl = e.ctrlKey || e.metaKey;
+        const isShift = e.shiftKey;
+
+        // Auto-activate selection mode when using Ctrl/Shift
+        if (!selectModeActive && (isCtrl || isShift)) {
+            toggleSelectMode(true);
+        }
+
+        // ──────────────────────────────
+        // NORMAL MODE → open / navigate
+        // ──────────────────────────────
         if (!selectModeActive) {
-            // Clear selection when exiting mode
-            document.querySelectorAll('.file-select-checkbox:checked').forEach(cb => {
-                cb.checked = false;
-            });
-            handleSelectionChange();
+            // Put your normal open behavior here
+            // Examples:
+            // if (card.dataset.isDir === 'true') {
+            //     window.location.href = `/browse/${rel}`;
+            // } else {
+            //     openPreview(rel);
+            //     // or: window.open(`/view/${rel}`, '_blank');
+            // }
+            return;
+        }
+
+        // ──────────────────────────────
+        // SELECTION MODE ACTIVE
+        // ──────────────────────────────
+        e.preventDefault(); // safe now
+
+        const visibleCards = Array.from(
+            grid.querySelectorAll('.file-card:not([style*="display: none"]):not(.hidden)')
+        );
+
+        const currentIndex = visibleCards.indexOf(card);
+
+        if (isShift && lastSelectedCard) {
+            const lastIndex = visibleCards.indexOf(lastSelectedCard);
+
+            // If last card disappeared → just toggle current
+            if (lastIndex === -1) {
+                toggleSelection(card, rel);
+            } else {
+                const start = Math.min(currentIndex, lastIndex);
+                const end = Math.max(currentIndex, lastIndex) + 1;
+
+                visibleCards.slice(start, end).forEach(c => {
+                    const r = c.dataset.rel;
+                    if (r) selectedFiles.add(r);
+                    const cb = c.querySelector('.file-select-checkbox');
+                    if (cb) cb.checked = true;
+                });
+            }
+        } 
+        
+      
+        lastSelectedCard = card;
+        handleSelectionChange();
+    });
+
+    // Helper
+    function toggleSelection(card, rel) {
+        if (selectedFiles.has(rel)) {
+            selectedFiles.delete(rel);
+            const cb = card.querySelector('.file-select-checkbox');
+            if (cb) cb.checked = false;
+        } else {
+            selectedFiles.add(rel);
+            const cb = card.querySelector('.file-select-checkbox');
+            if (cb) cb.checked = true;
         }
     }
 
-    function selectAll() {
-        document.querySelectorAll('.file-card:not([style*="display: none"]) .file-select-checkbox').forEach(cb => {
-            cb.checked = true;
-        });
-        handleSelectionChange();
-    }
+    // Toolbar buttons
+    document.getElementById('selectModeBtn')?.addEventListener('click', () => toggleSelectMode());
+    document.getElementById('selectAllBtn')?.addEventListener('click', selectAll);
+    document.getElementById('deselectAllBtn')?.addEventListener('click', deselectAll);
+    document.getElementById('cancelSelectionBtn')?.addEventListener('click', () => toggleSelectMode(false));
+});
 
-    function deselectAll() {
-        document.querySelectorAll('.file-card .file-select-checkbox').forEach(cb => {
-            cb.checked = false;
-        });
-        handleSelectionChange();
-    }
 
     // Dhikr data
 

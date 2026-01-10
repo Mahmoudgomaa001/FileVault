@@ -331,3 +331,55 @@
   font-size: 5rem;
   margin-bottom: 1rem;
 }
+/* Make cards feel interactive */
+.file-card {
+  transition: all 0.18s ease;
+  user-select: none; /* Prevent text selection when dragging */
+  position: relative;
+  cursor: pointer;
+}
+
+.file-card:hover {
+  background: rgba(139, 92, 246, 0.08);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.file-card.selected {
+  background: rgba(59, 130, 246, 0.18) !important;
+  border: 2px solid var(--primary);
+  border-radius: 0.75rem;
+  transform: scale(1.015);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.25);
+}
+
+/* Hide checkboxes if you want pure card-click UX */
+.file-select-checkbox {
+  /* opacity: 0; */ /* uncomment to hide completely */
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+}
+
+/* Floating toolbar (optional - looks very modern) */
+#bulkActionsToolbar {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: rgba(30, 30, 46, 0.95);
+  backdrop-filter: blur(12px);
+  border-radius: 1rem;
+  padding: 0.8rem 1.5rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  transition: all 0.3s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#bulkActionsToolbar[style*="display: flex"] {
+  opacity: 1;
+  pointer-events: auto;
+}
