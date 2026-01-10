@@ -776,26 +776,24 @@ def safe_path(path: Optional[str]) -> Path:
         abort(403)
     return p
 
-def sanitize_filename(name, is_path=False):
-    """Sanitize a filename or path for safe filesystem use."""
-    if not name:
-        return "unnamed"
-    
-    if is_path and '/' in name:
-        # Handle path: sanitize each component
-        parts = name.split('/')
-        sanitized_parts = [sanitize_filename(part, is_path=False) for part in parts if part]
+def sanitize_filename(filename: str, is_path: bool = False) -> str:
+    if is_path:
+        parts = filename.split('/')
+        sanitized_parts = [sanitize_filename(part) for part in parts]
         return '/'.join(sanitized_parts)
-    
-    # Remove or replace dangerous characters
-    # Keep alphanumeric, spaces, hyphens, underscores, dots
-    import re
-    name = re.sub(r'[<>:"|?*\\]', '_', name)
-    name = name.strip('. ')
-    
+
+    name = os.path.basename(filename or "").strip()
+    name = unicodedata.normalize("NFC", name)
+    name = "".join(ch for ch in name if ch >= " " and ch != "\x7f")
+    illegal = '<>:"\\|?*\n\r\t'
+    name = name.replace("/", "_").replace("\\", "_")
+    for ch in illegal:
+        name = name.replace(ch, "_")
+    name = name.strip().strip(".")
     if not name:
-        return "unnamed"
-    
+        name = "file"
+        base, ext = os.path.splitext(name)
+        name = base[:200 - len(ext)] + ext
     return name
 
 def human_size(n: Optional[int]) -> str:
