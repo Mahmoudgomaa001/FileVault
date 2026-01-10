@@ -54,6 +54,17 @@
       <button class="view-btn" data-view="list" onclick="setView('list')"><i class="fas fa-list-ul"></i><span>List</span></button>
     </div>
     <button id="selectModeBtn" class="btn btn-secondary" title="Select Files"><i class="fas fa-check-square"></i> Select</button>
+
+    <!-- Select + Current Folder + Sorting -->
+  <!-- Current Path (will show full relative path) -->
+<div id="currentPathDisplay" style="font-size:0.9rem; color:var(--primary); display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap; max-width:400px;">
+  <!-- Filled dynamically -->
+</div>
+ 
+
+      <a class="btn btn-secondary" href=".." title="Up one folder">
+      <i class="fas fa-level-up-alt"></i>
+    </a>
     <!-- Sorting controls -->
     <div class="view-controls" style="gap:.5rem;">
       <select id="sortBy" class="btn btn-secondary" title="Sort by">
@@ -69,9 +80,7 @@
     <button class="btn btn-secondary" onclick="showNewFolderModal()"><i class="fas fa-folder-plus"></i> New Folder</button>
     <button class="btn btn-primary" id="openClipBtn"><i class="fas fa-paste"></i> Paste Text</button>
     <nav class="nav-menu">
-    <a class="btn btn-secondary" href=".." title="Up one folder">
-      <i class="fas fa-level-up-alt"></i>
-    </a>
+    
 
 
 
@@ -205,8 +214,8 @@
 <div class="fab-container">
   <div class="fab-menu" id="fabMenu">
     <button id="fabNewFolderBtn" class="fab-menu-item"><i class="fas fa-folder-plus"></i> New Folder</button>
-    <button id="fabUploadFileBtn" class="fab-menu-item"><i class="fas fa-file-upload"></i> Upload Files</button>
-    <button id="fabUploadFolderBtn" class="fab-menu-item"><i class="fas fa-upload"></i> Upload Folder</button>
+    <button id="fabUploadFileBtn" class="fab-menu-item"><i class="fas fa-file-upload"></i> Upload</button>
+    <!-- <button id="fabUploadFolderBtn" class="fab-menu-item"><i class="fas fa-upload"></i> Upload Folder</button> -->
     <button id="fabPasteTextBtn" class="fab-menu-item"><i class="fas fa-clipboard"></i> Paste Text</button>
   </div>
   <button class="fab" onclick="toggleFabMenu()" aria-label="Open actions menu"><i class="fas fa-plus"></i></button>

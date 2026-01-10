@@ -356,6 +356,91 @@ setInterval(changeDhikr, 30000);
       savePref('view', view);
     }
 
+
+    // Show current folder name next to Select button
+// Show real current browsing path (not just account root)
+// Dynamic clickable breadcrumb - safe within current account
+document.addEventListener('DOMContentLoaded', () => {
+  const container = document.getElementById('currentPathDisplay');
+  if (!container) return;
+
+  // Get current relative path (subfolders only)
+  let relPath = APP_CONFIG?.current_rel || '';
+
+  // Fallback from URL - take everything after /b/<account>/
+  if (!relPath) {
+    const path = window.location.pathname;
+    const match = path.match(/\/b\/[^/]+(?:\/(.*))?/);
+    if (match && match[1]) relPath = match[1];
+  }
+
+  // Split into parts, filter empty
+  const parts = relPath.split('/').filter(Boolean);
+
+  if (parts.length === 0) {
+    // We're at the real root → show nothing or minimal hint
+    container.innerHTML = '<span style="opacity:0.6; font-style:italic;">(root)</span>';
+    return;
+  }
+
+  const breadcrumb = document.createElement('div');
+  breadcrumb.style.display = 'flex';
+  breadcrumb.style.alignItems = 'center';
+  breadcrumb.style.gap = '0.5rem';
+
+  // Build breadcrumb parts
+  parts.forEach((part, index) => {
+    if (index > 0) {
+      const sep = document.createElement('span');
+      sep.textContent = '›';
+      sep.style.opacity = '0.5';
+      breadcrumb.appendChild(sep);
+    }
+
+    const isLast = index === parts.length - 1;
+
+    const link = document.createElement('span');
+    link.textContent = part;
+    link.style.cursor = isLast ? 'default' : 'pointer';
+    link.style.textDecoration = isLast ? 'none' : 'underline';
+    link.style.textUnderlineOffset = '2px';
+    link.style.fontWeight = isLast ? '600' : 'normal';
+    link.style.color = isLast ? 'var(--text-primary)' : 'var(--primary)';
+
+    // Hover effect only for clickable parents
+    if (!isLast) {
+      link.addEventListener('mouseenter', () => link.style.opacity = '0.8');
+      link.addEventListener('mouseleave', () => link.style.opacity = '1');
+    }
+
+    // Click handler: only navigate if NOT the current (last) folder
+    if (!isLast) {
+      // console.log(isLast);
+      console.log(index);
+      const levelsUp = parts.length - (index + 1);
+      console.log(levelsUp);
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+
+        const levelsUp = parts.length - (index + 1);
+        const relativeUp = '../'.repeat(levelsUp);
+
+        const base = window.location.pathname.endsWith('/')
+          ? window.location.pathname
+          : window.location.pathname + '/';
+
+        const url = new URL(relativeUp || '.', window.location.origin + base);
+        window.location.assign(url.pathname);
+      });
+
+    }
+
+    breadcrumb.appendChild(link);
+  });
+
+  container.appendChild(breadcrumb);
+});
+
     // SEARCH
     function searchFiles(){
       const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
@@ -410,8 +495,6 @@ setInterval(changeDhikr, 30000);
     }
 
  // UPLOADS
-// UPLOADS - Complete implementation with folder conflict handling
-
 // UPLOADS - Complete implementation with folder conflict handling
 
 // UPLOADS - Complete implementation with choice modal
@@ -840,9 +923,17 @@ function initUploadArea(){
     folderInput.addEventListener('change', fileChangeHandler, false);
   }
 
-  // Click handler - show choice modal
+  // Click handler - show choice modal on desktop, direct file upload on mobile
   area.addEventListener('click', (e) => {
-    showUploadChoice();
+    const isMobile = isMobileDevice();
+    
+    if (isMobile || !folderInput) {
+      // On mobile or if folder input doesn't exist, directly open file picker
+      input.click();
+    } else {
+      // On desktop, show choice modal
+      showUploadChoice();
+    }
   });
 
   // Setup choice modal buttons
@@ -859,27 +950,69 @@ function initUploadArea(){
   });
 }
 
+// Check if device is mobile
+function isMobileDevice() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+         (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+}
+
 // FAB Button Handlers
 function initFabButtons() {
+  // Hide folder upload buttons on mobile
+  const isMobile = isMobileDevice();
+  
+  if (isMobile) {
+    // Hide folder upload from FAB menu
+    const fabFolderBtn = document.getElementById('fabUploadFolderBtn');
+    if (fabFolderBtn) {
+      fabFolderBtn.style.display = 'none';
+    }
+    
+    // Hide folder upload from toolbar
+    const toolbarFolderBtn = document.getElementById('uploadFolderBtn');
+    if (toolbarFolderBtn) {
+      toolbarFolderBtn.style.display = 'none';
+    }
+    
+    // Hide folder choice button in modal
+    const folderChoiceBtn = document.getElementById('uploadFolderChoiceBtn');
+    if (folderChoiceBtn) {
+      folderChoiceBtn.style.display = 'none';
+    }
+  }
+  
+  // FAB Upload Files - directly trigger input
   document.getElementById('fabUploadFileBtn')?.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
+
+    const isMobile = isMobileDevice();
     const input = document.getElementById('uploadInput');
-    if (input) {
-      closeFabMenu();
+
+    if (isMobile ) {
+      // On mobile or if folder input doesn't exist, directly open file picker
       input.click();
     } else {
-      showToast("File upload input not found", "error");
+      // On desktop, show choice modal
+      showUploadChoice();
     }
+    // const input = document.getElementById('uploadInput');
+    // if (input) {
+    //   closeFabMenu();
+    //   setTimeout(() => input.click(), 100); // Small delay to ensure menu closes first
+    // } else {
+    //   showToast("File upload input not found", "error");
+    // }
   });
 
+  // FAB Upload Folder - directly trigger input (hidden on mobile)
   document.getElementById('fabUploadFolderBtn')?.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
     const input = document.getElementById('uploadFolderInput');
     if (input) {
       closeFabMenu();
-      input.click();
+      setTimeout(() => input.click(), 100); // Small delay to ensure menu closes first
     } else {
       showToast("Folder upload input not found", "error");
     }
@@ -899,7 +1032,6 @@ function initFabButtons() {
     openClipModal();
   });
 }
-
 
     function createProgressElement(filename, id){
       const div = document.createElement('div');
@@ -949,63 +1081,6 @@ function initFabButtons() {
       setTimeout(()=>{ element.remove(); }, 900);
     }
 
-    // function uploadSingleFile(item){
-    //   const {file, id} = item;
-    //   const container = document.getElementById('progressContainer');
-    //   const row = createProgressElement(file.webkitRelativePath || file.name, id);
-    //   container?.appendChild(row);
-
-    //   const form = new FormData();
-    //   form.append('dest', window.currentPath || '');
-    //   form.append('file', file, file.webkitRelativePath || file.name);
-
-    //   const xhr = new XMLHttpRequest();
-    //   activeXHRs.set(id, xhr);
-
-    //   const start = Date.now();
-    //   xhr.upload.addEventListener('progress', e=>{
-    //     if(e.lengthComputable){
-    //       const percent = (e.loaded/e.total) * 100;
-    //       const seconds = Math.max(0.25, (Date.now()-start)/1000);
-    //       const speed = e.loaded/seconds;
-    //       const eta = (e.total-e.loaded) / Math.max(speed, 1);
-    //       updateProgress(row, {percent, speed, eta});
-    //     }
-    //   });
-    //   xhr.addEventListener('load', ()=>{
-    //     activeXHRs.delete(id);
-    //     try {
-    //       const j = JSON.parse(xhr.responseText || '{}');
-    //       if(xhr.status >= 200 && xhr.status < 300 && j.ok){
-    //         markProgressComplete(row, true);
-    //         showToast(`Uploaded: ${file.name}`, 'success');
-    //       } else {
-    //         markProgressComplete(row, false);
-    //         showToast(`Failed: ${file.name}`, 'error');
-    //       }
-    //     } catch(e){
-    //       if(xhr.status >= 200 && xhr.status < 300){
-    //         markProgressComplete(row, true);
-    //         showToast(`Uploaded: ${file.name}`, 'success');
-    //       } else {
-    //         markProgressComplete(row, false);
-    //         showToast(`Failed: ${file.name}`, 'error');
-    //       }
-    //     }
-    //   });
-    //   xhr.addEventListener('error', ()=>{
-    //     activeXHRs.delete(id);
-    //     markProgressComplete(row, false);
-    //     showToast(`Failed: ${file.name}`, 'error');
-    //   });
-    //   xhr.addEventListener('abort', ()=>{
-    //     activeXHRs.delete(id);
-    //     row.remove();
-    //   });
-
-    //   xhr.open('POST', URLS.api_upload);
-    //   xhr.send(form);
-    // }
 
     function cancelUpload(id){
       const xhr = activeXHRs.get(id);
