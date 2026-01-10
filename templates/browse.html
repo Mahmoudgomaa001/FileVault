@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
-<div id="fullPageDropZone" style="display: none;">
+<div id="fullPageDropZone" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; color: white; font-size: 2em;">
   <div class="drop-zone-content">
-    <i class="fas fa-cloud-upload-alt"></i>
-    <h2>Drop files to upload</h2>
+    <i class="fas fa-cloud-upload-alt fa-3x"></i>
+    <h2 style="margin-top: 1rem;">Drop files to upload</h2>
   </div>
 </div>
 <!-- Stats -->

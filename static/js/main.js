@@ -513,11 +513,7 @@ function initUploadArea(){
   }
 
   // When clicking the upload area, trigger folder selection, which is more versatile.
-  area.addEventListener('click', (e) => {
-    // Prevent the click from reaching the underlying file inputs directly
-    e.preventDefault();
-    e.stopPropagation();
-
+  area.addEventListener('click', () => {
     // Trigger the folder input. Fallback to file input if it doesn't exist.
     if (folderInput) {
       folderInput.click();
