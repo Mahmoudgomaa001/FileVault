@@ -412,23 +412,72 @@ setInterval(changeDhikr, 30000);
     // UPLOADS
     const activeXHRs = new Map();
 
-    function initUploadArea(){
-      const area = document.getElementById('uploadArea');
-      const input = document.getElementById('uploadInput');
-      if(!area || !input) return;
+    function initUploadArea() {
+        const area = document.getElementById('uploadArea');
+        const input = document.getElementById('uploadInput');
+        const fullPageDropZone = document.getElementById('fullPageDropZone');
+        if (!area || !input || !fullPageDropZone) return;
 
-      ['dragenter','dragover','dragleave','drop'].forEach(ev=>{
-        area.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); }, false);
-        document.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); }, false);
-      });
-      area.addEventListener('dragenter', ()=> area.classList.add('dragover'));
-      area.addEventListener('dragleave', ()=> area.classList.remove('dragover'));
-      area.addEventListener('drop', e=>{
-        area.classList.remove('dragover');
-        const files = e.dataTransfer.files; if(files?.length) handleNewFiles(files);
-      });
+        let dragCounter = 0;
 
-      input.addEventListener('change', e=>{
+        // Show full-page drop zone on drag enter
+        window.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // Check if dragged items are files
+            if (e.dataTransfer && e.dataTransfer.types.some(type => type === 'Files')) {
+                dragCounter++;
+                fullPageDropZone.style.display = 'flex';
+            }
+        }, false);
+
+        // Hide full-page drop zone on drag leave
+        window.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragCounter--;
+            if (dragCounter === 0) {
+                fullPageDropZone.style.display = 'none';
+            }
+        }, false);
+
+        // Prevent default for dragover to allow drop
+        window.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        }, false);
+
+        // Handle file drop on the full-page zone
+        fullPageDropZone.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragCounter = 0;
+            fullPageDropZone.style.display = 'none';
+
+            if (e.dataTransfer && e.dataTransfer.items) {
+                const files = await getFilesFromDataTransferItems(e.dataTransfer.items);
+                if (files.length) handleNewFiles(files);
+            } else if (e.dataTransfer && e.dataTransfer.files) {
+                if (e.dataTransfer.files.length) handleNewFiles(e.dataTransfer.files);
+            }
+        }, false);
+
+
+        // Original smaller drop zone logic
+        area.addEventListener('dragenter', (e) => { e.stopPropagation(); area.classList.add('dragover'); }, false);
+        area.addEventListener('dragleave', (e) => { e.stopPropagation(); area.classList.remove('dragover'); }, false);
+        area.addEventListener('drop', async (e) => {
+            e.stopPropagation();
+            area.classList.remove('dragover');
+            if (e.dataTransfer && e.dataTransfer.items) {
+                const files = await getFilesFromDataTransferItems(e.dataTransfer.items);
+                if (files.length) handleNewFiles(files);
+            } else if (e.dataTransfer && e.dataTransfer.files) {
+                if (e.dataTransfer.files.length) handleNewFiles(e.dataTransfer.files);
+            }
+        }, false);
+
+        input.addEventListener('change', e => {
         const files = e.target.files; if(files?.length){ handleNewFiles(files); }
         input.value = '';
       }, false);
@@ -441,6 +490,37 @@ setInterval(changeDhikr, 30000);
         }
         folderInput.value = '';
       }, false);
+    }
+
+    async function getFilesFromDataTransferItems(dataTransferItems) {
+        const files = [];
+        const queue = [];
+        for (const item of dataTransferItems) {
+            queue.push(item.webkitGetAsEntry());
+        }
+        while (queue.length > 0) {
+            const entry = queue.shift();
+            if (entry.isFile) {
+                try {
+                    const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+                    if (file) {
+                        file.webkitRelativePath = entry.fullPath.startsWith('/') ? entry.fullPath.substring(1) : entry.fullPath;
+                        files.push(file);
+                    }
+                } catch (err) {
+                    console.error('Could not get file from entry:', entry.fullPath, err);
+                }
+            } else if (entry.isDirectory) {
+                const reader = entry.createReader();
+                try {
+                    const entries = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+                    queue.push(...entries);
+                } catch (err) {
+                    console.error('Could not read directory entries:', entry.fullPath, err);
+                }
+            }
+        }
+        return files;
     }
 
     function handleNewFiles(files){

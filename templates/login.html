@@ -73,7 +73,7 @@
 
       <form action="{{ url_for('login_with_code') }}" method="POST">
           <label for="code-input" style="display: block; margin-bottom: .5rem; color: var(--text-secondary);">Enter a code from another device:</label>
-          <input id="code-input" type="text" name="code" class="form-input" placeholder="123456" required pattern="[0-9]{6}" maxlength="6" inputmode="numeric" style="font-size: 1.5rem; text-align: center; letter-spacing: 0.2em; margin-bottom: 1rem;">
+          <input id="code-input" type="text" name="code" class="form-input" placeholder="123" required pattern="[0-9]{3,6}" maxlength="6" inputmode="numeric" style="font-size: 1.5rem; text-align: center; letter-spacing: 0.2em; margin-bottom: 1rem;">
           <button type="submit" class="btn btn-primary" style="width: 100%;">Continue</button>
       </form>
     </div>
