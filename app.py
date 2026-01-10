@@ -792,6 +792,7 @@ def sanitize_filename(filename: str, is_path: bool = False) -> str:
     name = name.strip().strip(".")
     if not name:
         name = "file"
+    if len(name) > 200:
         base, ext = os.path.splitext(name)
         name = base[:200 - len(ext)] + ext
     return name
