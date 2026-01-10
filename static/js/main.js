@@ -412,6 +412,7 @@ setInterval(changeDhikr, 30000);
  // UPLOADS
 const activeXHRs = new Map();
 
+// UPLOADS - Fixed click handler for upload area
 function initUploadArea(){
   const area = document.getElementById('uploadArea');
   const input = document.getElementById('uploadInput');
@@ -480,9 +481,7 @@ function initUploadArea(){
     }
   });
 
-
   // --- Specific listeners for the smaller upload area ---
-
   area.addEventListener('dragenter', ()=> area.classList.add('dragover'));
   area.addEventListener('dragleave', (e)=> {
     if (!area.contains(e.relatedTarget)) {
@@ -490,7 +489,6 @@ function initUploadArea(){
     }
   });
   
-  // The global drop listener handles the logic, but we still need to prevent default on the area
   area.addEventListener('drop', (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -512,12 +510,13 @@ function initUploadArea(){
     folderInput.addEventListener('change', fileChangeHandler, false);
   }
 
-  // When clicking the upload area, trigger file selection.
+  // FIXED: Click handler for upload area - simplified to just trigger the file input
   area.addEventListener('click', (e) => {
-    // Prevent the click from reaching the underlying file inputs directly
-    e.preventDefault();
-    e.stopPropagation();
-    // Trigger the file input.
+    // Don't trigger if clicking on the actual file inputs
+    if (e.target === input || e.target === folderInput) {
+      return;
+    }
+    // Trigger the regular file input (not folder)
     input.click();
   });
 }
@@ -2005,6 +2004,9 @@ function removeFileCard(rel){
         }
     }
 
+
+
+    
     // INIT
     document.addEventListener('DOMContentLoaded', async ()=>{
       const dhikrBanner = document.getElementById('dhikrBanner');
@@ -2035,6 +2037,7 @@ function removeFileCard(rel){
       if (document.getElementById('fileGrid')) {
         document.getElementById('searchInput')?.addEventListener('input', searchFiles);
         initUploadArea();
+        initFabButtons();
         initFileGrid();
         initSortControls();
         applySort();
@@ -2051,15 +2054,86 @@ function removeFileCard(rel){
         document.getElementById('clipNameInput')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveClipboardText(); }});
 
         // Bind Toolbar Upload Buttons
-        document.getElementById('uploadFileBtn')?.addEventListener('click', () => document.getElementById('uploadInput')?.click());
-        document.getElementById('uploadFolderBtn')?.addEventListener('click', () => document.getElementById('uploadFolderInput')?.click());
+        // document.getElementById('uploadFileBtn')?.addEventListener('click', () => document.getElementById('uploadInput')?.click());
+        // document.getElementById('uploadFolderBtn')?.addEventListener('click', () => document.getElementById('uploadFolderInput')?.click());
 
-        // Bind FAB (Floating Action Button) Menu Buttons
-        document.getElementById('fabNewFolderBtn')?.addEventListener('click', showNewFolderModal);
-        document.getElementById('fabUploadFileBtn')?.addEventListener('click', () => document.getElementById('uploadInput')?.click());
-        document.getElementById('fabUploadFolderBtn')?.addEventListener('click', () => document.getElementById('uploadFolderInput')?.click());
+        // // Bind FAB (Floating Action Button) Menu Buttons
+        // document.getElementById('fabNewFolderBtn')?.addEventListener('click', showNewFolderModal);
+        // // FAB Upload Files
+        // document.getElementById('fabUploadFileBtn')?.addEventListener('click', (e) => {
+        //     e.preventDefault();
+        //     e.stopPropagation();
+        //     const input = document.getElementById('uploadInput');
+        //     if (input) {
+        //         console.log("Triggering FILE upload from FAB");
+        //         input.click();
+        //     } else {
+        //         showToast("File upload input not found", "error");
+        //     }
+        // });
+
+        // // FAB Upload Folder
+        // document.getElementById('fabUploadFolderBtn')?.addEventListener('click', (e) => {
+        //     e.preventDefault();
+        //     e.stopPropagation();
+        //     const input = document.getElementById('uploadFolderInput');
+        //     if (input) {
+        //         console.log("Triggering FOLDER upload from FAB");
+        //         input.click();
+        //     } else {
+        //         showToast("Folder upload input not found", "error");
+        //     }
+        // });
+        
         document.getElementById('fabPasteTextBtn')?.addEventListener('click', openClipModal);
       }
+
+// FAB Button Handlers - Add these to your DOMContentLoaded section
+function initFabButtons() {
+  // FAB Upload Files
+  document.getElementById('fabUploadFileBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const input = document.getElementById('uploadInput');
+    if (input) {
+      console.log("Triggering FILE upload from FAB");
+      closeFabMenu(); // Close the menu first
+      input.click();
+    } else {
+      showToast("File upload input not found", "error");
+    }
+  });
+
+  // FAB Upload Folder
+  document.getElementById('fabUploadFolderBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const input = document.getElementById('uploadFolderInput');
+    if (input) {
+      console.log("Triggering FOLDER upload from FAB");
+      closeFabMenu(); // Close the menu first
+      input.click();
+    } else {
+      showToast("Folder upload input not found", "error");
+    }
+  });
+
+  // FAB New Folder
+  document.getElementById('fabNewFolderBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeFabMenu();
+    showNewFolderModal();
+  });
+
+  // FAB Paste Text
+  document.getElementById('fabPasteTextBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeFabMenu();
+    openClipModal();
+  });
+}
 
       // Global initializations for all pages
       document.getElementById('confirmRenameBtn')?.addEventListener('click', confirmRename);
