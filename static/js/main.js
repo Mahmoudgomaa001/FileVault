@@ -414,6 +414,8 @@ setInterval(changeDhikr, 30000);
 
 // UPLOADS - Complete implementation with folder conflict handling
 
+// UPLOADS - Complete implementation with choice modal
+
 const activeXHRs = new Map();
 
 // Get files from DataTransferItems (supports folder drops)
@@ -426,10 +428,7 @@ async function getFilesFromDataTransferItems(items) {
     if (entry.isFile) {
       return new Promise((resolve) => {
         entry.file((file) => {
-          // Create a new file object with the relative path
           const relativePath = path + file.name;
-          
-          // We need to create a wrapper that includes the path
           const fileWithPath = new File([file], file.name, { type: file.type });
           fileWithPath.relativePath = relativePath;
           fileWithPath.fullPath = relativePath;
@@ -452,14 +451,13 @@ async function getFilesFromDataTransferItems(items) {
         const readEntries = () => {
           dirReader.readEntries(async (entries) => {
             if (entries.length === 0) {
-              // Process all entries
               for (const e of allEntries) {
                 await traverseFileTree(e, path + entry.name + '/');
               }
               resolve();
             } else {
               allEntries.push(...entries);
-              readEntries(); // Continue reading (readEntries has a limit per call)
+              readEntries();
             }
           }, (err) => {
             console.warn('Error reading directory:', err);
@@ -480,7 +478,6 @@ async function getFilesFromDataTransferItems(items) {
       if (entry) {
         promises.push(traverseFileTree(entry, ''));
       } else {
-        // No entry support, get file directly
         const file = item.getAsFile();
         if (file) {
           files.push({
@@ -496,9 +493,7 @@ async function getFilesFromDataTransferItems(items) {
   return files;
 }
 
-// Modified handleNewFiles to detect folder uploads and handle conflicts
 function handleNewFiles(filesInput) {
-  // Normalize input - can be FileList, array of Files, or array of {file, relativePath}
   let items = [];
   
   if (filesInput instanceof FileList) {
@@ -509,10 +504,8 @@ function handleNewFiles(filesInput) {
   } else if (Array.isArray(filesInput)) {
     items = filesInput.map(item => {
       if (item.file) {
-        // Already in {file, relativePath} format
         return item;
       } else {
-        // Plain File object
         return {
           file: item,
           relativePath: item.webkitRelativePath || item.relativePath || item.name
@@ -526,7 +519,6 @@ function handleNewFiles(filesInput) {
   const container = document.getElementById('progressContainer');
   if (container) container.innerHTML = '';
   
-  // Detect if this is a folder upload (multiple files with same root folder)
   const folderMap = new Map();
   let isFolderUpload = false;
   let rootFolderName = null;
@@ -541,20 +533,17 @@ function handleNewFiles(filesInput) {
       }
       folderMap.get(topLevel).push(item);
       
-      // Track the root folder name if all files share the same root
       if (rootFolderName === null) {
         rootFolderName = topLevel;
       } else if (rootFolderName !== topLevel) {
-        rootFolderName = null; // Multiple root folders
+        rootFolderName = null;
       }
     }
   }
   
-  // If this is a single folder upload, check for conflicts and get a unique name
   if (isFolderUpload && rootFolderName && folderMap.size === 1) {
     checkFolderConflictAndUpload(rootFolderName, items);
   } else {
-    // Regular file upload or multiple folders - upload as-is
     for (const item of items) {
       const id = `up-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       uploadSingleFile({ file: item.file, relativePath: item.relativePath, id });
@@ -562,10 +551,8 @@ function handleNewFiles(filesInput) {
   }
 }
 
-// Check if folder exists and get a unique name if needed
 async function checkFolderConflictAndUpload(folderName, items) {
   try {
-    // Check existing files in current directory
     const existingCards = document.querySelectorAll('.file-card[data-is-dir="1"]');
     const existingFolders = new Set();
     
@@ -576,7 +563,6 @@ async function checkFolderConflictAndUpload(folderName, items) {
       }
     });
     
-    // Find a unique folder name
     let uniqueFolderName = folderName;
     let counter = 1;
     
@@ -585,15 +571,12 @@ async function checkFolderConflictAndUpload(folderName, items) {
       counter++;
     }
     
-    // If we had to rename, show a toast
     if (uniqueFolderName !== folderName) {
       showToast(`Folder renamed to "${uniqueFolderName}" to avoid conflict`, 'info');
     }
     
-    // Upload all files with the new folder name
     for (const item of items) {
       const parts = item.relativePath.split('/');
-      // Replace the root folder name with the unique name
       parts[0] = uniqueFolderName;
       const newRelativePath = parts.join('/');
       
@@ -608,7 +591,6 @@ async function checkFolderConflictAndUpload(folderName, items) {
     }
   } catch (error) {
     console.error('Error checking folder conflict:', error);
-    // Fallback to regular upload
     for (const item of items) {
       const id = `up-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       uploadSingleFile({ file: item.file, relativePath: item.relativePath, id });
@@ -616,12 +598,10 @@ async function checkFolderConflictAndUpload(folderName, items) {
   }
 }
 
-// Modified uploadSingleFile to handle renamed folders
 function uploadSingleFile(item) {
   const { file, relativePath, id, uniqueFolderName } = item;
   const container = document.getElementById('progressContainer');
   
-  // Use relative path for display if it's different from filename
   const displayName = relativePath || file.name;
   const row = createProgressElement(displayName, id);
   container?.appendChild(row);
@@ -629,12 +609,10 @@ function uploadSingleFile(item) {
   const form = new FormData();
   form.append('dest', window.currentPath || '');
   
-  // Send the relative path as the filename to preserve folder structure
   const uploadPath = relativePath || file.name;
   form.append('file', file, uploadPath);
-  form.append('relativePath', uploadPath); // Extra field for clarity
+  form.append('relativePath', uploadPath);
   
-  // Send the unique folder name if we had to rename
   if (uniqueFolderName) {
     form.append('uniqueFolderName', uniqueFolderName);
   }
@@ -659,7 +637,6 @@ function uploadSingleFile(item) {
       const j = JSON.parse(xhr.responseText || '{}');
       if (xhr.status >= 200 && xhr.status < 300 && j.ok) {
         markProgressComplete(row, true);
-        // Don't show individual file success toasts for folder uploads
         if (!uniqueFolderName) {
           showToast(`Uploaded: ${file.name}`, 'success');
         }
@@ -753,15 +730,31 @@ function cancelUpload(id){
   if(el){ el.remove(); }
 }
 
-// Fixed initUploadArea
+// Show upload choice modal
+function showUploadChoice() {
+  const modal = document.getElementById('uploadChoiceModal');
+  if (modal) {
+    openModal('uploadChoiceModal');
+  }
+}
+
+// Initialize upload area with choice modal
 function initUploadArea(){
   const area = document.getElementById('uploadArea');
   const input = document.getElementById('uploadInput');
+  const folderInput = document.getElementById('uploadFolderInput');
   const fullPageDropZone = document.getElementById('fullPageDropZone');
 
   if(!area || !input || !fullPageDropZone) return;
 
-  // --- Full Page Drag-and-Drop ---
+  // Make both inputs hidden and positioned off-screen to avoid overlap
+  input.style.position = 'absolute';
+  input.style.left = '-9999px';
+  if (folderInput) {
+    folderInput.style.position = 'absolute';
+    folderInput.style.left = '-9999px';
+  }
+
   let dragCounter = 0;
 
   document.addEventListener('dragenter', e => {
@@ -834,9 +827,6 @@ function initUploadArea(){
     e.stopPropagation();
   });
 
-  // Handle file input changes
-  const folderInput = document.getElementById('uploadFolderInput');
-
   const fileChangeHandler = e => {
     const files = Array.from(e.target.files || []);
     if (files.length) {
@@ -850,41 +840,21 @@ function initUploadArea(){
     folderInput.addEventListener('change', fileChangeHandler, false);
   }
 
-  // Click handler for upload area - allow user to choose files or folders
+  // Click handler - show choice modal
   area.addEventListener('click', (e) => {
-    if (e.target === input || e.target === folderInput) {
-      return;
-    }
-    
-    // Check if user is holding Shift key to upload folders instead
-    if (e.shiftKey && folderInput) {
+    showUploadChoice();
+  });
+
+  // Setup choice modal buttons
+  document.getElementById('uploadFilesChoiceBtn')?.addEventListener('click', () => {
+    closeModal('uploadChoiceModal');
+    input.click();
+  });
+
+  document.getElementById('uploadFolderChoiceBtn')?.addEventListener('click', () => {
+    closeModal('uploadChoiceModal');
+    if (folderInput) {
       folderInput.click();
-    } else {
-      // Default to regular file upload
-      input.click();
-    }
-  });
-
-  // Visual feedback for Shift key
-  let shiftHintTimeout;
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Shift' && !e.repeat) {
-      const uploadText = area.querySelector('.upload-text');
-      if (uploadText && folderInput) {
-        uploadText.dataset.originalText = uploadText.textContent;
-        uploadText.textContent = 'Drop or click to select FOLDERS';
-        uploadText.style.color = 'var(--primary)';
-      }
-    }
-  });
-
-  document.addEventListener('keyup', (e) => {
-    if (e.key === 'Shift') {
-      const uploadText = area.querySelector('.upload-text');
-      if (uploadText && uploadText.dataset.originalText) {
-        uploadText.textContent = uploadText.dataset.originalText;
-        uploadText.style.color = '';
-      }
     }
   });
 }
@@ -1722,6 +1692,53 @@ function qsCardByRel(rel){
   const esc = (window.CSS && CSS.escape) ? CSS.escape(rel) : String(rel).replace(/"/g,'\\"');
   return grid.querySelector(`.file-card[data-rel="${esc}"]`);
 }
+
+// Download folder as zip
+async function downloadFolder(folderRel, folderName) {
+  try {
+    showToast(`Preparing "${folderName}" for download...`, 'info');
+    
+    const response = await fetch(URLS.api_download_zip, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: [folderRel] })
+    });
+
+    if (response.ok) {
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      
+      // Get filename from Content-Disposition header or use folder name
+      let filename = `${folderName}.zip`;
+      const contentDisposition = response.headers.get('Content-Disposition');
+      if (contentDisposition) {
+        const matches = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (matches && matches[1]) {
+          filename = matches[1].replace(/['"]/g, '');
+        }
+      }
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      showToast(`Downloaded: ${filename}`, 'success');
+    } else {
+      const j = await response.json();
+      showToast(j.error || 'Download failed', 'error');
+    }
+  } catch (e) {
+    console.error('Download error:', e);
+    showToast('An error occurred during download', 'error');
+  }
+}
+
+// Modified renderFileCard function to include download button for folders
+
 function renderFileCard(meta){
   const isDir = !!meta.is_dir;
   const mime = (meta.mime || '').toLowerCase();
@@ -1752,6 +1769,8 @@ function renderFileCard(meta){
   el.dataset.dl = meta.download_url || '';
 
   const openHref = encodeURI(`/b/${meta.rel}`);
+  
+  // Updated actions for folders to include download button
   el.innerHTML = `
     <div class="file-preview">${preview}</div>
     <div class="file-info">
@@ -1760,6 +1779,7 @@ function renderFileCard(meta){
       <div class="file-actions">
         ${isDir
           ? `<a class="btn btn-secondary btn-icon" href="${openHref}" title="Open"><i class="fas fa-folder-open"></i></a>
+             <button class="btn btn-primary btn-icon" onclick="event.stopPropagation(); downloadFolder('${meta.rel.replace(/'/g,"\\'")}', '${safeHTML(meta.name).replace(/'/g,"\\\'")}')" title="Download as ZIP"><i class="fas fa-download"></i></button>
              <button class="btn btn-danger btn-icon" onclick="event.stopPropagation(); deleteFile('${meta.rel.replace(/'/g,"\\'")}')" title="Delete Folder"><i class="fas fa-trash"></i></button>`
           : `<a class="btn btn-primary btn-icon" href="${meta.download_url}" title="Download"><i class="fas fa-download"></i></a>
              <button class="btn btn-secondary btn-icon" onclick="event.stopPropagation(); shareFile('${meta.rel.replace(/'/g,"\\'")}')" title="Share"><i class="fas fa-share"></i></button>
@@ -1770,6 +1790,9 @@ function renderFileCard(meta){
   `;
   return el;
 }
+// Make functions globally accessible
+window.downloadFolder = downloadFolder;
+
 function upsertFileCard(meta){
   const grid = document.getElementById('fileGrid');
   if(!grid || !meta) return;

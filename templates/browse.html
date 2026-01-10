@@ -129,13 +129,37 @@
             <a class="btn btn-primary btn-icon" href="{{ url_for('download', path=item.rel) }}" title="Download"><i class="fas fa-download"></i></a>
             <button class="btn btn-danger btn-icon" onclick="event.stopPropagation(); deleteFile('{{ item.rel }}')" title="Delete"><i class="fas fa-trash"></i></button>
           {% else %}
-            <a class="btn btn-secondary btn-icon" href="{{ url_for('browse') }}/{{ item.rel }}" title="Open"><i class="fas fa-folder-open"></i></a>
-            <button class="btn btn-danger btn-icon" onclick="event.stopPropagation(); deleteFile('{{ item.rel }}')" title="Delete Folder"><i class="fas fa-trash"></i></button>
+          <a class="btn btn-secondary btn-icon" href="{{ url_for('browse') }}/{{ item.rel }}" title="Open"><i class="fas fa-folder-open"></i></a>
+          <button class="btn btn-primary btn-icon" onclick="event.stopPropagation(); downloadFolder('{{ item.rel }}', '{{ item.name }}')" title="Download as ZIP"><i class="fas fa-download"></i></button>
+          <button class="btn btn-danger btn-icon" onclick="event.stopPropagation(); deleteFile('{{ item.rel }}')" title="Delete Folder"><i class="fas fa-trash"></i></button>
+            <!-- <a class="btn btn-secondary btn-icon" href="{{ url_for('browse') }}/{{ item.rel }}" title="Open"><i class="fas fa-folder-open"></i></a>
+            <button class="btn btn-danger btn-icon" onclick="event.stopPropagation(); deleteFile('{{ item.rel }}')" title="Delete Folder"><i class="fas fa-trash"></i></button> -->
           {% endif %}
         </div>
       </div>
     </div>
   {% endfor %}
+</div>
+
+
+<!-- Upload Choice Modal -->
+<div class="modal" id="uploadChoiceModal">
+  <div class="modal-content" style="max-width: 400px;">
+    <div class="modal-header">
+      <h3 class="modal-title">Choose Upload Type</h3>
+      <button class="modal-close" onclick="closeModal('uploadChoiceModal')" aria-label="Close">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem; padding: 2rem;">
+      <button class="btn btn-primary" id="uploadFilesChoiceBtn" style="padding: 1.5rem; font-size: 1.1rem;">
+        <i class="fas fa-file"></i> Upload Files
+      </button>
+      <button class="btn btn-secondary" id="uploadFolderChoiceBtn" style="padding: 1.5rem; font-size: 1.1rem;">
+        <i class="fas fa-folder"></i> Upload Folder
+      </button>
+    </div>
+  </div>
 </div>
 
 <!-- New Folder Modal -->
